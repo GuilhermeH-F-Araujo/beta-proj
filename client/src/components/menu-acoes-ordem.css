@@ -1,0 +1,11 @@
+.os-action-menu { position:fixed; z-index:50; width:184px; padding:5px 7px; border:1px solid #e3e6e9; border-radius:11px; background:#fff; box-shadow:0 10px 26px #10182724; color:#111c34; font:600 11px Arial,Helvetica,sans-serif; }
+.os-action-menu::before { content:""; position:absolute; top:-6px; left:var(--arrow-left); width:10px; height:10px; background:#fff; border-left:1px solid #e3e6e9; border-top:1px solid #e3e6e9; transform:translateX(-50%) rotate(45deg); }
+.os-action-menu.menu-above::before { top:auto; bottom:-6px; transform:translateX(-50%) rotate(225deg); }
+.os-action-menu button { width:100%; min-height:39px; display:flex; align-items:center; gap:8px; text-align:left; border:0; background:transparent; border-radius:7px; padding:3px 5px; color:inherit; font:inherit; cursor:pointer; white-space:nowrap; }
+.os-action-menu button:hover { background:#f7f9fb; }
+.os-action-menu .menu-icon { width:27px; height:27px; display:grid; place-items:center; flex:none; border-radius:8px; }
+.os-action-menu .menu-glyph { width:15px; height:15px; background:currentColor; mask-size:contain; mask-repeat:no-repeat; mask-position:center; }
+.os-action-menu .status .menu-glyph { mask-image:url('/assets/atualizar.svg'); }
+.os-action-menu .edit .menu-glyph { mask-image:url('/assets/lapis.svg'); }
+.os-action-menu .delete .menu-glyph { mask-image:url('/assets/lixeira.svg'); }
+.os-action-menu .status { color:#1d80ff; background:#eef5ff; }.os-action-menu .edit { color:#f49d00; background:#fff9e9; }.os-action-menu .delete { color:#ff3048; background:#fff0f2; }

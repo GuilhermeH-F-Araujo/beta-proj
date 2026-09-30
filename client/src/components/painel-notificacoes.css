@@ -1,0 +1,40 @@
+.notice-root{position:relative;display:grid;place-items:center;flex:none}
+.orders-viewport .notice-trigger{position:relative;color:#1e2836;width:37px;height:37px;display:grid;place-items:center;border-radius:10px;transition:background .15s,color .15s}
+.orders-viewport .notice-trigger:hover,.orders-viewport .notice-trigger.notice-active{background:#fff0f1;color:#cf2339}
+.notice-badge{position:absolute;top:-5px;right:-7px;min-width:21px;height:21px;padding:0 4px;display:grid;place-items:center;border-radius:20px;background:#f32f3c;color:white;font-weight:750;font-size:11px;line-height:1;border:2px solid white;box-shadow:0 2px 6px #aa182a3b}
+.notice-popover{position:absolute;right:-20px;top:calc(100% + 12px);z-index:110;width:min(380px,calc(100vw - 24px));max-height:min(570px,calc(100vh - 85px));display:flex;flex-direction:column;overflow:hidden;background:white;border:1px solid #e9edf1;border-radius:15px;box-shadow:0 22px 55px #17233338;text-align:left;color:#202a38}
+.notice-popover::before{content:'';position:absolute;right:33px;top:-1px;width:11px;height:11px;background:#fff;border-top:1px solid #e9edf1;border-left:1px solid #e9edf1;transform:translateY(-5px) rotate(45deg)}
+.notice-top{padding:20px 20px 17px;display:flex;gap:10px;align-items:start;border-bottom:1px solid #eef0f3}
+.notice-eyebrow{font-size:9px;font-weight:800;letter-spacing:.14em;color:#d6243a}
+.notice-top h2{font-size:18px;margin:6px 0 3px;letter-spacing:-.03em}
+.notice-top p{font-size:11px;color:#86919e;margin:0}
+.notice-close,.notice-dismiss{border:0;background:transparent;color:#8c98a7;display:grid;place-items:center;cursor:pointer}
+.notice-close{margin-left:auto;width:25px;height:25px;border-radius:6px}
+.notice-close:hover,.notice-dismiss:hover{background:#f2f4f6;color:#bb2135}
+.notice-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 20px;background:#fcfcfd;color:#606d7b;font-size:11px;font-weight:700;border-bottom:1px solid #f0f1f3}
+.notice-toolbar button{border:0;background:transparent;color:#d1273b;font-size:10px;font-weight:700;white-space:nowrap;cursor:pointer}
+.notice-toolbar button:hover{text-decoration:underline}
+.notice-list{min-height:90px;overflow:auto;overscroll-behavior:contain}
+.notice-item{position:relative;display:flex;align-items:flex-start;gap:11px;padding:15px 16px 14px 19px;background:#fff;border-bottom:1px solid #f0f2f4}
+.notice-item:not(.is-read){background:linear-gradient(90deg,#fff8f9,#fff 45%)}
+.notice-item:not(.is-read)::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:#ea2a3e}
+.notice-icon{display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:9px;background:#ffebed;color:#df2b40}
+.notice-ready .notice-icon{background:#e9f7ee;color:#228c54}
+.notice-waiting_part .notice-icon{background:#fff3dc;color:#b37b17}
+.notice-cancelled .notice-icon{background:#eff0f2;color:#66717d}
+.notice-content{min-width:0;flex:1;border:0;background:transparent;text-align:left;padding:0;color:inherit;cursor:pointer}
+.notice-content>span{display:flex;gap:6px;align-items:center}
+.notice-content b{font-size:12px;font-weight:720;line-height:1.3}
+.notice-content i{height:6px;width:6px;background:#ed2b3e;border-radius:50%;flex:none}
+.notice-content small,.notice-content time{display:block;color:#7d8896;font-size:11px;line-height:1.35;margin-top:4px;overflow-wrap:anywhere}
+.notice-content time{color:#a2aab4;font-size:10px;margin-top:7px}
+.notice-content:hover b{color:#cf2238}
+.notice-dismiss{width:22px;height:22px;border-radius:6px;flex:none;margin-top:-3px}
+.notice-empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:7px;text-align:center;padding:34px 15px;color:#8d99a5;font-size:12px}
+.notice-empty span{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#eef8f2;color:#3b9966;margin-bottom:5px}
+.notice-empty strong{color:#314050;font-size:13px}
+.notice-empty small{font-size:11px}
+.notice-error{padding:10px 17px;color:#c62138;background:#fff3f4;font-size:11px;line-height:1.4}
+.notice-error button{border:0;background:transparent;color:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
+.notice-bottom{font-size:10px;color:#9aa4af;text-align:center;padding:12px;border-top:1px solid #eef0f2;background:#fff}
+@media(max-width:650px){.notice-popover{position:fixed;top:66px;right:12px}}

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: estacao-motos-painel
+    runtime: node
+    plan: free
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm --prefix server run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: MODEL_IMAGE_PROVIDER
+        value: cloudflare
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
