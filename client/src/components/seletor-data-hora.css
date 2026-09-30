@@ -1,0 +1,11 @@
+.os-data-hora-campos{display:flex;gap:6px;min-width:0}
+.os-data-hora-data{position:relative;min-width:0;flex:1}
+.os-data-hora-data input{padding-right:32px}
+.os-data-hora-data button{position:absolute;right:3px;top:3px;display:grid;place-items:center;width:32px;height:33px;border:0;border-radius:6px;background:transparent;color:#758493;cursor:pointer}
+.os-data-hora-data button:hover{background:#f1f5f8;color:#273b51}
+.os-create-field .os-data-hora-hora{width:63px;flex:none;text-align:center;padding-inline:4px}
+.os-data-hora-erro{color:#b42038;font-size:10px;font-weight:500}
+.os-data-hora-calendario{position:fixed;right:auto;z-index:1500;padding-top:16px}
+.os-data-hora-calendario .range-footer{margin-top:13px}
+.os-data-hora-calendario .range-clear{flex:1;border-color:#d7dbe1;color:#657486}
+@media(max-width:600px){.os-create-dates{grid-template-columns:1fr}.os-create-field .os-data-hora-hora{width:76px}}

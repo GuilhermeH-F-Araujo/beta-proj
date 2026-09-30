@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
 import { Icon } from './MenuAdmin';
+import SeletorDatasOrdem from './SeletorDatasOrdem';
 import { criarOrdem, buscarOpcoesNovaOrdem, type OpcoesNovaOrdem } from '../services/apiAutenticacao';
 import './modal-nova-ordem.css';
 
@@ -62,6 +63,7 @@ export default function ModalNovaOrdem({ onClose, onCreated }: { onClose: () => 
   const [mileage, setMileage] = useState('');
   const [entryAt, setEntryAt] = useState(localDateTime);
   const [forecastAt, setForecastAt] = useState('');
+  const [previsaoIncompleta, setPrevisaoIncompleta] = useState(false);
   const [forecastAcknowledged, setForecastAcknowledged] = useState(false);
   const [mechanicId, setMechanicId] = useState('');
   const [mechanicOpen, setMechanicOpen] = useState(false);
@@ -150,6 +152,7 @@ export default function ModalNovaOrdem({ onClose, onCreated }: { onClose: () => 
     if (motoMode === 'existing' && !motorcycleId) return invalid('Selecione a moto deste cliente ou cadastre uma nova.', bikeSection);
     if (motoMode === 'new' && (model.trim().length < 2 || !/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate))) return invalid('Informe o modelo e uma placa válida, como ABC1D23.', bikeSection);
     if (!entryAt) return invalid('Informe a data de entrada.', serviceSection);
+    if (previsaoIncompleta) return invalid('Complete a data e o horário da previsão ou limpe o campo.', serviceSection);
     if (!problem.trim() || problem.trim().length < 3) return invalid('Descreva o problema relatado pelo cliente.', serviceSection);
     if (!forecastAt && !forecastAcknowledged) return invalid('Confira a previsão de entrega ou confirme que deseja abrir a OS sem essa data.', serviceSection);
     if (forecastAt && forecastAt < entryAt) return invalid('A previsão deve ser posterior à entrada.', serviceSection);
@@ -185,7 +188,7 @@ export default function ModalNovaOrdem({ onClose, onCreated }: { onClose: () => 
         </div>
         <div className="os-create-column">
           <section className="os-create-card" ref={serviceSection}><div className="os-create-section-title"><span className="os-create-number">03</span><div><h3>Atendimento</h3><p>Detalhes essenciais para iniciar o serviço.</p></div>{completed[2] && <Icon name="check" size={18}/>}</div>
-            <div className="os-create-row"><label className="os-create-field"><span>Entrada <b>*</b></span><input type="datetime-local" value={entryAt} onChange={e => setEntryAt(e.target.value)}/></label><label className="os-create-field"><span>Previsão de entrega</span><input type="datetime-local" value={forecastAt} onChange={e => { setForecastAt(e.target.value); setForecastAcknowledged(false); }}/></label></div>
+            <SeletorDatasOrdem entrada={entryAt} previsao={forecastAt} aoMudarEntrada={setEntryAt} aoMudarPrevisao={valor => { setForecastAt(valor); setForecastAcknowledged(false); }} aoValidarPrevisao={setPrevisaoIncompleta}/>
             {!forecastAt && <label className="os-create-forecast-note"><input type="checkbox" checked={forecastAcknowledged} onChange={e => setForecastAcknowledged(e.target.checked)}/><span>Sem previsão por enquanto. Eu aviso o cliente depois.</span></label>}
             <div className="os-create-field os-create-mechanic" ref={mechanicRef}><span>Mecânico responsável</span><button type="button" className="os-create-mechanic-trigger" aria-haspopup="listbox" aria-expanded={mechanicOpen} onClick={() => setMechanicOpen(value => !value)}><Icon name="wrench" size={15}/><span>{options?.mechanics.find(item => String(item.id) === mechanicId)?.name ?? "Atribuir depois"}</span><Icon name="chevron" size={16}/></button>{mechanicOpen && <div className="os-create-mechanic-list" role="listbox" aria-label="Mecânicos"><button type="button" role="option" aria-selected={!mechanicId} onClick={() => { setMechanicId(''); setMechanicOpen(false); }}>Atribuir depois <small>Definir durante o atendimento</small></button>{options?.mechanics.map(mechanic => <button type="button" role="option" aria-selected={mechanicId === String(mechanic.id)} key={mechanic.id} onClick={() => { setMechanicId(String(mechanic.id)); setMechanicOpen(false); }}>{mechanic.name}</button>)}</div>}</div>
             <label className="os-create-field"><span>Problema relatado <b>*</b></span><textarea maxLength={255} rows={2} value={problem} onChange={e => setProblem(e.target.value)} placeholder="O que o cliente percebeu na moto?"/><small className="os-create-counter">{problem.length}/255</small></label>

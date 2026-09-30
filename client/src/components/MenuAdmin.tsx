@@ -1,4 +1,17 @@
 import { NavLink } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+
+type PosicaoMenu = 'esquerda' | 'direita' | 'superior' | 'inferior';
+const posicoes: { valor: PosicaoMenu; rotulo: string }[] = [
+  { valor: 'esquerda', rotulo: 'Esquerda' }, { valor: 'direita', rotulo: 'Direita' },
+  { valor: 'superior', rotulo: 'Em cima' }, { valor: 'inferior', rotulo: 'Embaixo' },
+];
+function posicaoSalva(): PosicaoMenu {
+  try {
+    const salva = localStorage.getItem('posicao-menu-admin');
+    return posicoes.find(item => item.valor === salva)?.valor ?? 'esquerda';
+  } catch { return 'esquerda'; }
+}
 
 type Item = { label: string; icon: string; path: string };
 const items: Item[] = [
@@ -61,8 +74,38 @@ export function Icon({ name, size = 14 }: { name: string; size?: number }) {
 }
 
 export default function MenuAdmin({ collapsed = false, onUnavailable }: { collapsed?: boolean; onUnavailable?: (label: string) => void }) {
-  return <aside className={`admin-menu${collapsed ? ' collapsed' : ''}`}>
+  const [posicao, setPosicao] = useState<PosicaoMenu>(posicaoSalva);
+  const [aberto, setAberto] = useState(false);
+  const controle = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const pagina = menu.current?.closest('.orders-viewport');
+    if (pagina instanceof HTMLElement) pagina.dataset.menuPosition = posicao;
+    return () => { if (pagina instanceof HTMLElement) delete pagina.dataset.menuPosition; };
+  }, [posicao]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fechar = (evento: PointerEvent) => { if (!controle.current?.contains(evento.target as Node)) setAberto(false); };
+    const teclado = (evento: KeyboardEvent) => { if (evento.key === 'Escape') setAberto(false); };
+    document.addEventListener('pointerdown', fechar);
+    document.addEventListener('keydown', teclado);
+    return () => { document.removeEventListener('pointerdown', fechar); document.removeEventListener('keydown', teclado); };
+  }, [aberto]);
+
+  function mudarPosicao(nova: PosicaoMenu) {
+    setPosicao(nova);
+    setAberto(false);
+    try { localStorage.setItem('posicao-menu-admin', nova); } catch {}
+  }
+
+  return <aside ref={menu} className={`admin-menu${collapsed ? ' collapsed' : ''}`}>
     <div className="admin-menu-brand"><img src="/assets/estacao-motos-logo-sidebar.png" alt="Estação Motos" /></div>
     <nav aria-label="Menu principal">{items.map(item => ['/ordens-de-servico', '/clientes','/motocicletas'].includes(item.path) ? <NavLink key={item.path} to={item.path} title={item.label} className={({isActive}) => `admin-menu-link${isActive ? ' selected' : ''}`}><Icon name={item.icon} size={11}/><span>{item.label}</span></NavLink> : <button key={item.path} className="admin-menu-link" title={item.label} onClick={() => onUnavailable?.(item.label)}><Icon name={item.icon} size={11}/><span>{item.label}</span></button>)}</nav>
+    <div className="admin-menu-position" ref={controle}>
+      <button type="button" className="admin-menu-position-trigger" title="Posição do menu" aria-label="Escolher posição do menu" aria-expanded={aberto} aria-haspopup="dialog" onClick={() => setAberto(valor => !valor)}><Icon name="sliders" size={16}/><span>Posição do menu</span></button>
+      {aberto && <div className="admin-menu-position-options" role="dialog" aria-label="Posição do menu"><strong>Posição do menu</strong><p>Escolha onde prefere navegar.</p><div>{posicoes.map(item => <button key={item.valor} type="button" aria-pressed={posicao === item.valor} onClick={() => mudarPosicao(item.valor)}><span className={`admin-menu-position-drawing posicao-${item.valor}`}/>{item.rotulo}</button>)}</div></div>}
+    </div>
   </aside>;
 }
