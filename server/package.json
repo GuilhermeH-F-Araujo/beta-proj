@@ -14,7 +14,8 @@
     "publish:recovery-logo": "node scripts/publicar-logo-recuperacao.mjs",
     "publish:auth-emails": "node scripts/publicar-emails-autenticacao.mjs",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test:employees": "npm run build && node --test scripts/funcionarios.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",

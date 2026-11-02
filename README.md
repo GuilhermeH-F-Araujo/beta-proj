@@ -4,6 +4,13 @@ Este repositório reúne o painel administrativo, sua API e as alterações de b
 
 ## Estrutura de pastas
 
+A transição das tabelas administrativas está documentada em
+[supabase/TABELAS.md](supabase/TABELAS.md), com o mapeamento em
+[supabase/MAPEAMENTO.md](supabase/MAPEAMENTO.md), a implantação/recuperação em
+[supabase/IMPLANTACAO.md](supabase/IMPLANTACAO.md) e os testes em
+[supabase/VALIDACAO.md](supabase/VALIDACAO.md). A aplicação no banco remoto exige
+autorização expressa; preparar os arquivos não altera o banco.
+
 | Local | O que contém |
 | --- | --- |
 | `client/` | Aplicação web em React e TypeScript. `index.html` é a entrada e `vite.config.ts` configura o Vite e o proxy local da API. |
