@@ -3,9 +3,36 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-for (const path of ['server/src/index.ts', 'server/tsconfig.json', 'server/package-lock.json', 'client/src/main.tsx', 'client/package-lock.json']) {
+const requiredFiles = [
+  'server/src/index.ts',
+  'server/tsconfig.json',
+  'server/package-lock.json',
+  'client/src/main.tsx',
+  'client/src/App.tsx',
+  'client/src/pages/Entrar.tsx',
+  'client/src/pages/EsqueciSenha.tsx',
+  'client/src/pages/RedefinirSenha.tsx',
+  'client/src/pages/OrdensServico.tsx',
+  'client/src/pages/DetalhesOrdem.tsx',
+  'client/src/pages/HistoricoMotocicleta.tsx',
+  'client/src/pages/Clientes.tsx',
+  'client/src/pages/MeuPerfil.tsx',
+  'client/src/pages/Motocicletas.tsx',
+  'client/src/pages/Funcionarios.tsx',
+  'client/src/pages/Agendamentos.tsx',
+  'client/src/pages/Servicos.tsx',
+  'client/src/pages/Dashboard.tsx',
+  'client/src/components/RotaProtegida.tsx',
+  'client/src/components/ModalNovaOrdem.tsx',
+  'client/src/components/ModalNovoUsuario.tsx',
+  'client/src/components/PainelNotificacoes.tsx',
+  'client/src/components/FuncionarioUI.tsx',
+  'client/src/services/funcionarios.ts',
+  'client/package-lock.json',
+];
+for (const path of requiredFiles) {
   if (!existsSync(new URL('../' + path, import.meta.url))) {
-    console.error('Arquivo obrigatório ausente: ' + path + '. Envie o projeto completo ao GitHub e use a raiz do projeto como Root Directory no Render.');
+    console.error('Arquivo obrigatório ausente: ' + path + '. O projeto foi enviado incompleto ou extraído na pasta errada. Envie todo o conteúdo do ZIP para a raiz do repositório e configure a raiz do projeto como Root Directory no Render.');
     process.exit(1);
   }
 }

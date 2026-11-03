@@ -2,7 +2,7 @@
 
 Esta versão inclui server/src completo, o build de produção e o painel servido pelo próprio servidor.
 
-1. Extraia o ZIP. Copie o conteúdo de estacao-motos-perc3 para a raiz do repositório, onde estão server, client e package.json. Não crie outra pasta estacao-motos-perc3 dentro do repositório.
+1. Extraia o ZIP corrigido diretamente na raiz do repositório. As pastas `client/` e `server/`, além de `render.yaml` e `package.json`, devem ficar lado a lado. Não compile nem envie apenas `client/src` ou apenas `server/`.
 2. Preserve seu .env local. Não envie senhas ao GitHub.
 3. Execute na raiz:
    git add .
@@ -30,6 +30,6 @@ O render.yaml não reconfigura automaticamente um serviço já criado manualment
 Verificação antes de enviar:
    git ls-files server/src
 
-Devem aparecer os nove arquivos TypeScript do servidor. O erro TS18003 ocorre quando esses arquivos não chegam ao build ou quando a raiz do serviço aponta para a pasta errada; trocar `include` não recupera arquivos ausentes. O `render.yaml` fixa `rootDir: .` e o comando de build confere os arquivos essenciais antes de compilar.
+Devem aparecer os nove arquivos TypeScript do servidor. Os erros TS18003/TS2307 indicam fontes ausentes ou raiz/pasta errada; trocar `include` não recupera arquivos ausentes. O `render.yaml` fixa `rootDir: .` e o comando de build confere as fontes do servidor e do cliente antes de compilar, com uma mensagem direta se o pacote estiver incompleto.
 
 Os testes de build não validam credenciais, permissões nem as migrations do banco de produção.
