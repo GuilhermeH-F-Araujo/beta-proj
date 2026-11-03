@@ -11,7 +11,7 @@ Esta versão inclui server/src completo, o build de produção e o painel servid
    git push origin main
 4. No serviço Web Service do Render, configure:
    - Branch: main
-   - Root Directory: vazio (se server e client estão na raiz do GitHub)
+   - Root Directory: `.` ou vazio (a raiz do GitHub, onde ficam `server`, `client` e o `package.json` principal)
    - Build Command: npm run build:render
    - Start Command: npm start
    - Health Check Path: /health
@@ -30,6 +30,6 @@ O render.yaml não reconfigura automaticamente um serviço já criado manualment
 Verificação antes de enviar:
    git ls-files server/src
 
-Devem aparecer os oito arquivos TypeScript do servidor. O erro TS18003 ocorre quando esses arquivos não chegam ao build; trocar include não recupera arquivos ausentes.
+Devem aparecer os nove arquivos TypeScript do servidor. O erro TS18003 ocorre quando esses arquivos não chegam ao build ou quando a raiz do serviço aponta para a pasta errada; trocar `include` não recupera arquivos ausentes. O `render.yaml` fixa `rootDir: .` e o comando de build confere os arquivos essenciais antes de compilar.
 
 Os testes de build não validam credenciais, permissões nem as migrations do banco de produção.
