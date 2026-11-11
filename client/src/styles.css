@@ -1079,3 +1079,47 @@ button, input { font: inherit; }
 
 /* Evita o botão de revelação nativo do Edge quando existe um controle próprio. */
 .field-login-password input::-ms-reveal,.field-login-password input::-ms-clear,.nam-password input::-ms-reveal,.nam-password input::-ms-clear{display:none}
+
+/* Preferências de acessibilidade aplicadas em todas as telas do sistema. */
+@supports (zoom: 1.08) {
+  html[data-app-text-scale="90"] .orders-viewport{zoom:0.90;width:111.1111vw;height:111.1111vh}
+  html[data-app-text-scale="95"] .orders-viewport{zoom:0.95;width:105.2632vw;height:105.2632vh}
+  html[data-app-text-scale="100"] .orders-viewport{zoom:1.00;width:100.0000vw;height:100.0000vh}
+  html[data-app-text-scale="105"] .orders-viewport{zoom:1.05;width:95.2381vw;height:95.2381vh}
+  html[data-app-text-scale="110"] .orders-viewport{zoom:1.10;width:90.9091vw;height:90.9091vh}
+  html[data-app-text-scale="115"] .orders-viewport{zoom:1.15;width:86.9565vw;height:86.9565vh}
+  html[data-app-text-scale="120"] .orders-viewport{zoom:1.20;width:83.3333vw;height:83.3333vh}
+  html[data-app-text-scale="125"] .orders-viewport{zoom:1.25;width:80.0000vw;height:80.0000vh}
+  html[data-app-text-scale="130"] .orders-viewport{zoom:1.30;width:76.9231vw;height:76.9231vh}
+  html[data-app-text-scale="135"] .orders-viewport{zoom:1.35;width:74.0741vw;height:74.0741vh}
+  html[data-app-text-scale="140"] .orders-viewport{zoom:1.40;width:71.4286vw;height:71.4286vh}
+  html[data-app-text-scale="145"] .orders-viewport{zoom:1.45;width:68.9655vw;height:68.9655vh}
+  html[data-app-text-scale="150"] .orders-viewport{zoom:1.50;width:66.6667vw;height:66.6667vh}
+}
+html .orders-viewport :where(p,span,div,label,input,select,textarea,td,th,dt,dd,small,button,li,a){font-weight:var(--app-font-weight,500)!important}
+html .orders-viewport :where(b,strong,h1,h2,h3,h4){font-weight:calc(var(--app-font-weight,500) + 200)!important}
+html .orders-viewport :where(p,small,td,dd,dt,li,label){line-height:var(--app-line-height,1.4)!important}
+html[data-app-contrast="true"] .orders-viewport{filter:contrast(1.08)}
+html[data-app-motion="false"] *,html[data-app-motion="false"] *::before,html[data-app-motion="false"] *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+html[data-app-density="confortavel"] .orders-viewport input,html[data-app-density="confortavel"] .orders-viewport select{min-height:44px}
+html[data-app-density="confortavel"] .orders-viewport button{min-height:40px}
+html[data-app-density="confortavel"] .admin-menu-link{min-height:44px}
+
+/* Modais em portal também respeitam a leitura ampliada escolhida pelo usuário. */
+html .nam-dialog :where(p,span,div,label,input,select,textarea,td,th,dt,dd,small,button,li,a){font-weight:var(--app-font-weight,500)!important}
+html .nam-dialog :where(b,strong,h1,h2,h3,h4){font-weight:calc(var(--app-font-weight,500) + 200)!important}
+html .nam-dialog :where(p,small,td,dd,dt,li,label){line-height:var(--app-line-height,1.4)!important}
+html[data-app-text-scale="90"] .nam-dialog{zoom:0.90;max-width:min(100%,1111.1px);max-height:104.44vh}
+html[data-app-text-scale="95"] .nam-dialog{zoom:0.95;max-width:min(100%,1052.6px);max-height:98.95vh}
+html[data-app-text-scale="100"] .nam-dialog{zoom:1.00;max-width:min(100%,1000.0px);max-height:94.00vh}
+html[data-app-text-scale="105"] .nam-dialog{zoom:1.05;max-width:min(100%,952.4px);max-height:89.52vh}
+html[data-app-text-scale="110"] .nam-dialog{zoom:1.10;max-width:min(100%,909.1px);max-height:85.45vh}
+html[data-app-text-scale="115"] .nam-dialog{zoom:1.15;max-width:min(100%,869.6px);max-height:81.74vh}
+html[data-app-text-scale="120"] .nam-dialog{zoom:1.20;max-width:min(100%,833.3px);max-height:78.33vh}
+html[data-app-text-scale="125"] .nam-dialog{zoom:1.25;max-width:min(100%,800.0px);max-height:75.20vh}
+html[data-app-text-scale="130"] .nam-dialog{zoom:1.30;max-width:min(100%,769.2px);max-height:72.31vh}
+html[data-app-text-scale="135"] .nam-dialog{zoom:1.35;max-width:min(100%,740.7px);max-height:69.63vh}
+html[data-app-text-scale="140"] .nam-dialog{zoom:1.40;max-width:min(100%,714.3px);max-height:67.14vh}
+html[data-app-text-scale="145"] .nam-dialog{zoom:1.45;max-width:min(100%,689.7px);max-height:64.83vh}
+html[data-app-text-scale="150"] .nam-dialog{zoom:1.50;max-width:min(100%,666.7px);max-height:62.67vh}
+html[data-app-contrast="true"] .nam-backdrop .nam-dialog{filter:contrast(1.08)}

@@ -1,4 +1,6 @@
-const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+import {avisarAlteracaoDados} from './atualizacaoDados';
+import type {AcessoConta} from './acessoConta';
+const API_URL = (import.meta.env?.VITE_API_URL || '').replace(/\/$/, '');
 
 export type DadosEntrada = {
   identifier: string;
@@ -55,12 +57,17 @@ export async function request<T>(path: string, init: RequestInit): Promise<T> {
     throw new Error('Não foi possível conectar ao serviço de acesso. Verifique sua conexão e tente novamente.');
   }
 
-  return readResponse<T>(response);
+  if(response.status===401 && !path.startsWith('/api/auth/'))window.dispatchEvent(new Event('admin-session-expired'));
+  const result = await readResponse<T>(response);
+  const method = (init.method || 'GET').toUpperCase();
+  if (!['GET','HEAD','OPTIONS'].includes(method) && /^\/api\/(?:clients(?:\/|$)|orders(?:\/|$)|admin\/users(?:\/|$))/.test(path)) window.dispatchEvent(new Event('admin-notifications-refresh'));
+  if (!['GET','HEAD','OPTIONS'].includes(method) && path.startsWith('/api/') && !/\/(?:auth|postal-code|admin\/preferences|admin\/notifications)(?:\/|$)/.test(path)) avisarAlteracaoDados();
+  return result;
 }
 
 export function login(payload: DadosEntrada) {
   return request<{
-    user: { id: string; email: string | null; nome: string; telefone?: string | null; perfil: 'Administrador' };
+    user: { id: string; email: string | null; nome: string; telefone?: string | null; perfil:string; acesso:AcessoConta };
   }>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -83,7 +90,7 @@ export function redefinirSenha(payload: { password: string; tokenHash?: string; 
 
 export function buscarUsuarioAtual() {
   return request<{
-    user: { id: string; email: string | null; nome: string; telefone?: string | null; perfil: 'Administrador' };
+    user: { id: string; email: string | null; nome: string; telefone?: string | null; perfil:string; acesso:AcessoConta };
   }>('/api/auth/me', { method: 'GET' });
 }
 
@@ -133,8 +140,8 @@ export type DadosNovoUsuario = {
 export function cadastrarUsuario(input:DadosNovoUsuario) {
   return request<{ id:number }>('/api/admin/users',{ method:'POST',body:JSON.stringify(input) });
 }
-export type NotificacaoAdmin={id:number;kind:'nova_os'|'aguardando_peca'|'pronta'|'cancelada';
-  orderId:number|null;title:string;body:string;createdAt:string;read:boolean};
+export type NotificacaoAdmin={id:number;kind:'nova_os'|'aguardando_peca'|'pronta'|'cancelada'|'novo_cliente'|'cliente_atualizado'|'os_atualizada'|'status_os'|'entregue';
+  orderId:number|null;clientId?:number|null;title:string;body:string;createdAt:string;read:boolean};
 export function buscarNotificacoesAdmin(){return request<{items:NotificacaoAdmin[];unreadCount:number}>('/api/admin/notifications',{method:'GET'});}
 export function limparNotificacoesAdmin(){return request<{cleared:number}>('/api/admin/notifications/clear',{method:'POST'});}
 export function atualizarNotificacaoAdmin(id:number,action:'ler'|'dispensar'){
@@ -156,7 +163,7 @@ export type RespostaClientes = {
 export type DadosPerfilCliente = {
   id: number; name: string; phone: string | null; email: string | null; cpf: string | null; hasPhoto: boolean; photoUrl: string | null;
   photoRevision: string | null; birthDate: string | null; postalCode: string | null; address: string | null;
-  addressNumber: string | null; district: string | null; city: string | null; state: string | null;
+  addressNumber: string | null; complement?: string | null; district: string | null; city: string | null; state: string | null;
   motorcycles: { id_moto: number; modelo: string; placa: string | null; ano: number | null; cor: string | null; quilometragem: number | null }[];
   orders: { id_os: number; id_moto: number; status: StatusOrdem; data_entrada: string; data_saida: string | null; total: number | null; problema_relatado: string | null }[];
   summary: { motorcycleCount: number; orderCount: number; recordedTotal: number; firstAttendance: string | null; lastAttendance: string | null };
@@ -169,7 +176,7 @@ export function excluirCliente(id: number, reason: string) {
 export type EdicaoPerfilCliente = {
   name: string; phone: string | null; email: string | null; cpf: string;
   birthDate: string | null; postalCode: string | null; address: string | null;
-  addressNumber: string | null; district: string | null; city: string | null; state: string | null;
+  addressNumber: string | null; complement?: string | null; district: string | null; city: string | null; state: string | null;
   photo?: string;
 };
 export function atualizarPerfilCliente(id: number, values: EdicaoPerfilCliente) {

@@ -84,7 +84,7 @@ export async function diretorioClientes(db: SupabaseClient) {
 }
 
 export async function perfilClienteNoDiretorio(db: SupabaseClient, id: number) {
-  const { data: client, error } = await db.from('cliente').select('id_cliente,nome,telefone,email,cpf,foto,data_nascimento,cep,endereco,numero,bairro,cidade,estado').eq('id_cliente', id).is('excluido_em', null).maybeSingle();
+  const { data: client, error } = await db.from('cliente').select('id_cliente,nome,telefone,email,cpf,foto,data_nascimento,cep,endereco,numero,complemento,bairro,cidade,estado').eq('id_cliente', id).is('excluido_em', null).maybeSingle();
   if (error) throw error;
   if (!client) return null;
   const { data: motorcycles, error: bikesError } = await db.from('moto')
@@ -103,7 +103,7 @@ export async function perfilClienteNoDiretorio(db: SupabaseClient, id: number) {
   orders.sort((a, b) => b.data_entrada.localeCompare(a.data_entrada) || b.id_os - a.id_os);
   return {
     id: client.id_cliente, name: client.nome, phone: client.telefone, email: client.email, cpf: client.cpf,
-    birthDate: client.data_nascimento, postalCode: client.cep, address: client.endereco, addressNumber: client.numero,
+    birthDate: client.data_nascimento, postalCode: client.cep, address: client.endereco, addressNumber: client.numero, complement: client.complemento,
     district: client.bairro, city: client.cidade, state: client.estado,
     hasPhoto: Boolean(client.foto), photoUrl: client.foto?.startsWith('https://') ? client.foto : null, photoRevision: client.foto,
     motorcycles: motorcycles ?? [], orders,

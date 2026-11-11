@@ -1,0 +1,464 @@
+/* Notifications shares the preference editor: one navigation, one active subject. */
+.settings-app .cfg-notify-workspace {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 27px;
+  align-items: start;
+  min-width: 0;
+}
+.settings-app .cfg-notify-workspace > [hidden] {
+  display: none !important;
+}
+.settings-app .cfg-notify-workspace .cfg-notification-layout {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  display: block;
+}
+.settings-app .cfg-notify-nav {
+  grid-column: 1;
+  grid-row: 1;
+  padding-top: 8px;
+}
+.settings-app .cfg-notify-global {
+  padding: 17px 15px;
+  margin: 24px 0 0;
+  border: 1px solid #dfe6ef;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 3px 12px #23364d03;
+}
+.settings-app .cfg-notify-global > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.settings-app .cfg-notify-global-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #5c728d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settings-app .cfg-notify-global-label svg {
+  flex: none;
+}
+.settings-app .cfg-notify-global > b {
+  display: block;
+  margin-top: 15px;
+  font-size: 14px;
+  color: #667a92;
+}
+.settings-app .cfg-notify-global > b.enabled {
+  color: #377d60;
+}
+.settings-app .cfg-notify-global > p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: #6b8098;
+  line-height: 1.7;
+}
+.settings-app .cfg-notify-workspace .cfg-events-column > .cfg-card {
+  border-radius: 13px;
+  box-shadow: 0 5px 22px #24364e05;
+}
+.settings-app .cfg-notify-workspace .cfg-events-column .cfg-card-head {
+  padding: 25px 26px;
+  align-items: center;
+}
+.settings-app .cfg-notify-workspace .cfg-card-head h2 {
+  font-size: 21px;
+  letter-spacing: -0.025em;
+  color: #2c425d;
+}
+.settings-app .cfg-notify-workspace .cfg-card-head p {
+  font-size: 14px;
+  color: #667c94;
+  line-height: 1.65;
+}
+.settings-app
+  .cfg-notify-workspace
+  .cfg-events-column
+  .cfg-card-head
+  > .cfg-icon {
+  width: 43px;
+  height: 43px;
+  background: #fff6f7;
+  border-color: #f0e1e5;
+  color: #c8324a;
+  border-radius: 11px;
+}
+.settings-app .cfg-notify-workspace .cfg-event-filter-bar {
+  padding: 17px 26px;
+  background: #fdfefe;
+}
+.settings-app .cfg-notify-workspace .cfg-events-table {
+  padding: 20px 26px 8px;
+}
+.settings-app .cfg-notify-workspace .cfg-events-labels {
+  grid-template-columns: minmax(0, 1fr) 85px 85px;
+  gap: 14px;
+  padding-left: 45px;
+}
+.settings-app .cfg-notify-workspace .cfg-event {
+  grid-template-columns: 31px minmax(0, 1fr) 85px 85px;
+  gap: 14px;
+  padding: 22px 0;
+}
+.settings-app .cfg-notify-workspace .cfg-event:hover,
+.settings-app .cfg-notify-workspace .cfg-event:focus-within {
+  background: #fafcfe;
+}
+.settings-app .cfg-notify-workspace .cfg-event-copy {
+  gap: 17px;
+}
+.settings-app .cfg-notify-workspace .cfg-event-copy b {
+  font-size: 15px;
+  color: #344e6c;
+}
+.settings-app .cfg-notify-workspace .cfg-event-copy p {
+  font-size: 13px;
+  color: #697e96;
+}
+.settings-app .cfg-notify-workspace .cfg-event-sound {
+  flex-basis: 230px;
+  width: 230px;
+  max-width: 42%;
+}
+.settings-app .cfg-notify-workspace .cfg-event-sound .filter-select-trigger {
+  font-size: 12px;
+  min-height: 37px;
+}
+.settings-app .cfg-notify-workspace .cfg-event-sound .cfg-icon-button {
+  width: 35px;
+  height: 35px;
+  min-height: 35px;
+}
+.settings-app .cfg-notify-workspace .cfg-sound-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.settings-app
+  .cfg-notify-workspace
+  .cfg-notification-layout
+  .cfg-sound-column
+  > .cfg-card:first-child {
+  display: block;
+  grid-column: auto !important;
+}
+.settings-app .cfg-notify-workspace .cfg-sound-column > .cfg-card {
+  grid-column: auto !important;
+  padding: 25px 27px;
+  border-radius: 13px;
+  box-shadow: 0 5px 22px #24364e05;
+}
+.settings-app .cfg-notify-workspace .cfg-sound-column .cfg-card-head {
+  margin-bottom: 24px;
+  padding-bottom: 22px;
+  align-items: center;
+}
+.settings-app
+  .cfg-notify-workspace
+  .cfg-sound-column
+  .cfg-card-head
+  > .cfg-icon {
+  width: 43px;
+  height: 43px;
+  border-radius: 11px;
+  background: #f8fafc;
+  border-color: #e1e8f1;
+  color: #6b819d;
+}
+.settings-app .cfg-notify-workspace .cfg-audio-config-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 30px;
+  align-items: start;
+}
+.settings-app .cfg-notify-workspace .cfg-audio-tone,
+.settings-app .cfg-notify-workspace .cfg-audio-level {
+  min-width: 0;
+}
+.settings-app .cfg-notify-workspace .cfg-audio-level {
+  padding-left: 30px;
+  border-left: 1px solid #e8edf4;
+}
+.settings-app .cfg-notify-workspace .cfg-audio-tone .cfg-sound-picker {
+  max-width: none;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.settings-app
+  .cfg-notify-workspace
+  .cfg-audio-tone
+  .cfg-sound-picker
+  > .filter-select {
+  flex: 1 1 160px;
+}
+.settings-app
+  .cfg-notify-workspace
+  .cfg-audio-tone
+  .cfg-sound-picker
+  > .cfg-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  border-radius: 7px;
+}
+.settings-app .cfg-notify-workspace .cfg-audio-level .cfg-volume {
+  max-width: none;
+  margin: 0 0 16px;
+}
+.settings-app .cfg-notify-workspace .cfg-audio-level .cfg-inline-info {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.settings-app .cfg-notify-workspace .cfg-sound-column > .cfg-custom-audio {
+  display: grid;
+  grid-template-columns: 235px minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: 0;
+}
+.settings-app .cfg-notify-workspace .cfg-custom-audio > .cfg-card-head {
+  grid-column: 1;
+  grid-row: 1 / span 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  gap: 13px;
+}
+.settings-app .cfg-notify-workspace .cfg-custom-audio > .cfg-card-head h2 {
+  font-size: 19px;
+  line-height: 1.5;
+}
+.settings-app .cfg-notify-workspace .cfg-custom-audio > .cfg-card-head p {
+  font-size: 13px;
+  line-height: 1.7;
+  margin-top: 7px;
+}
+.settings-app .cfg-notify-workspace .cfg-custom-audio > :not(.cfg-card-head) {
+  grid-column: 2;
+  min-width: 0;
+}
+.settings-app .cfg-notify-workspace .cfg-custom-audio .cfg-upload {
+  min-height: 95px;
+  padding: 18px;
+  background: #fafcfe;
+  border-color: #bdcddd;
+  border-radius: 9px;
+}
+.settings-app .cfg-notify-workspace .cfg-custom-audio .cfg-audio-file {
+  margin-bottom: 14px;
+}
+.settings-app .cfg-notify-workspace .cfg-custom-audio .cfg-help {
+  font-size: 13px;
+  margin-top: 13px;
+  color: #6e839b;
+}
+.settings-app .cfg-notify-workspace .cfg-quiet-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: 0;
+}
+.settings-app .cfg-notify-workspace .cfg-quiet-editor > .cfg-card-head {
+  grid-column: 1/-1;
+  grid-row: 1;
+}
+.settings-app .cfg-notify-workspace .cfg-quiet-editor > .cfg-setting-row {
+  grid-column: 1/-1;
+  grid-row: 2;
+  margin-bottom: 22px;
+  padding-bottom: 21px;
+}
+.settings-app .cfg-notify-workspace .cfg-quiet-editor > .cfg-time-grid {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: none;
+  align-self: start;
+  gap: 13px;
+  margin: 0;
+}
+.settings-app .cfg-notify-workspace .cfg-quiet-editor > .cfg-time-grid input {
+  min-width: 0;
+  width: 100%;
+  min-height: 45px;
+}
+.settings-app .cfg-notify-workspace .cfg-quiet-editor > .cfg-help {
+  grid-column: 1/-1;
+  margin: 17px 0 0;
+}
+.settings-app .cfg-quiet-context {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 18px;
+  background: #f7f9fc;
+  border: 1px solid #e4ebf3;
+  border-radius: 9px;
+  color: #6e849d;
+}
+.settings-app .cfg-quiet-context > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.settings-app .cfg-quiet-context b {
+  display: block;
+  font-size: 14px;
+  color: #4c6582;
+}
+.settings-app .cfg-quiet-context p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #667e98;
+  margin: 7px 0;
+}
+.settings-app .cfg-quiet-context small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #70869f;
+}
+@container (max-width:1200px) {
+  .settings-app .cfg-notify-workspace .cfg-event-copy {
+    display: block;
+  }
+  .settings-app .cfg-notify-workspace .cfg-event-sound {
+    width: 255px;
+    max-width: 100%;
+    margin-top: 10px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-audio-config-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-audio-level {
+    border-left: 0;
+    border-top: 1px solid #e8edf4;
+    padding: 22px 0 0;
+  }
+  .settings-app .cfg-notify-workspace .cfg-sound-column > .cfg-custom-audio {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-app .cfg-notify-workspace .cfg-custom-audio > .cfg-card-head {
+    grid-column: auto;
+    grid-row: auto;
+    flex-direction: row;
+    align-items: center;
+    padding-bottom: 22px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid #e8edf4;
+  }
+  .settings-app .cfg-notify-workspace .cfg-custom-audio > :not(.cfg-card-head) {
+    grid-column: auto;
+  }
+  .settings-app .cfg-notify-workspace .cfg-quiet-editor {
+    display: block;
+  }
+  .settings-app .cfg-notify-workspace .cfg-quiet-editor > .cfg-time-grid {
+    max-width: 650px;
+  }
+  .settings-app .cfg-quiet-context {
+    margin-top: 22px;
+    max-width: 650px;
+  }
+}
+@container (max-width:1050px) {
+  .settings-app .cfg-notify-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .settings-app .cfg-notify-nav {
+    grid-column: 1;
+    grid-row: auto;
+    padding: 0;
+  }
+  .settings-app .cfg-notify-workspace .cfg-notification-layout {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .settings-app .cfg-notify-global {
+    margin-top: 17px;
+    padding: 16px 18px;
+  }
+  .settings-app .cfg-notify-global > div {
+    gap: 20px;
+  }
+  .settings-app .cfg-notify-global > b {
+    margin-top: 10px;
+  }
+}
+@container (max-width:750px) {
+  .settings-app .cfg-notify-workspace .cfg-events-column .cfg-card-head {
+    padding: 21px 18px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-events-table {
+    padding: 18px 17px 7px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-event-filter-bar {
+    padding-inline: 17px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-events-labels {
+    grid-template-columns: minmax(0, 1fr) 64px 64px;
+    gap: 8px;
+    padding-left: 33px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-event {
+    grid-template-columns: 25px minmax(0, 1fr) 64px 64px;
+    gap: 8px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-sound-column > .cfg-card {
+    padding: 22px 19px;
+  }
+  .settings-app .cfg-notify-workspace .cfg-card-head h2 {
+    font-size: 19px;
+  }
+}
+@media (max-width: 900px) {
+  .settings-app .cfg-notify-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-app .cfg-notify-workspace .cfg-notification-layout {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .settings-app .cfg-notify-nav {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+.settings-app .cfg-notify-quiet-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 13px;
+  padding: 11px 0 0;
+  border: 0;
+  border-top: 1px solid #e8edf3;
+  background: none;
+  text-align: left;
+  color: #6c819b;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings-app .cfg-notify-quiet-link svg {
+  flex: none;
+}
+.settings-app .cfg-notify-quiet-link svg:last-child {
+  margin-left: auto;
+}
+.settings-app .cfg-notify-quiet-link:hover {
+  color: #b13248;
+}

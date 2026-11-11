@@ -1,11 +1,13 @@
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import Skeleton from '../components/Skeleton';
+import {useDadosVivos} from '../hooks/useDadosVivos';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
 import { rotulosStatusOrdem } from '../services/statusOrdem';
-import MenuAdmin, { Icon } from '../components/MenuAdmin';
+import { Icon } from '../components/MenuAdmin';
 import ModalAcoesOrdem from '../components/ModalAcoesOrdem';
 import ModalPreviaModelo from '../components/ModalPreviaModelo';
-import { ErroRequisicaoApi, buscarFotoCliente, buscarUsuarioAtual, buscarDetalhesOrdem, buscarHistoricoObservacoes, logout, type RegistroHistoricoObservacao, type DetalhesOrdem as Details } from '../services/apiAutenticacao';
+import { ErroRequisicaoApi, buscarFotoCliente, buscarDetalhesOrdem, buscarHistoricoObservacoes, logout, type RegistroHistoricoObservacao, type DetalhesOrdem as Details } from '../services/apiAutenticacao';
 import { useMiniaturaMotocicleta } from '../services/miniaturasMotocicletas';
 import './ordens-servico.css';
 import './detalhes-ordem.css';
@@ -56,8 +58,8 @@ export default function DetalhesOrdem() {
   useEffect(() => {
     if (!Number.isSafeInteger(orderId) || orderId < 1) { setError('Número da OS inválido.'); return; }
     let active = true;
-    Promise.all([buscarUsuarioAtual(), buscarDetalhesOrdem(orderId)]).then(([identity, details]) => {
-      if (active) { setName(identity.user.nome); setData(details); setError(''); }
+    buscarDetalhesOrdem(orderId).then((details) => {
+      if (active) { setData(details); setError(''); }
     }).catch(err => {
       if (!active) return;
       if (err instanceof ErroRequisicaoApi && (err.status === 401 || err.status === 403)) navigate('/login', { replace: true });
@@ -65,6 +67,7 @@ export default function DetalhesOrdem() {
     });
     return () => { active = false; };
   }, [orderId, navigate]);
+  useDadosVivos(async valido=>{try{const result=await buscarDetalhesOrdem(orderId);if(valido()){setData(result);setError('')}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar a OS.')}},!!data,String(orderId));
   async function handleLogout() {
     try { await logout(); navigate('/login', { replace: true }); }
     catch { setToast('Não foi possível sair agora.'); }
@@ -90,10 +93,10 @@ export default function DetalhesOrdem() {
   ].filter(item => item.at) : [];
 
   return <div className="orders-viewport details-viewport">
-    <MenuAdmin collapsed={collapsed} onUnavailable={label => setToast(`${label} ainda não possui uma página neste projeto.`)} />
+    
     <div className="orders-main">
-      <CabecalhoAdmin title="Detalhes da OS" collapsed={collapsed} onToggle={()=>setCollapsed(value=>!value)} name={name} onLogout={handleLogout}/>
-      <main className="details-scroll">
+      
+      <main className="details-scroll"><ConteudoCarregando carregando={!data&&!error}>
         {error ? <div className="details-error"><p>{error}</p><button onClick={() => navigate('/ordens-de-servico')}>Voltar à lista</button></div> : !data ? <div className="details-loading">Carregando detalhes da OS...</div> : <div className="details-body">
           <button type="button" className="detail-return" onClick={() => navigate('/ordens-de-servico')}><Icon name="left" size={14}/> Voltar às ordens</button><div className="details-title-row"><div><h1>Detalhes da Ordem de Serviço</h1><span className="details-number">OS #{data.id}</span></div><div className="details-title-actions"><button className="white-btn" onClick={() => navigate(`/ordens-de-servico/${data.id}/historico`)}><Icon name="clock" size={14}/> Histórico</button><button className="red-btn" onClick={() => setEditing(true)}><Icon name="pencil" size={14}/> Editar</button></div></div>
           <section className="details-summary" aria-label="Resumo da ordem">
@@ -121,7 +124,7 @@ export default function DetalhesOrdem() {
           </div>
           <section className="details-panel observations"><div className="observations-heading"><h2><span className="details-section-icon icon-file" aria-hidden="true"/> Observação atual</h2><button type="button" onClick={() => void openObservationHistory()}><Icon name="clock" size={13}/> Ver histórico de observações</button></div><p>{data.observations || 'Nenhuma observação atual cadastrada.'}</p></section>
         </div>}
-      </main>
+      </ConteudoCarregando></main>
     </div>
     {historyOpen && <div className="observation-history-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setHistoryOpen(false); }}>
       <section className="observation-history-dialog" role="dialog" aria-modal="true" aria-labelledby="observation-history-title">

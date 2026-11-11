@@ -20,4 +20,6 @@ export const adicionarDocumentoFuncionario=(id:number,input:{tipo:string;numero:
 export const adicionarNotaFuncionario=(id:number,texto:string)=>request<{ok:true}>(`/api/employees/${id}/notas`,{method:'POST',body:JSON.stringify({texto})});
 export const removerRegistroFuncionario=(id:number,tipo:'notas'|'documentos',item:number)=>request<{ok:true}>(`/api/employees/${id}/${tipo}/${item}`,{method:'DELETE'});
 export const salvarFotoFuncionario=(id:number,image:string)=>request<{ok:true}>(`/api/employees/${id}/photo`,{method:'POST',body:JSON.stringify({image})});
-export const fotoFuncionario=(id:number,versao=0)=>`${(import.meta.env.VITE_API_URL||'').replace(/\/$/,'')}/api/employees/${id}/photo?v=${versao}`;
+export const fotoFuncionario=(id:number,versao=0)=>`${(import.meta.env?.VITE_API_URL||'').replace(/\/$/,'')}/api/employees/${id}/photo?v=${versao}`;
+
+export const buscarOpcoesMecanicos=(signal?:AbortSignal)=>request<{itens:Pick<Funcionario,'nome'|'cargo'|'departamento'|'situacao'>[]}>('/api/employees/options',{method:'GET',signal});

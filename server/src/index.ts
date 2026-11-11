@@ -1,3 +1,8 @@
+import {rotasDadosCompartilhados} from './dadosCompartilhados.js';
+import {rotasCep} from './cep.js';
+import {lerAcesso,permitirRequisicao,tiposAvisos,permitir} from './cargos.js';
+import { rotasPreferenciasConta } from './preferenciasConta.js';
+import { rotasConfiguracoes } from './configuracoes.js';
 import {rotasPainel} from './painelAdmin.js';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
@@ -205,24 +210,22 @@ function isAdministratorRole(value: string | null | undefined) {
 }
 
 async function readAuthorizedAdmin(accessToken: string, userId: string) {
-  const scopedClient = createSupabaseClient(accessToken);
+  const scopedClient = createPrivilegedSupabaseClient() || createSupabaseClient(accessToken);
 
   const { data: profile, error } = await scopedClient
     .from('funcionario')
-    .select('id_funcionario, nome, cargo, email, telefone, perfil_acesso, auth_user_id')
+    .select('id_funcionario, nome, cargo, email, telefone, perfil_acesso, auth_user_id, situacao')
     .eq('auth_user_id', userId)
     .maybeSingle();
 
   if (error) throw new Error(`Consulta ao perfil administrativo falhou: ${error.message}`);
   if (!profile) return null;
 
-  // Defesa em profundidade: não basta ter um vínculo com auth.users.
-  // O registro precisa ser Administrador nos dois campos usados pelo projeto.
-  if (!isAdministratorRole(profile.cargo) || !isAdministratorRole(profile.perfil_acesso)) {
-    return null;
-  }
-
-  return profile;
+  const privileged=createPrivilegedSupabaseClient();
+  if(!privileged)return null;
+  const acesso=await lerAcesso(privileged,profile);
+  if(acesso&&!acesso.administrador&&profile.situacao!=="ativo")return null;
+  return acesso?{...profile,acesso}:null;
 }
 
 
@@ -367,12 +370,12 @@ async function isRecoverableAdministratorEmail(email: string) {
 
   const { data: profile, error } = await privileged
     .from('funcionario')
-    .select('auth_user_id, cargo, perfil_acesso, email')
+    .select('id_funcionario, auth_user_id, cargo, perfil_acesso, email')
     .ilike('email', email)
     .maybeSingle();
 
   if (error || !profile?.auth_user_id) return false;
-  if (!isAdministratorRole(profile.cargo) || !isAdministratorRole(profile.perfil_acesso)) return false;
+  if (!await lerAcesso(privileged,profile)) return false;
 
   const { data, error: authError } = await privileged.auth.admin.getUserById(profile.auth_user_id);
   if (authError || !data.user?.email) return false;
@@ -482,7 +485,8 @@ app.post('/api/auth/login', async (req, res) => {
         id: data.user.id,
         email: data.user.email ?? null,
         nome: adminProfile.nome,
-        perfil: 'Administrador',
+        perfil: adminProfile.acesso.cargo,
+        acesso: adminProfile.acesso,
       },
     });
   } catch (error) {
@@ -636,7 +640,8 @@ app.get('/api/auth/me', async (req, res) => {
       email: session.user.email ?? null,
       nome: adminProfile.nome,
       telefone: adminProfile.telefone ?? null,
-      perfil: 'Administrador',
+      perfil: adminProfile.acesso.cargo,
+        acesso: adminProfile.acesso,
     },
   });
 });
@@ -662,9 +667,10 @@ const ORDERS_PER_PAGE = 15;
 async function ordersClient(req: express.Request, res: express.Response) {
   const session = await authenticatedUser(req, res);
   if (!session) { res.status(401).json({ message: 'Sessão expirada. Entre novamente.' }); return null; }
-  if (!await readAuthorizedAdmin(session.accessToken, session.user.id)) {
-    res.status(403).json({ message: 'Acesso permitido apenas a administradores.' }); return null;
-  }
+  const profile=await readAuthorizedAdmin(session.accessToken,session.user.id);
+  if(!profile){res.status(403).json({message:'Sua conta não possui acesso ativo ao painel.'});return null;}
+  res.locals.acesso=profile.acesso;
+  if(!permitirRequisicao(profile.acesso,req.method,req.originalUrl,req.body)){res.status(403).json({message:'Seu cargo não permite esta ação.',code:'PERMISSION_DENIED'});return null;}
   res.locals.adminUserId = session.user.id;
   const privileged = createPrivilegedSupabaseClient();
   if (!privileged) {
@@ -677,6 +683,10 @@ async function ordersClient(req: express.Request, res: express.Response) {
 const ADMIN_AVATAR_BUCKET = 'admin-avatars';
 app.use('/api/employees',rotasFuncionarios(ordersClient));
 app.use('/api/admin/dashboard',rotasPainel(ordersClient));
+app.use('/api/admin/settings',rotasConfiguracoes(ordersClient));
+app.use('/api/admin/preferences',rotasPreferenciasConta(ordersClient));
+app.use('/api/postal-code',rotasCep(ordersClient));
+app.use('/api/shared',rotasDadosCompartilhados(ordersClient));
 const adminAvatarPath = (userId: string) => `admins/${userId}/avatar.jpg`;
 
 app.patch('/api/admin/profile', async (req,res) => {
@@ -981,10 +991,11 @@ app.get('/api/orders/create-options', async (req, res) => {
       ? await db.from('funcionario').select('id_funcionario,nome').in('id_funcionario',mechanicIds)
       : { data:[],error:null };
     if (staffError) throw staffError;
+    const detalhesCliente=permitir(res.locals.acesso,'clientes','visualizar')||permitir(res.locals.acesso,'ordens','visualizar');
     return res.json({
-      clients:(clients ?? []).map(c => ({ id:c.id_cliente,name:c.nome,phone:c.telefone,email:c.email,cpf:c.cpf })),
+      clients:(clients ?? []).map(c => ({ id:c.id_cliente,name:c.nome,phone:detalhesCliente?c.telefone:null,email:detalhesCliente?c.email:null,cpf:detalhesCliente?c.cpf:null })),
       motorcycles:(motorcycles ?? []).map(m => ({ id:m.id_moto,clientId:m.id_cliente,model:m.modelo,plate:m.placa,year:m.ano,color:m.cor,mileage:m.quilometragem })),
-      mechanics:(staff ?? []).map(m => ({ id:m.id_funcionario,name:m.nome })),
+      mechanics:permitir(res.locals.acesso,'ordens','visualizar')?(staff ?? []).map(m => ({ id:m.id_funcionario,name:m.nome })):[],
     });
   } catch (error) {
     console.error('[orders/create-options]',error);
@@ -1085,8 +1096,9 @@ app.get('/api/admin/notifications',async(req,res)=>{
   const db=await ordersClient(req,res);if(!db)return;
   const userId=res.locals.adminUserId as string;
   try {
-    const {data:events,error:eventError}=await db.from('admin_notify')
-      .select('id,tipo,id_os,titulo,mensagem,criado_em').order('criado_em',{ascending:false}).limit(100);
+    const tipos=tiposAvisos(res.locals.acesso);if(tipos&&!tipos.length)return res.json({items:[],unreadCount:0});
+    let query=db.from('admin_notify').select('id,tipo,id_os,id_cliente,titulo,mensagem,criado_em').order('criado_em',{ascending:false}).limit(100);if(tipos)query=query.in('tipo',tipos);
+    const {data:events,error:eventError}=await query;
     if(eventError)throw eventError;
     const ids=(events??[]).map(event=>event.id);
     const {data:receipts,error:receiptError}=ids.length
@@ -1096,7 +1108,7 @@ app.get('/api/admin/notifications',async(req,res)=>{
     if(receiptError)throw receiptError;
     const state=new Map((receipts??[]).map(receipt=>[receipt.id_aviso,receipt]));
     const items=(events??[]).filter(event=>!state.get(event.id)?.dispensado_em)
-      .slice(0,40).map(event=>({id:event.id,kind:event.tipo,orderId:event.id_os,
+      .slice(0,100).map(event=>({id:event.id,kind:event.tipo,orderId:event.id_os,clientId:event.id_cliente,
         title:event.titulo,body:event.mensagem,createdAt:event.criado_em,read:!!state.get(event.id)?.lido_em}));
     const unreadCount=(events??[]).filter(event=>!state.get(event.id)?.dispensado_em&&!state.get(event.id)?.lido_em).length;
     return res.json({items,unreadCount});
@@ -1109,15 +1121,16 @@ app.post('/api/admin/notifications/clear',async(req,res)=>{
   const db=await ordersClient(req,res);if(!db)return;
   const userId=res.locals.adminUserId as string;
   try{
-    const {data:latest,error:latestError}=await db.from('admin_notify')
-      .select('id').order('id',{ascending:false}).limit(1).maybeSingle();
+    const tipos=tiposAvisos(res.locals.acesso);if(tipos&&!tipos.length)return res.json({cleared:0});
+    let latestQuery=db.from('admin_notify').select('id').order('id',{ascending:false}).limit(1);if(tipos)latestQuery=latestQuery.in('tipo',tipos);
+    const {data:latest,error:latestError}=await latestQuery.maybeSingle();
     if(latestError)throw latestError;
     if(!latest)return res.json({cleared:0});
     let cursor=0;
     let cleared=0;
     while(true){
-      const {data:events,error:listError}=await db.from('admin_notify')
-        .select('id').gt('id',cursor).lte('id',latest.id).order('id').limit(250);
+      let listQuery=db.from('admin_notify').select('id').gt('id',cursor).lte('id',latest.id).order('id').limit(250);if(tipos)listQuery=listQuery.in('tipo',tipos);
+      const {data:events,error:listError}=await listQuery;
       if(listError)throw listError;
       if(!events?.length)break;
       const now=new Date().toISOString();
@@ -1141,7 +1154,9 @@ app.patch('/api/admin/notifications/:id',async(req,res)=>{
     return res.status(400).json({message:'Ação de notificação inválida.'});
   const userId=res.locals.adminUserId as string;
   try {
-    const {data:notification,error:findError}=await db.from('admin_notify').select('id').eq('id',id).maybeSingle();
+    const tipos=tiposAvisos(res.locals.acesso);if(tipos&&!tipos.length)return res.status(404).json({message:'Notificação não encontrada.'});
+    let noticeQuery=db.from('admin_notify').select('id').eq('id',id);if(tipos)noticeQuery=noticeQuery.in('tipo',tipos);
+    const {data:notification,error:findError}=await noticeQuery.maybeSingle();
     if(findError)throw findError;
     if(!notification)return res.status(404).json({message:'Notificação não encontrada.'});
     const {error}=await db.from('admin_leitura').upsert({
@@ -1406,6 +1421,7 @@ app.patch('/api/clients/:id', async (req, res) => {
     postalCode: z.string().regex(/^(?:\d{8})?$/).nullable(),
     address: z.string().trim().max(255).nullable(),
     addressNumber: z.string().trim().max(20).nullable(),
+    complement: z.string().trim().max(120).nullable().optional(),
     district: z.string().trim().max(100).nullable(),
     city: z.string().trim().max(100).nullable(),
     state: z.string().trim().regex(/^(?:[A-Z]{2})?$/).nullable(),
@@ -1435,7 +1451,7 @@ app.patch('/api/clients/:id', async (req, res) => {
     const { data, error } = await db.from('cliente').update({
       nome: input.name, telefone: input.phone || null, email: input.email || null, cpf: input.cpf || null,
       data_nascimento: input.birthDate, cep: input.postalCode || null, endereco: input.address || null,
-      numero: input.addressNumber || null, bairro: input.district || null, cidade: input.city || null,
+      ...(input.complement!==undefined?{complemento:input.complement||null}:{}), numero: input.addressNumber || null, bairro: input.district || null, cidade: input.city || null,
       estado: input.state || null, ...(uploadedPath ? { foto: uploadedPath } : {}),
     }).eq('id_cliente', id.data).select('id_cliente').maybeSingle();
     if (error) throw error;

@@ -1,3 +1,7 @@
+import {useDadosVivos} from '../hooks/useDadosVivos';
+import Skeleton from './Skeleton';
+import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
+import {limparRascunho,temRascunho} from '../services/rascunhos';
 import { useEffect, useState } from 'react';
 import { buscarResumoPagamento, registrarPagamentoOrdem, type ResumoPagamento } from '../services/apiAutenticacao';
 import './modal-pagamento.css';
@@ -21,10 +25,10 @@ export default function ModalPagamento({ orderId, onClose, onPaid }: {
   const [summary, setSummary] = useState<ResumoPagamento | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [method, setMethod] = useState<Method>('credito');
-  const [terminal, setTerminal] = useState<Terminal>('rede');
-  const [installments, setInstallments] = useState(1);
-  const [moreOptions, setMoreOptions] = useState(false);
+  const [method, setMethod] = useEstadoRascunho<Method>(`pagamento-${orderId}`,'method','credito');
+  const [terminal, setTerminal] = useEstadoRascunho<Terminal>(`pagamento-${orderId}`,'terminal','rede');
+  const [installments, setInstallments] = useEstadoRascunho(`pagamento-${orderId}`,'installments',1);
+  const [moreOptions, setMoreOptions] = useEstadoRascunho(`pagamento-${orderId}`,'moreOptions',false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -46,6 +50,7 @@ export default function ModalPagamento({ orderId, onClose, onPaid }: {
     return () => window.removeEventListener('keydown', escape);
   }, [onClose, saving]);
 
+  useDadosVivos(async valido=>{const data=await buscarResumoPagamento(orderId);if(valido())setSummary(data)},!loading&&!saving&&!success,String(orderId));
   async function finish() {
     if (!summary || summary.amount <= 0 || saving) return;
     setSaving(true); setError('');
@@ -55,7 +60,7 @@ export default function ModalPagamento({ orderId, onClose, onPaid }: {
         installments: method === 'credito' ? installments : 1,
       });
       onPaid(orderId);
-      setSuccess(true);
+      limparRascunho(`pagamento-${orderId}`);setSuccess(true);
     } catch (err) { setError(err instanceof Error ? err.message : 'Não foi possível finalizar o registro.'); }
     finally { setSaving(false); }
   }
@@ -68,7 +73,7 @@ export default function ModalPagamento({ orderId, onClose, onPaid }: {
       <small>Você será direcionado de volta em instantes.</small>
     </section> : <section className="payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-title">
       <div className="payment-dialog-head"><h2 id="payment-title">Pagamento da OS #{orderId}</h2><button type="button" aria-label="Fechar pagamento" onClick={onClose} disabled={saving}>×</button></div>
-      {loading ? <div className="payment-loading">Carregando dados da OS…</div> : !summary ? <div className="payment-loading"><p>{error}</p><button type="button" onClick={onClose}>Voltar</button></div> : <>
+      {loading ? <Skeleton tipo="formulario" linhas={4}/> : !summary ? <div className="payment-loading"><p>{error}</p><button type="button" onClick={onClose}>Voltar</button></div> : <>
         <div className="payment-scroll-content">
           <div className="payment-facts"><div><small>♙ Cliente</small><strong>{summary.client}</strong><span>{summary.phone || 'Telefone não informado'}</span></div><div><small>◇ Veículo</small><strong>{summary.motorcycle}</strong><span>{summary.plate || 'Placa não informada'}</span></div><div className="payment-value"><small>▤ Valor da OS</small><strong>{money(summary.amount)}</strong></div></div>
           <div className="payment-breakdown"><h3>Resumo do pagamento</h3><div><span>Peças e acessórios</span><b>{money(summary.partsTotal)}</b></div><div><span>Serviços</span><b>{money(summary.servicesTotal)}</b></div><div className="discount"><span>Descontos</span><b>- {money(summary.discount)}</b></div><div className="payment-total"><strong>Total a pagar</strong><strong>{money(summary.amount)}</strong></div></div>

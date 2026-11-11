@@ -1,3 +1,5 @@
+import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
+import {limparRascunho,temRascunho} from '../services/rascunhos';
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './MenuAdmin';
@@ -35,11 +37,11 @@ const roles:{id:Role;icon:string;description:string}[]=[
   {id:'Cliente',icon:'user',description:'Cadastro do cliente'},
 ];
 export default function ModalNovoUsuario({onClose,onCreated,employeeOnly=false,initialRole,replaceBackground=false}:{onClose:()=>void;onCreated:(user?:{id:number;name:string;phone:string;email:string;cpf:string;role:Role})=>void;employeeOnly?:boolean;initialRole?:Role;replaceBackground?:boolean}){
-  const [name,setName]=useState('');
-  const [email,setEmail]=useState('');
-  const [phone,setPhone]=useState('');
-  const [cpf,setCpf]=useState('');
-  const [role,setRole]=useState<Role>(initialRole??'Administrador');
+  const [name,setName]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'name','');
+  const [email,setEmail]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'email','');
+  const [phone,setPhone]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'phone','');
+  const [cpf,setCpf]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'cpf','');
+  const [role,setRole]=useEstadoRascunho<Role>(`usuario-${initialRole??'geral'}`,'role',initialRole??'Administrador');
   const [password,setPassword]=useState('');
   const [confirm,setConfirm]=useState('');
   const [visible,setVisible]=useState(false);
@@ -49,9 +51,9 @@ export default function ModalNovoUsuario({onClose,onCreated,employeeOnly=false,i
   const [copied,setCopied]=useState(false);
   const [createdPassword,setCreatedPassword]=useState('');
   const [employeeDetailsOpen,setEmployeeDetailsOpen]=useState(false);
-  const [employeeDetails,setEmployeeDetails]=useState<NovoFuncionario|null>(null);
-  const [employeeDetailsReady,setEmployeeDetailsReady]=useState(false);
-  const [employeePhoto,setEmployeePhoto]=useState<string|null>(null);
+  const [employeeDetails,setEmployeeDetails]=useEstadoRascunho<NovoFuncionario|null>(`usuario-${initialRole??'geral'}`,'employeeDetails',null);
+  const [employeeDetailsReady,setEmployeeDetailsReady]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'employeeDetailsReady',false);
+  const [employeePhoto,setEmployeePhoto]=useEstadoRascunho<string|null>(`usuario-${initialRole??'geral'}`,'employeePhoto',null);
   const whatsappNumber=`55${phone.replace(/\D/g,'')}`;
   const employeeInitial: NovoFuncionario=employeeDetails??{nome:name,email,telefone:phone,cpf,cargo:'Mecânico',data_nascimento:'',data_admissao:'',departamento:'Oficina',especialidade:'',endereco:'',cep:'',complemento:'',tipo_contrato:'CLT',comissao_servico:null,observacoes_profissionais:'',situacao:'ativo'};
   function closeEmployeeDetails(draft:NovoFuncionario,photo:string|null){setEmployeeDetails(draft);setEmployeePhoto(photo);setEmployeeDetailsReady(false);setName(draft.nome);setEmail(draft.email);setPhone(draft.telefone);setCpf(draft.cpf);setRole(draft.cargo as Role);setEmployeeDetailsOpen(false);}
@@ -80,12 +82,12 @@ export default function ModalNovoUsuario({onClose,onCreated,employeeOnly=false,i
       if(employeeDetailsReady&&employeeDetails){
         const createdUser=await cadastrarFuncionario({...employeeDetails,nome:name.trim(),email:email.trim().toLowerCase(),telefone:phone.trim(),cpf:cpf.replace(/\D/g,''),senha:password});
         if(employeePhoto){try{await salvarFotoFuncionario(createdUser.id,employeePhoto);}catch{setError('Funcionário criado; não foi possível salvar a foto. Você pode adicioná-la no perfil.');}}
-        setCreatedPassword(password);setPassword('');setConfirm('');setCreated(true);onCreated({id:createdUser.id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),role});
+        setCreatedPassword(password);setPassword('');setConfirm('');limparRascunho(`usuario-${initialRole??'geral'}`);limparRascunho('funcionario-novo-detalhes');setCreated(true);onCreated({id:createdUser.id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),role});
       }else if(role==='Mecânico'){
         setEmployeeDetailsOpen(true);setBusy(false);return;
       }else{
         const createdUser=await cadastrarUsuario({name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),position:role,profile:role,password});
-        setCreatedPassword(password);setPassword('');setConfirm('');setCreated(true);onCreated({id:createdUser.id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),role});
+        setCreatedPassword(password);setPassword('');setConfirm('');limparRascunho(`usuario-${initialRole??'geral'}`);limparRascunho('funcionario-novo-detalhes');setCreated(true);onCreated({id:createdUser.id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),role});
       }
     }catch(err){setError(err instanceof Error?err.message:'Não foi possível cadastrar o usuário.');}
     finally{setBusy(false);}

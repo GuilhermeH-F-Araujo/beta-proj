@@ -1,0 +1,778 @@
+@font-face{font-family:JakartaSettings;src:url('/assets/funcionarios/jakarta-latin.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+.settings-app .settings-content{font-family:JakartaSettings,system-ui,sans-serif}
+.settings-app .settings-content > [role="tabpanel"] {
+  container-type: inline-size;
+}
+/* Workspace composition adapted from MUI navigation and 21st settings patterns. */
+.settings-app .cfg-local-tabs {
+  box-sizing: border-box;
+}
+.settings-app .cfg-local-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.settings-app .cfg-local-tabs button > svg {
+  flex: none;
+}
+.settings-app .cfg-local-tabs button > span {
+  display: block;
+  min-width: 0;
+  text-align: left;
+}
+.settings-app .cfg-local-tabs button b {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.settings-app .cfg-local-tabs button small {
+  display: block;
+  font-size: 12px;
+  color: #6e7e92;
+  line-height: 1.6;
+  margin-top: 3px;
+}
+.settings-app .cfg-local-tabs button:focus-visible {
+  outline: 3px solid #8aa7c9;
+  outline-offset: 3px;
+  z-index: 1;
+}
+.settings-app .settings-tabs.cfg-local-tabs {
+  padding: 5px 14px;
+  border-radius: 10px;
+  gap: 8px;
+  box-shadow: 0 2px 8px #23364d03;
+}
+.settings-app .settings-tabs.cfg-local-tabs button {
+  justify-content: center;
+  gap: 9px;
+  min-height: 49px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  border-radius: 0;
+  color: #66788f;
+}
+.settings-app .settings-tabs.cfg-local-tabs button b {
+  font-size: 13px;
+}
+.settings-app .settings-tabs.cfg-local-tabs button[aria-selected="true"] {
+  color: #d42944;
+  border-bottom-color: #e82c49;
+  background: none;
+}
+.settings-app .settings-tabs.cfg-local-tabs button:hover {
+  background: #fafbfd;
+}
+/* Preferences is an editor with a local navigation, rather than three long cards. */
+.settings-app .settings-preferences-redesigned {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 27px;
+  align-items: start;
+  container-type: inline-size;
+}
+.settings-app .settings-workspace-nav {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  padding-top: 8px;
+}
+.settings-app .settings-workspace-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: #7a899c;
+  margin: 0 15px 16px;
+}
+.settings-app .cfg-local-tabs.vertical {
+  display: grid;
+  gap: 8px;
+}
+.settings-app .cfg-local-tabs.vertical button {
+  width: 100%;
+  min-height: 82px;
+  padding: 15px 13px;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  background: transparent;
+  border-radius: 9px;
+  color: #61768f;
+}
+.settings-app .cfg-local-tabs.vertical button > span {
+  flex: 1;
+}
+.settings-app .cfg-local-tabs.vertical button > svg:last-child {
+  width: 13px;
+  color: #a6b2c1;
+}
+.settings-app .cfg-local-tabs.vertical button b {
+  font-size: 15px;
+}
+.settings-app .cfg-local-tabs.vertical button:hover {
+  background: #fff;
+  border-color: #e2e8f0;
+}
+.settings-app .cfg-local-tabs.vertical button[aria-selected="true"] {
+  background: #fff;
+  border-color: #e3e7ef;
+  border-left-color: #e02c47;
+  color: #c62c44;
+  box-shadow: 0 3px 12px #23364d05;
+}
+.settings-app .cfg-local-tabs.vertical button[aria-selected="true"] b {
+  color: #243d59;
+}
+.settings-app
+  .cfg-local-tabs.vertical
+  button[aria-selected="true"]
+  > svg:last-child {
+  color: #d42d47;
+}
+.settings-app .settings-workspace-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 27px 15px 0;
+  padding-top: 18px;
+  border-top: 1px solid #dfe6ef;
+  color: #72859c;
+}
+.settings-app .settings-workspace-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.settings-app .settings-workspace-note p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+}
+.settings-app .settings-preferences-redesigned > .settings-card {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0;
+  border: 1px solid #dce4ee;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 5px 22px #24364e05;
+  min-height: 0;
+}
+.settings-app .settings-preferences-redesigned > [hidden] {
+  display: none !important;
+}
+.settings-app
+  .settings-preferences-redesigned
+  > .settings-card
+  > .settings-card-heading {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 15px;
+  padding: 25px 28px;
+  margin: 0;
+  background: #fff;
+  border-bottom: 1px solid #e8edf3;
+}
+.settings-app
+  .settings-preferences-redesigned
+  .settings-card-heading
+  .settings-card-icon {
+  width: 43px;
+  height: 43px;
+  background: #fafbfd;
+  border: 1px solid #e5ebf2;
+  color: #667e99;
+  border-radius: 11px;
+}
+.settings-app
+  .settings-reading-card
+  > .settings-card-heading
+  .settings-card-icon {
+  background: #fff5f7;
+  border-color: #f3e0e6;
+  color: #ce3049;
+}
+.settings-app
+  .settings-preferences-redesigned
+  > .settings-card
+  > .settings-card-heading
+  h2 {
+  font-size: 21px;
+  margin: 0 0 5px;
+  color: #263c56;
+  letter-spacing: -0.025em;
+}
+.settings-app
+  .settings-preferences-redesigned
+  > .settings-card
+  > .settings-card-heading
+  p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #65788e;
+  margin: 0;
+}
+.settings-app .settings-preferences-redesigned .settings-section-body {
+  padding: 4px 28px 26px;
+  border: 0;
+}
+.settings-app .settings-preferences-redesigned .settings-range-control {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.95fr);
+  column-gap: 32px;
+  padding-block: 25px;
+}
+.settings-app .settings-preferences-redesigned .settings-range-top b {
+  font-size: 16px;
+  color: #344b65;
+}
+.settings-app .settings-preferences-redesigned .settings-range-top small {
+  font-size: 13px;
+  color: #687d95;
+  line-height: 1.65;
+  max-width: 370px;
+}
+.settings-app .settings-preferences-redesigned .settings-range-adjust {
+  gap: 10px;
+}
+.settings-app .settings-preferences-redesigned .settings-range-adjust button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 7px;
+}
+.settings-app .settings-preferences-redesigned .settings-range-adjust output {
+  width: 86px;
+  min-width: 86px;
+  padding: 7px;
+  background: #f7f9fc;
+  border-color: #e1e8f1;
+  color: #425e7e;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.settings-app .settings-preferences-redesigned .settings-reading-bottom {
+  margin-top: 0;
+  padding-top: 23px;
+  gap: 25px;
+  grid-template-columns: 1fr 1fr;
+}
+.settings-app .settings-preferences-redesigned .settings-reading-preview {
+  background: #f8fafc;
+  border-color: #e3eaf3;
+  border-radius: 10px;
+  padding: 17px;
+}
+.settings-app
+  .settings-preferences-redesigned
+  .settings-reading-preview
+  > span {
+  font-size: 13px;
+  color: #586f8c;
+}
+.settings-app .settings-preferences-redesigned .settings-preview-sample {
+  padding: 18px 14px;
+  gap: 12px;
+  border-color: #e3ebf4;
+  border-radius: 8px;
+}
+.settings-app .settings-preferences-redesigned .settings-preview-sample strong {
+  font-size: 15px;
+}
+.settings-app .settings-preferences-redesigned .settings-toggle-row {
+  min-height: 80px;
+}
+.settings-app .settings-preferences-redesigned .settings-toggle-row b {
+  font-size: 15px;
+}
+.settings-app .settings-preferences-redesigned .settings-toggle-row small {
+  font-size: 13px;
+  color: #697e96;
+}
+.settings-app .settings-preferences-redesigned .settings-routine-options {
+  padding-top: 23px;
+  gap: 27px;
+}
+.settings-app .settings-preferences-redesigned .settings-preferences-footer {
+  margin-top: 26px;
+  line-height: 1.7;
+}
+/* Notification rules and sound settings have separate, full-width workspaces. */
+.settings-app .cfg-notification-intro {
+  padding: 22px 25px;
+  box-shadow: 0 3px 14px #24364e04;
+  border-radius: 12px;
+  background: #fff;
+}
+.settings-app .cfg-notification-intro h2 {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+.settings-app .cfg-notification-intro p {
+  font-size: 14px;
+  color: #657b94;
+}
+.settings-app .cfg-notification-intro small {
+  font-size: 13px;
+  color: #6c819a;
+}
+.settings-app .cfg-notification-navigation {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.settings-app .cfg-local-tabs.horizontal:not(.settings-tabs) {
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  background: #eaf0f6;
+  border: 1px solid #e1e7ef;
+  border-radius: 10px;
+  width: fit-content;
+  max-width: 100%;
+}
+.settings-app .cfg-local-tabs.horizontal:not(.settings-tabs) button {
+  min-height: 46px;
+  padding: 11px 22px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: #687e97;
+  justify-content: center;
+}
+.settings-app .cfg-local-tabs.horizontal:not(.settings-tabs) button b {
+  font-size: 14px;
+}
+.settings-app
+  .cfg-local-tabs.horizontal:not(.settings-tabs)
+  button[aria-selected="true"] {
+  background: #fff;
+  border-color: #dce4ef;
+  color: #c82b45;
+  box-shadow: 0 2px 6px #283d5809;
+}
+.settings-app .cfg-notifications .cfg-notification-layout {
+  display: block;
+  min-width: 0;
+}
+.settings-app .cfg-notifications .cfg-notification-layout [hidden] {
+  display: none !important;
+}
+.settings-app .cfg-notifications .cfg-events-column > .cfg-card {
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px #24364e04;
+}
+.settings-app .cfg-notifications .cfg-events-column .cfg-card-head {
+  padding: 23px 26px;
+  margin: 0;
+  border-bottom: 1px solid #e7edf4;
+  align-items: center;
+}
+.settings-app .cfg-notifications .cfg-events-column .cfg-card-head > .cfg-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border-color: #e5ecf3;
+}
+.settings-app .cfg-notifications .cfg-card-head h2 {
+  font-size: 19px;
+  color: #2e455f;
+  letter-spacing: -0.025em;
+}
+.settings-app .cfg-notifications .cfg-card-head p {
+  font-size: 14px;
+  color: #667b94;
+  line-height: 1.6;
+}
+.settings-app
+  .cfg-notifications
+  .cfg-events-column
+  .cfg-card-head
+  .cfg-text-button {
+  font-size: 13px !important;
+  padding: 9px 12px;
+  color: #ac3b50;
+  border-color: #e6dce2;
+}
+.settings-app .cfg-event-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 26px;
+  border-bottom: 1px solid #edf1f6;
+}
+.settings-app .cfg-event-filter-bar > span {
+  font-size: 13px;
+  color: #7589a0;
+  white-space: nowrap;
+}
+.settings-app .cfg-event-filters {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.settings-app .cfg-event-filters button {
+  min-height: 37px;
+  padding: 8px 13px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid #e1e8f1;
+  background: #fff;
+  border-radius: 6px;
+  color: #687f99;
+  cursor: pointer;
+}
+.settings-app .cfg-event-filters button:hover {
+  border-color: #c0cddd;
+  background: #f8fafc;
+}
+.settings-app .cfg-event-filters button[aria-pressed="true"] {
+  color: #c52b45;
+  border-color: #efcad4;
+  background: #fff5f7;
+}
+.settings-app .cfg-notifications .cfg-events-table {
+  padding: 20px 26px 8px;
+}
+.settings-app .cfg-notifications .cfg-events-labels {
+  grid-template-columns: minmax(0, 1fr) 100px 100px;
+  padding: 0 0 18px 47px;
+  gap: 16px;
+}
+.settings-app .cfg-notifications .cfg-events-labels > span:not(:first-child) {
+  font-size: 13px;
+  flex-direction: row;
+  justify-content: center;
+  gap: 6px;
+}
+.settings-app .cfg-notifications .cfg-event-group h3 {
+  padding: 12px 13px;
+  margin: 0;
+  border-radius: 6px;
+  border: 0;
+  background: #f5f8fc;
+  color: #4d6685;
+  font-size: 14px;
+}
+.settings-app .cfg-notifications .cfg-event-group h3 > span {
+  font-size: 12px;
+  color: #6e849e;
+}
+.settings-app .cfg-notifications .cfg-event {
+  grid-template-columns: 31px minmax(0, 1fr) 100px 100px;
+  gap: 16px;
+  padding: 22px 0;
+  min-height: 96px;
+}
+.settings-app .cfg-notifications .cfg-event-icon {
+  color: #7890ad;
+}
+.settings-app .cfg-notifications .cfg-event-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-width: 0;
+}
+.settings-app .cfg-event-description {
+  flex: 1;
+  min-width: 0;
+}
+.settings-app .cfg-notifications .cfg-event-copy b {
+  font-size: 16px;
+  color: #314b69;
+  letter-spacing: -0.015em;
+}
+.settings-app .cfg-notifications .cfg-event-copy p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #647b96;
+  margin-top: 5px;
+}
+.settings-app .cfg-notifications .cfg-event-sound {
+  flex: 0 1 265px;
+  width: 265px;
+  max-width: 45%;
+  margin: 0;
+  gap: 8px;
+}
+.settings-app .cfg-notifications .cfg-event-sound .filter-select {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.settings-app .cfg-notifications .cfg-event-sound .filter-select-trigger {
+  min-height: 38px;
+  font-size: 13px;
+  background: #fbfcfe;
+  border-color: #e3eaf3;
+  border-radius: 6px;
+}
+.settings-app .cfg-notifications .cfg-event-sound .cfg-icon-button {
+  width: 37px;
+  height: 37px;
+  min-height: 37px;
+  flex: none;
+  border-color: #e1e8f2;
+  color: #738aa5;
+}
+.settings-app .cfg-notifications .cfg-event-toggle {
+  min-height: 44px;
+}
+.settings-app .cfg-notifications .cfg-switch {
+  width: 45px;
+  height: 27px;
+  padding: 3px;
+  border-color: #d6e1ed;
+  background: #e1e9f2;
+}
+.settings-app .cfg-notifications .cfg-switch span {
+  width: 19px;
+  height: 19px;
+}
+.settings-app .cfg-notifications .cfg-switch.on {
+  background: #398565;
+  border-color: #398565;
+}
+.settings-app .cfg-notifications .cfg-switch.on span {
+  transform: translateX(18px);
+}
+.settings-app .cfg-notifications .cfg-sound-column {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 19px;
+  align-items: start;
+}
+.settings-app .cfg-notifications .cfg-sound-column > .cfg-card {
+  grid-column: auto !important;
+  min-width: 0;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px #24364e04;
+}
+.settings-app .cfg-notifications .cfg-sound-column .cfg-card-head {
+  padding-bottom: 20px;
+  margin-bottom: 21px;
+  align-items: flex-start;
+}
+.settings-app .cfg-notifications .cfg-sound-column .cfg-card-head > .cfg-icon {
+  width: 38px;
+  height: 38px;
+  background: #f8fafc;
+  border-color: #e3eaf3;
+  border-radius: 10px;
+}
+.settings-app .cfg-notifications .cfg-sound-column .cfg-card-head h2 {
+  font-size: 18px;
+}
+.settings-app .cfg-notifications .cfg-sound-column .cfg-card-head p {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.settings-app .cfg-notifications .cfg-sound-picker {
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+.settings-app .cfg-notifications .cfg-sound-picker > .filter-select {
+  flex: 1 1 160px;
+}
+.settings-app .cfg-notifications .cfg-sound-picker > .cfg-button {
+  flex: 0 0 auto;
+}
+.settings-app .cfg-notifications .cfg-time-grid input {
+  min-width: 0;
+  width: 100%;
+}
+.settings-app .cfg-notifications .cfg-upload {
+  padding: 16px;
+  min-height: 94px;
+  background: #fafcfe;
+  border-color: #c2d0e0;
+}
+.settings-app .cfg-notifications .cfg-help {
+  font-size: 13px;
+  color: #6c819b;
+}
+.settings-app .cfg-notifications .cfg-save-note {
+  font-size: 13px;
+  padding: 13px 16px;
+  border-radius: 8px;
+}
+@container (max-width:1250px) {
+  .settings-app .settings-preferences-redesigned .settings-range-control {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+  }
+  .settings-app .cfg-notifications .cfg-sound-column {
+    grid-template-columns: 1fr 1fr;
+  }
+  .settings-app .cfg-notifications .cfg-sound-column > .cfg-card:first-child {
+    grid-column: 1/-1 !important;
+  }
+  .settings-app
+    .cfg-notifications
+    .cfg-sound-column
+    > .cfg-card:first-child
+    .cfg-sound-picker,
+  .settings-app
+    .cfg-notifications
+    .cfg-sound-column
+    > .cfg-card:first-child
+    .cfg-volume {
+    max-width: 650px;
+  }
+}
+@container (max-width:1050px) {
+  .settings-app .settings-preferences-redesigned {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 19px;
+  }
+  .settings-app .settings-workspace-nav {
+    grid-column: 1;
+    grid-row: auto;
+    display: block;
+    padding: 0;
+  }
+  .settings-app .settings-preferences-redesigned > .settings-card {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .settings-app .settings-workspace-label,
+  .settings-app .settings-workspace-note {
+    display: none;
+  }
+  .settings-app .cfg-local-tabs.vertical {
+    gap: 4px;
+  }
+  .settings-app .cfg-local-tabs.vertical button {
+    min-height: 62px;
+    padding: 10px 15px;
+  }
+  .settings-app .settings-preferences-redesigned .settings-reading-bottom {
+    grid-template-columns: 1fr;
+  }
+  .settings-app .cfg-notifications .cfg-event-copy {
+    display: block;
+  }
+  .settings-app .cfg-notifications .cfg-event-sound {
+    width: 270px;
+    max-width: 100%;
+    margin-top: 11px;
+  }
+}
+@container (max-width:750px) {
+  .settings-app .cfg-notifications .cfg-sound-column {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-app .cfg-notifications .cfg-sound-column > .cfg-card:first-child {
+    grid-column: auto !important;
+  }
+  .settings-app .cfg-notifications .cfg-events-table {
+    padding: 17px 16px 5px;
+  }
+  .settings-app .cfg-event-filter-bar {
+    padding: 16px;
+    flex-wrap: wrap;
+  }
+  .settings-app .cfg-notifications .cfg-events-column .cfg-card-head {
+    padding: 20px 16px;
+    align-items: flex-start;
+  }
+  .settings-app .cfg-notifications .cfg-event {
+    grid-template-columns: 25px minmax(0, 1fr) 65px 65px;
+    gap: 8px;
+  }
+  .settings-app .cfg-notifications .cfg-events-labels {
+    grid-template-columns: minmax(0, 1fr) 65px 65px;
+    gap: 8px;
+    padding-left: 33px;
+  }
+  .settings-app .cfg-notifications .cfg-events-labels > span:not(:first-child) {
+    flex-direction: column;
+  }
+  .settings-app .cfg-local-tabs.horizontal:not(.settings-tabs) button {
+    padding-inline: 14px;
+  }
+  .settings-app
+    .settings-preferences-redesigned
+    > .settings-card
+    > .settings-card-heading {
+    padding: 22px 20px;
+  }
+  .settings-app .settings-preferences-redesigned .settings-section-body {
+    padding-inline: 20px;
+  }
+}
+@media (max-width: 900px) {
+  .settings-app .settings-preferences-redesigned {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-app .settings-workspace-nav {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .settings-app .settings-preferences-redesigned > .settings-card {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .settings-app .settings-preferences-redesigned .settings-range-control {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+  }
+}
+
+@container (min-width:751px) and (max-width:1250px) {
+  .settings-app .cfg-notifications .cfg-sound-column > .cfg-card:first-child {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 27px;
+  }
+  .settings-app
+    .cfg-notifications
+    .cfg-sound-column
+    > .cfg-card:first-child
+    > .cfg-card-head {
+    grid-column: 1/-1;
+  }
+  .settings-app
+    .cfg-notifications
+    .cfg-sound-column
+    > .cfg-card:first-child
+    > .cfg-sound-picker {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .settings-app
+    .cfg-notifications
+    .cfg-sound-column
+    > .cfg-card:first-child
+    > .cfg-volume {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .settings-app
+    .cfg-notifications
+    .cfg-sound-column
+    > .cfg-card:first-child
+    > .cfg-sound-feedback {
+    grid-column: 1/-1;
+    grid-row: 3;
+  }
+  .settings-app
+    .cfg-notifications
+    .cfg-sound-column
+    > .cfg-card:first-child
+    > .cfg-inline-info {
+    grid-column: 1/-1;
+    grid-row: 4;
+  }
+}

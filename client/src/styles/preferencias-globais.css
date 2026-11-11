@@ -1,0 +1,162 @@
+/* Regiões independentes: conteúdo não amplia a navegação fixa. */
+html[data-app-reading] :is(.orders-viewport, .appointments-viewport) {
+  zoom: 1 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+html[data-app-reading] :is(.orders-main, .appointments-main) > main {
+  zoom: var(--app-content-scale, 1) !important;
+  width: auto !important;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+html[data-app-reading] .admin-menu {
+  zoom: var(--app-menu-scale, 1) !important;
+  height: calc(100dvh / var(--app-menu-scale, 1));
+  overflow-y: auto;
+}
+html[data-app-reading] .orders-header {
+  zoom: var(--app-header-scale, 1) !important;
+  width: auto !important;
+  align-self: stretch;
+  flex: none;
+}
+html[data-app-reading] [data-app-portal-root],
+html[data-app-reading] [data-app-modal-root] {
+  zoom: var(--app-modal-scale, 1) !important;
+}
+html[data-app-reading] [data-app-modal-inline="content"] {
+  zoom: calc(
+    var(--app-modal-scale, 1) / var(--app-content-scale, 1)
+  ) !important;
+}
+html[data-app-reading] [data-app-modal-inline="header"] {
+  zoom: calc(var(--app-modal-scale, 1) / var(--app-header-scale, 1)) !important;
+}
+html[data-app-reading] [data-app-modal-inline="menu"] {
+  zoom: calc(var(--app-modal-scale, 1) / var(--app-menu-scale, 1)) !important;
+}
+html[data-app-reading]
+  [data-app-modal-root]:is([class*="backdrop"], [class*="overlay"]) {
+  width: calc(100vw / var(--app-modal-scale, 1));
+  height: calc(100dvh / var(--app-modal-scale, 1));
+}
+html[data-app-reading] [data-app-modal-root] :is(.nam-dialog, [role="dialog"]),
+html[data-app-reading] dialog[data-app-modal-root] {
+  max-height: calc(94dvh / var(--app-modal-scale, 1));
+  max-width: calc(96vw / var(--app-modal-scale, 1));
+}
+html[data-app-reading]
+  [data-app-portal-root]:is(
+    [role="menu"],
+    [role="listbox"],
+    [role="status"],
+    [role="alert"]
+  ) {
+  zoom: var(--app-floating-scale, var(--app-content-scale, 1)) !important;
+}
+html[data-app-reading] .nam-dialog {
+  zoom: 1 !important;
+}
+html[data-app-reading]
+  body
+  :is(#root, [data-app-portal-root])
+  :where(
+    p,
+    span,
+    div,
+    label,
+    input,
+    select,
+    textarea,
+    td,
+    th,
+    dt,
+    dd,
+    small,
+    button,
+    li,
+    a,
+    summary
+  ) {
+  font-weight: var(--app-font-weight, 500) !important;
+}
+html[data-app-reading]
+  body
+  :is(#root, [data-app-portal-root])
+  :where(b, strong, h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--app-heading-weight, 700) !important;
+}
+html[data-app-reading]
+  body
+  :is(#root, [data-app-portal-root])
+  :where(
+    p,
+    span,
+    div,
+    b,
+    strong,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    small,
+    td,
+    th,
+    dd,
+    dt,
+    li,
+    label,
+    input,
+    select,
+    textarea,
+    button,
+    summary
+  ) {
+  line-height: var(--app-line-height, 1.4) !important;
+}
+html[data-app-contrast="true"]
+  :is(.orders-viewport, .appointments-viewport, [data-app-portal-root]) {
+  filter: contrast(1.08);
+}
+html[data-app-density="confortavel"]
+  :is(.appointments-viewport, [data-app-portal-root])
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select
+  ) {
+  min-height: 44px;
+}
+html[data-app-density="confortavel"]
+  :is(.appointments-viewport, [data-app-portal-root])
+  button {
+  min-height: 40px;
+}
+html[data-app-reading] .orders-main,
+html[data-app-reading] .appointments-main {
+  min-width: 0;
+}
+html[data-app-reading] :is(.orders-viewport, .appointments-viewport) {
+  min-width: 0 !important;
+}
+html[data-app-contrast="true"] dialog[data-app-portal-root] {
+  filter: none;
+}
+html[data-app-contrast="true"]
+  dialog[data-app-portal-root]
+  > :is(header, .cfg-dialog-body, footer) {
+  filter: contrast(1.08);
+}
+
+html[data-app-reading]
+  :is(.orders-viewport, .appointments-viewport, [data-app-portal-root])
+  button[role="switch"] {
+  min-height: 27px;
+}

@@ -1,8 +1,10 @@
+import {useAcessoConta} from '../services/acessoConta';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './MenuAdmin';
 import { useNavigate } from 'react-router-dom';
 
 export default function MenuPerfil({ name, onLogout }: { name: string; onLogout: () => void | Promise<void> }) {
+  const acesso=useAcessoConta();
   const [open, setOpen] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [photoVersion, setPhotoVersion] = useState(0);
@@ -31,7 +33,7 @@ export default function MenuPerfil({ name, onLogout }: { name: string; onLogout:
   return <div className="profile-wrap" ref={root}>
     <button className="profile plain" type="button" aria-label="Menu da conta" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>
       <span className="profile-avatar">{photoFailed ? name.charAt(0).toUpperCase() : <img src={`/api/admin/profile/photo?v=${photoVersion}`} alt="" onError={() => setPhotoFailed(true)}/>}</span>
-      <span className="profile-copy"><b>{name}</b><small>Administrador</small></span>
+      <span className="profile-copy"><b>{name}</b><small>{acesso.cargo||"Conta"}</small></span>
       <Icon name="chevron" size={13}/>
     </button>
     {open && <div className="profile-popover" role="menu">

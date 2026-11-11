@@ -1,7 +1,9 @@
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import Skeleton from '../components/Skeleton';
+import {useDadosVivos} from '../hooks/useDadosVivos';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import MenuAdmin,{Icon} from '../components/MenuAdmin';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
+import { Icon } from '../components/MenuAdmin';
 import SeletorFiltro from '../components/SeletorFiltro';
 import SeletorPeriodo from '../components/SeletorPeriodo';
 import {useUsuarioAdmin} from '../components/RotaProtegida';
@@ -27,6 +29,7 @@ export default function Funcionarios(){
   }else buscarFuncionarios(mes,controller.signal).then(r=>setItems(r.itens)).catch(e=>{if(!controller.signal.aborted)setError(e.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[id,mes,revision]);
   useEffect(()=>{setPage(1);},[search,filter,department,role,onlyOpen]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),4500);return()=>clearTimeout(timer);},[notice]);
+  useDadosVivos(async valido=>{try{if(id){const result=await buscarFuncionario(Number(id),mes);if(valido())setProfile(result)}else{const result=await buscarFuncionarios(mes);if(valido())setItems(result.itens)}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar a equipe.')}},!loading,`${id??''}:${mes}`);
   const filtered=useMemo(()=>items.filter(p=>(filter==='todos'||p.situacao===filter)&&(department==='todos'||p.departamento===department)&&(role==='todos'||p.cargo===role)&&(!onlyOpen||p.resumo.totalAbertas>0)&&normalizar(`${p.nome} ${p.email??''} ${p.cargo}`).includes(normalizar(search))).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),[items,filter,department,role,onlyOpen,search]);
   const currentPage=Math.min(page,Math.max(1,Math.ceil(filtered.length/8))),rows=filtered.slice((currentPage-1)*8,currentPage*8);
   const count=(s:SituacaoFuncionario)=>items.filter(p=>p.situacao===s).length;
@@ -39,9 +42,9 @@ export default function Funcionarios(){
   const refresh=()=>setRevision(v=>v+1);
   const setMonth=(value:string)=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(value)){const p=new URLSearchParams(params);p.set('mes',value);setParams(p,{replace:true});}};
   return <div className={`orders-viewport staff-app${id?' staff-detail':''}`}>
-    <MenuAdmin collapsed={collapsed} onUnavailable={label=>setNotice(`${label}: esta área ainda não está disponível.`)}/>
-    <div className="orders-main"><CabecalhoAdmin title="Funcionários" subtitle="Visão geral da oficina" name={usuario?.nome??'Administrador'} collapsed={collapsed} onToggle={()=>setCollapsed(v=>!v)} onLogout={async()=>{await logout();navigate('/login',{replace:true});}}/>
-      <main className="staff-content">
+    
+    <div className="orders-main">
+      <main className="staff-content"><ConteudoCarregando carregando={loading&&!error}>
         {id&&<nav className="staff-breadcrumb" aria-label="Localização"><Link to="/ordens-de-servico">Home</Link><Icon name="right" size={12}/><Link to="/funcionarios">Funcionários</Link><Icon name="right" size={12}/><span>{profile?.pessoa.nome??'Perfil'}</span></nav>}
         {!id&&<><section className="staff-heading"><div className="staff-heading-title"><span><IconeFuncionario name="equipe"/></span><div><h1>Funcionários</h1><p>Gerencie os colaboradores da oficina</p></div></div><div className="staff-heading-actions"><label className="staff-search"><input aria-label="Buscar funcionário" placeholder="Buscar funcionário..." value={search} onChange={e=>setSearch(e.target.value)}/><Icon name="search" size={17}/></label><button className="staff-primary" onClick={()=>setNovo(true)}><Icon name="plus" size={17}/>Novo Funcionário</button></div></section>
           <div className="staff-metrics"><MetricaFuncionario title="Total de Funcionários" value={items.length} description="Todos os colaboradores" icon="equipe" trend={atividadeEquipe} trendLabel="Ordens por funcionário" onClick={()=>filterCard('todos')} active={filter==='todos'&&!onlyOpen&&department==='todos'&&role==='todos'&&!search}/><MetricaFuncionario title="Funcionários Ativos" value={count('ativo')} description={`${items.length?Math.round(count('ativo')/items.length*100):0}% do total`} icon="ativos" tone="green" trend={ativosEquipe} trendLabel="Situação por funcionário" onClick={()=>filterCard('ativo')} active={filter==='ativo'&&!onlyOpen}/><MetricaFuncionario title="Em Férias" value={count('ferias')} description="Aproveitando o descanso" icon="ferias" tone="amber" trend={feriasEquipe} trendLabel="Situação por funcionário" onClick={()=>filterCard('ferias')} active={filter==='ferias'&&!onlyOpen}/><MetricaFuncionario title="Ordens Abertas" value={items.reduce((n,p)=>n+p.resumo.totalAbertas,0)} description="Em andamento" icon="abertas" tone="blue" trend={abertasEquipe} trendLabel="Ordens abertas por funcionário" onClick={()=>filterCard('open')} active={onlyOpen}/></div>
@@ -52,7 +55,7 @@ export default function Funcionarios(){
           <div className="staff-table-scroll"><table className="staff-table"><thead><tr>{['Funcionário','Cargo','Departamento','Ordens Concluídas no Mês','Ordens em Aberto','Status','Data de Admissão','Ações'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(p=><tr key={p.id}><td><Link className="staff-person-cell" to={`/funcionarios/${p.id}?mes=${mes}`}><AvatarFuncionario id={p.id} nome={p.nome}/><span><strong>{p.nome}</strong><small>{p.email??'E-mail não informado'}</small></span></Link></td><td>{p.cargo}</td><td>{p.departamento??'—'}</td><td className="staff-count green">{p.resumo.concluidas}</td><td className="staff-count red">{p.resumo.totalAbertas}</td><td><Situacao value={p.situacao}/></td><td>{dataCurta(p.admissao)}</td><td><div className="staff-row-actions"><Link className="staff-square" aria-label={`Ver perfil de ${p.nome}`} to={`/funcionarios/${p.id}?mes=${mes}`}><Icon name="eye" size={16}/></Link><details><summary aria-label={`Mais ações para ${p.nome}`}><Icon name="more" size={16}/></summary><div><Link to={`/funcionarios/${p.id}/dados?mes=${mes}`}><Icon name="pencil" size={14}/>Editar dados</Link><Link to={`/funcionarios/${p.id}/ordens?mes=${mes}`}><Icon name="clipboard" size={14}/>Ver ordens</Link>{p.email&&<a href={`mailto:${p.email}`}><Icon name="mail" size={14}/>Enviar e-mail</a>}</div></details></div></td></tr>)}{!rows.length&&<tr><td colSpan={8}><div className="staff-empty"><Icon name="users" size={30}/><strong>{items.length?'Nenhum funcionário encontrado':'Sua equipe começa aqui'}</strong><p>{items.length?'Experimente outro nome ou ajuste os filtros.':'Cadastre o primeiro colaborador para acompanhar sua equipe.'}</p><button className="staff-outline" onClick={()=>{if(items.length){setFilter('todos');setSearch('');setDepartment('todos');setRole('todos');setOnlyOpen(false);}else setNovo(true);}}>{items.length?'Limpar filtros':'Novo funcionário'}</button></div></td></tr>}</tbody></table></div>
           <PaginacaoFuncionario page={currentPage} total={filtered.length} count={rows.length} size={8} onChange={setPage} label="funcionários"/>
         </section>}
-      </main>
+      </ConteudoCarregando></main>
     </div>
     {notice&&<div className="staff-toast" role="status"><Icon name="check" size={18}/>{notice}<button aria-label="Fechar aviso" onClick={()=>setNotice('')}><Icon name="close" size={14}/></button></div>}
     {novo&&<Suspense fallback={null}><NovoUsuario employeeOnly onClose={()=>setNovo(false)} onCreated={()=>{refresh();setNotice('Funcionário cadastrado com sucesso.');}}/></Suspense>}

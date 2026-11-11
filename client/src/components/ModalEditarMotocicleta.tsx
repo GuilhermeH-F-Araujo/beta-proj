@@ -1,3 +1,5 @@
+import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
+import {limparRascunho,temRascunho} from '../services/rascunhos';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './MenuAdmin';
@@ -14,18 +16,18 @@ function splitModel(value:string){const found=[...brandNames].sort((a,b)=>b.leng
 const colors=['Preta','Branca','Prata','Vermelha','Azul','Verde','Cinza','Amarela','Laranja','Outra'];
 export default function ModalEditarMotocicleta({item,clients,onClose,onSaved,onImage}:{item:ItemMotocicleta|null;clients:{id:number;name:string}[];onClose:()=>void;onSaved:()=>void;onImage:(item:ItemMotocicleta)=>void}){
   const initial=splitModel(item?.model??'');
-  const [clientId,setClientId]=useState(item?.clientId??0);
-  const [brand,setBrand]=useState(initial.brand);
-  const [model,setModel]=useState(initial.model);
-  const [plate,setPlate]=useState(item?.plate??'');
-  const [year,setYear]=useState(item?.year?.toString()??'');
-  const [modelYear,setModelYear]=useState(item?.modelYear?.toString()??'');
-  const [color,setColor]=useState(item?.color??'');
-  const [mileage,setMileage]=useState(item?.mileage?.toString()??'');
-  const [chassis,setChassis]=useState(item?.chassis??'');
-  const [renavam,setRenavam]=useState(item?.renavam??'');
-  const [notes,setNotes]=useState(item?.notes??'');
-  const [active,setActive]=useState(item?.active??true);
+  const [clientId,setClientId]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'clientId',item?.clientId??0);
+  const [brand,setBrand]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'brand',initial.brand);
+  const [model,setModel]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'model',initial.model);
+  const [plate,setPlate]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'plate',item?.plate??'');
+  const [year,setYear]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'year',item?.year?.toString()??'');
+  const [modelYear,setModelYear]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'modelYear',item?.modelYear?.toString()??'');
+  const [color,setColor]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'color',item?.color??'');
+  const [mileage,setMileage]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'mileage',item?.mileage?.toString()??'');
+  const [chassis,setChassis]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'chassis',item?.chassis??'');
+  const [renavam,setRenavam]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'renavam',item?.renavam??'');
+  const [notes,setNotes]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'notes',item?.notes??'');
+  const [active,setActive]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'active',item?.active??true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [dirty,setDirty]=useState(false);
@@ -34,8 +36,8 @@ export default function ModalEditarMotocicleta({item,clients,onClose,onSaved,onI
   const [brandOpen,setBrandOpen]=useState(false);
   const [modelOpen,setModelOpen]=useState(false);
   const [ownerOpen,setOwnerOpen]=useState(false);
-  const [ownerSearch,setOwnerSearch]=useState(clients.find(client=>client.id===item?.clientId)?.name??item?.client??'');
-  const [additionalOpen,setAdditionalOpen]=useState(!!(item?.chassis||item?.renavam||item?.notes||item?.active===false));
+  const [ownerSearch,setOwnerSearch]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'ownerSearch',clients.find(client=>client.id===item?.clientId)?.name??item?.client??'');
+  const [additionalOpen,setAdditionalOpen]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'additionalOpen',!!(item?.chassis||item?.renavam||item?.notes||item?.active===false));
   const brandRef=useRef<HTMLDivElement>(null);
   const modelRef=useRef<HTMLDivElement>(null);
   const ownerRef=useRef<HTMLDivElement>(null);
@@ -49,12 +51,12 @@ export default function ModalEditarMotocicleta({item,clients,onClose,onSaved,onI
   useEffect(()=>{const close=(event:PointerEvent)=>{if(!brandRef.current?.contains(event.target as Node))setBrandOpen(false);if(!modelRef.current?.contains(event.target as Node))setModelOpen(false);if(!ownerRef.current?.contains(event.target as Node))setOwnerOpen(false);};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close);},[]);
   function chooseBrand(name:string){update(()=>{if(normalizeSearch(name)!==normalizeSearch(brand))setModel('');setBrand(name);setBrandOpen(false);setModelOpen(false);});}
   function chooseModel(name:string){update(()=>{setModel(name);setModelOpen(false);});}
-  function requestClose(){if(busy)return;if(pendingSave){setPendingSave(null);return;}if(dirty)setConfirmDiscard(true);else onClose();}
-  useEffect(()=>{const escape=(event:KeyboardEvent)=>{if(event.key!=='Escape'||busy)return;if(pendingSave)setPendingSave(null);else if(confirmDiscard)setConfirmDiscard(false);else if(dirty)setConfirmDiscard(true);else onClose();};window.addEventListener('keydown',escape);const old=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{window.removeEventListener('keydown',escape);document.body.style.overflow=old;};},[busy,pendingSave,confirmDiscard,dirty,onClose]);
+  function requestClose(){if(busy)return;if(pendingSave){setPendingSave(null);return;}onClose();}
+  useEffect(()=>{const escape=(event:KeyboardEvent)=>{if(event.key!=='Escape'||busy)return;if(pendingSave)setPendingSave(null);else if(confirmDiscard)setConfirmDiscard(false);else onClose();};window.addEventListener('keydown',escape);const old=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{window.removeEventListener('keydown',escape);document.body.style.overflow=old;};},[busy,pendingSave,confirmDiscard,dirty,onClose]);
   function update(fn:()=>void){fn();setDirty(true);setError('');}
   async function persist(payload:DadosMotocicleta){
     setBusy(true);setError('');
-    try{if(item)await atualizarMotocicleta(item.id,payload);else await criarMotocicleta(payload);setPendingSave(null);onSaved();}
+    try{if(item)await atualizarMotocicleta(item.id,payload);else await criarMotocicleta(payload);limparRascunho(`moto-${item?.id??'nova'}`);setPendingSave(null);onSaved();}
     catch(cause){setPendingSave(null);setError(cause instanceof Error?cause.message:'Não foi possível salvar a moto.');}
     finally{setBusy(false);}
   }

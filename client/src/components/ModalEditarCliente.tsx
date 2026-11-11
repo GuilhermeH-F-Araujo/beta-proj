@@ -1,3 +1,6 @@
+import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
+import {limparRascunho,temRascunho} from '../services/rascunhos';
+import CampoCep from './CampoCep';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Icon } from './MenuAdmin';
 import { buscarFotoDiretorioCliente, atualizarPerfilCliente, type DadosPerfilCliente, type EdicaoPerfilCliente } from '../services/apiAutenticacao';
@@ -63,18 +66,19 @@ async function preparePhoto(file: File): Promise<string> {
 export default function ModalEditarCliente({ client, onClose, onSaved }: {
   client: DadosPerfilCliente; onClose: () => void; onSaved: () => Promise<void>;
 }) {
-  const [name, setName] = useState(client.name);
-  const [cpf, setCpf] = useState(cpfMask(client.cpf ?? ''));
-  const [birthDate, setBirthDate] = useState(dateForInput(client.birthDate));
-  const [phone, setPhone] = useState(phoneMask(client.phone ?? ''));
-  const [email, setEmail] = useState(client.email ?? '');
-  const [postalCode, setPostalCode] = useState(cepMask(client.postalCode ?? ''));
-  const [address, setAddress] = useState(client.address ?? '');
-  const [addressNumber, setAddressNumber] = useState(client.addressNumber ?? '');
-  const [district, setDistrict] = useState(client.district ?? '');
-  const [city, setCity] = useState(client.city ?? '');
-  const [state, setState] = useState(client.state ?? '');
-  const [photo, setPhoto] = useState('');
+  const [name, setName] = useEstadoRascunho(`cliente-${client.id}`,'name',client.name);
+  const [cpf, setCpf] = useEstadoRascunho(`cliente-${client.id}`,'cpf',cpfMask(client.cpf ?? ''));
+  const [birthDate, setBirthDate] = useEstadoRascunho(`cliente-${client.id}`,'birthDate',dateForInput(client.birthDate));
+  const [phone, setPhone] = useEstadoRascunho(`cliente-${client.id}`,'phone',phoneMask(client.phone ?? ''));
+  const [email, setEmail] = useEstadoRascunho(`cliente-${client.id}`,'email',client.email ?? '');
+  const [postalCode, setPostalCode] = useEstadoRascunho(`cliente-${client.id}`,'postalCode',cepMask(client.postalCode ?? ''));
+  const [address, setAddress] = useEstadoRascunho(`cliente-${client.id}`,'address',client.address ?? '');
+  const [complement,setComplement]=useEstadoRascunho(`cliente-${client.id}`,'complement',client.complement??'');
+  const [addressNumber, setAddressNumber] = useEstadoRascunho(`cliente-${client.id}`,'addressNumber',client.addressNumber ?? '');
+  const [district, setDistrict] = useEstadoRascunho(`cliente-${client.id}`,'district',client.district ?? '');
+  const [city, setCity] = useEstadoRascunho(`cliente-${client.id}`,'city',client.city ?? '');
+  const [state, setState] = useEstadoRascunho(`cliente-${client.id}`,'state',client.state ?? '');
+  const [photo, setPhoto] = useEstadoRascunho(`cliente-${client.id}`,'photo','');
   const [currentPhoto, setCurrentPhoto] = useState(client.photoUrl ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -121,7 +125,7 @@ export default function ModalEditarCliente({ client, onClose, onSaved }: {
     const values: EdicaoPerfilCliente = {
       name: name.trim(), cpf: cpfDigits, birthDate: formattedBirthDate, phone: phone.trim() || null,
       email: email.trim() || null, postalCode: cepDigits || null, address: address.trim() || null,
-      addressNumber: addressNumber.trim() || null, district: district.trim() || null,
+      complement:complement.trim()||null, addressNumber: addressNumber.trim() || null, district: district.trim() || null,
       city: city.trim() || null, state: state || null, ...(photo ? { photo } : {}),
     };
     const labels: Record<string, string> = { name:'Nome', cpf:'CPF', birthDate:'Nascimento', phone:'Telefone', email:'E-mail', postalCode:'CEP', address:'Endereço', addressNumber:'Número', district:'Bairro', city:'Cidade', state:'Estado', photo:'Foto' };
@@ -134,7 +138,7 @@ export default function ModalEditarCliente({ client, onClose, onSaved }: {
     setBusy(true); setError('');
     try {
       await atualizarPerfilCliente(client.id, pending);
-      await onSaved(); setPending(null); setSuccess(true);
+      await onSaved(); setPending(null); limparRascunho(`cliente-${client.id}`);setSuccess(true);
     } catch (err) { setError(err instanceof Error ? err.message : 'Não foi possível salvar o cliente.'); }
     finally { setBusy(false); }
   }
@@ -151,10 +155,11 @@ export default function ModalEditarCliente({ client, onClose, onSaved }: {
             <label className="ce-field"><span>Data de nascimento <b>*</b></span><span className="ce-input-icon"><Icon name="calendar" size={17}/><input type="text" inputMode="numeric" maxLength={10} value={birthDate} onChange={event => setBirthDate(dateMask(event.target.value))} placeholder="dd/mm/aaaa"/></span></label>
             <label className="ce-field"><span>Telefone / WhatsApp <b>*</b></span><span className="ce-input-icon"><Icon name="phone" size={17}/><input type="tel" inputMode="tel" maxLength={18} value={phone} onChange={event => setPhone(phoneMask(event.target.value))} placeholder="(11) 99999-9999"/></span></label>
             <label className="ce-field"><span>E-mail <b>*</b></span><span className="ce-input-icon"><Icon name="mail" size={17}/><input type="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} placeholder="cliente@email.com"/></span></label>
-            <label className="ce-field"><span>CEP <b>*</b></span><input inputMode="numeric" maxLength={9} value={postalCode} onChange={event => setPostalCode(cepMask(event.target.value))} placeholder="00000-000"/></label>
+            <label className="ce-field"><span>CEP <b>*</b></span><CampoCep value={postalCode} onChange={setPostalCode} onEndereco={data=>{setAddress(data.rua);setDistrict(data.bairro);setCity(data.cidade);setState(data.estado)}}/></label>
           </div>
         </div>
-        <label className="ce-field ce-address"><span>Endereço <b>*</b></span><span className="ce-input-icon"><Icon name="pin" size={17}/><input maxLength={255} value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua e complemento"/></span></label>
+        <label className="ce-field ce-address"><span>Endereço <b>*</b></span><span className="ce-input-icon"><Icon name="pin" size={17}/><input maxLength={255} value={address} onChange={event => setAddress(event.target.value)} placeholder="Rua ou avenida"/></span></label>
+        <label className="ce-field"><span>Complemento <small>(opcional)</small></span><input maxLength={120} value={complement} onChange={e=>setComplement(e.target.value)} placeholder="Apartamento, bloco, sala…"/></label>
         <div className="ce-address-grid">
           <label className="ce-field"><span>Número <b>*</b></span><input maxLength={20} value={addressNumber} onChange={event => setAddressNumber(event.target.value)} placeholder="120"/></label>
           <label className="ce-field"><span>Bairro <b>*</b></span><input maxLength={100} value={district} onChange={event => setDistrict(event.target.value)} placeholder="Centro"/></label>

@@ -1,3 +1,5 @@
+import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
+import {temRascunho,limparRascunho} from '../services/rascunhos';
 import { useEffect, useRef, useState } from 'react';
 import './seletor-periodo.css';
 
@@ -11,15 +13,15 @@ const fieldDate = (value: string) => new Intl.DateTimeFormat('pt-BR', { timeZone
 function SeletorIntervalo({ value, onApply, variant = 'default', label = 'Período de entrada', placeholder = 'Período de entrada', autoOpen = false }: { value: DateRange | null; onApply: (value: DateRange | null) => void; variant?: 'default' | 'fields'; label?: string; placeholder?: string; autoOpen?: boolean }) {
   const [open, setOpen] = useState(autoOpen);
   const [month, setMonth] = useState(() => shiftMonth(new Date(), 0));
-  const [start, setStart] = useState(value?.from ?? new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()));
-  const [end, setEnd] = useState(value?.to ?? new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()));
+  const [start, setStart] = useEstadoRascunho(`periodo-${window.location.pathname}-${label}`,'start',value?.from ?? new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()));
+  const [end, setEnd] = useEstadoRascunho(`periodo-${window.location.pathname}-${label}`,'end',value?.to ?? new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()));
   const [selecting, setSelecting] = useState<'start' | 'end'>('start');
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setOpen(false); } };
     document.addEventListener('pointerdown', outside);
     window.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', outside); window.removeEventListener('keydown', escape); };
@@ -31,8 +33,8 @@ function SeletorIntervalo({ value, onApply, variant = 'default', label = 'Perío
     const part = (type: string) => Number(parts.find(item => item.type === type)?.value);
     const today = new Date(Date.UTC(part('year'), part('month') - 1, part('day'), 12));
     const recent = new Date(today); recent.setUTCDate(today.getUTCDate() - 7);
-    setStart(value?.from ?? iso(recent));
-    setEnd(value?.to ?? iso(today));
+    if(!temRascunho(`periodo-${window.location.pathname}-${label}`,'start'))setStart(value?.from ?? iso(recent));
+    if(!temRascunho(`periodo-${window.location.pathname}-${label}`,'end'))setEnd(value?.to ?? iso(today));
     setMonth(shiftMonth(value ? asDate(value.to) : today, 0));
     setSelecting(target); setOpen(true);
   }

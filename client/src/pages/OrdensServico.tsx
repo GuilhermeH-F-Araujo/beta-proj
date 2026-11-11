@@ -1,13 +1,16 @@
+import {useUsuarioAdmin} from '../components/RotaProtegida';
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import Skeleton from '../components/Skeleton';
+import {useDadosVivos} from '../hooks/useDadosVivos';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
 import SeletorFiltro from '../components/SeletorFiltro';
-import MenuAdmin, { Icon } from '../components/MenuAdmin';
+import { Icon } from '../components/MenuAdmin';
 import ModalPagamento from '../components/ModalPagamento';
 import SeletorPeriodo, { type DateRange } from '../components/SeletorPeriodo';
 import MenuAcoesOrdem from '../components/MenuAcoesOrdem';
 import ModalAcoesOrdem from '../components/ModalAcoesOrdem';
-import { ErroRequisicaoApi, exportarOrdens, buscarUsuarioAtual, buscarOrdens, logout, type ItemOrdem, type StatusOrdem, type FiltrosOrdens, type RespostaOrdens } from '../services/apiAutenticacao';
+import { ErroRequisicaoApi, exportarOrdens, buscarOrdens, logout, type ItemOrdem, type StatusOrdem, type FiltrosOrdens, type RespostaOrdens } from '../services/apiAutenticacao';
 import { cartoesStatusOrdem as cards, rotulosStatusOrdem as labels } from '../services/statusOrdem';
 import './ordens-servico.css';
 
@@ -39,7 +42,7 @@ const statusOptions: {value:FiltrosOrdens['status'];label:string;tone:string}[] 
 export default function OrdensServico() {
   const navigate = useNavigate();
   const [name, setName] = useState('Administrador');
-  const [access, setAccess] = useState(false);
+  const usuario=useUsuarioAdmin(), access=!!usuario;
   const [accessError, setAccessError] = useState('');
   const [authRetry, setAuthRetry] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
@@ -71,24 +74,11 @@ export default function OrdensServico() {
   const [paymentOrder, setPaymentOrder] = useState<number | null>(null);
   const filters: FiltrosOrdens = useMemo(() => ({ page, search: debouncedSearch, status, period: 'todos', dateFrom: dateRange?.from, dateTo: dateRange?.to, clientId: clientFilter ?? undefined }), [page, debouncedSearch, status, dateRange, clientFilter]);
 
-  useEffect(() => {
-    let active = true;
-    setAccessError('');
-    buscarUsuarioAtual().then(({ user }) => { if (active) { setName(user.nome); setAccess(true); } })
-      .catch(err => {
-        if (!active) return;
-        if (err instanceof ErroRequisicaoApi && (err.status === 401 || err.status === 403)) {
-          navigate('/login', { replace: true });
-        } else {
-          setAccessError(err instanceof Error ? err.message : 'Não foi possível verificar seu acesso.');
-        }
-      });
-    return () => { active = false; };
-  }, [navigate, authRetry]);
+  
   useEffect(() => { const id = setTimeout(() => setDebouncedSearch(search.trim()), 250); return () => clearTimeout(id); }, [search]);
   useEffect(() => { setPage(1); setOpenAction(null); }, [debouncedSearch, status, dateRange]);
   useEffect(() => {
-    if (!access) return;
+  if (!access) return;
     let active = true;
     setLoading(true); setError('');
     buscarOrdens(filters).then(result => { if (active) setData(result); })
@@ -130,14 +120,15 @@ export default function OrdensServico() {
   const last = Math.min(page * 15, data.total);
   const visibleColumnCount = 6 + Number(columns.forecast) + Number(columns.mechanic) + Number(columns.total);
 
+useDadosVivos(async valido=>{try{const result=await buscarOrdens(filters);if(valido()){setData(result);setError('')}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar as ordens.')}},access&&!loading,JSON.stringify(filters));
   if (!access) return <div className="orders-auth-loading">{accessError
     ? <div><p>{accessError}</p><button type="button" onClick={() => setAuthRetry(value => value + 1)}>Tentar novamente</button></div>
-    : 'Validando acesso…'}</div>;
+    : <Skeleton/>}</div>;
   return <div className="orders-viewport">
-    <MenuAdmin collapsed={collapsed} onUnavailable={label => setToast(`${label} ainda não possui uma página neste projeto.`)} />
+    
     <div className="orders-main">
-      <CabecalhoAdmin title="Ordens De Serviço" name={name} onLogout={handleLogout} collapsed={collapsed} onToggle={()=>setCollapsed(!collapsed)} search={{value:search,onChange:setSearch,ariaLabel:'Busca rápida'}}/>
-      <main className="orders-content">
+      
+      <main className="orders-content"><ConteudoCarregando carregando={loading&&!error}>
         {clientFilter && <div className="orders-client-filter">Exibindo ordens de <strong>{clientFilterName || `cliente #${clientFilter}`}</strong><button type="button" onClick={() => { setClientFilter(null); navigate('/ordens-de-servico', { replace: true }); }}>Remover filtro <Icon name="close" size={12}/></button></div>}
         <div className="orders-toolbar">
           <label className="orders-search"><Icon name="search" size={16}/><input aria-label="Buscar ordens" placeholder="Buscar por cliente, OS ou placa..." value={search} onChange={e => setSearch(e.target.value)}/></label>
@@ -152,7 +143,7 @@ export default function OrdensServico() {
           </tbody></table></div>
           <div className="list-footer"><span>Mostrando {first} a {last} de {data.total} ordens</span><nav className="pagination" aria-label="Páginas de ordens"><button aria-label="Página anterior" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><Icon name="left" size={14}/></button>{pagesToShow(page, pages).map((item, index) => item === '…' ? <span key={`gap-${index}`}>…</span> : <button key={item} className={page === item ? 'active' : ''} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}>{item}</button>)}<button aria-label="Próxima página" disabled={page >= pages || loading} onClick={() => setPage(page + 1)}><Icon name="right" size={14}/></button></nav></div>
         </section>
-      </main>
+      </ConteudoCarregando></main>
     </div>
     {openAction !== null && actionAnchor && <MenuAcoesOrdem anchor={actionAnchor} onClose={() => setOpenAction(null)} onSelect={action => { setActionModal({ id: openAction, tab: action }); setOpenAction(null); }} />}
     {actionModal && <ModalAcoesOrdem key={`${actionModal.id}-${actionModal.tab}`} orderId={actionModal.id} initialTab={actionModal.tab} onClose={() => setActionModal(null)} onChanged={() => refreshOrders()} onDeleted={() => refreshOrders(true)}/>}

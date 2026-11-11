@@ -1,7 +1,7 @@
+import {useDadosVivos} from '../hooks/useDadosVivos';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
-import MenuAdmin, { Icon } from '../components/MenuAdmin';
+import { Icon } from '../components/MenuAdmin';
 import { logout, request, buscarNotificacoesAdmin, type ItemOrdem, type RespostaOrdens, type StatusOrdem } from '../services/apiAutenticacao';
 type OrdemPainel={id:number;status:StatusOrdem;entry:string;exit:string|null;forecast:string|null;mechanicId:number|null};
 type TecnicoPainel={id:number;nome:string;cargo:string};
@@ -37,7 +37,10 @@ export default function Dashboard() {
   const [collapsed, setCollapsed] = useState(false);
   const [summary, setSummary] = useState<RespostaOrdens>(empty);
   const [monthly, setMonthly] = useState<OrdemPainel[]>([]);
-  const [chartPeriod, setChartPeriod] = useState('diario');
+  const [chartPeriod, setChartPeriod] = useState(() => {
+    const saved = localStorage.getItem('estacao-periodo-dashboard');
+    return saved === 'diario' || saved === 'mensal' ? saved : 'semanal';
+  });
   const [customRange, setCustomRange] = useState<DateRange | null>(null);
   const [pickingRange, setPickingRange] = useState(false);
   const [pickerVersion,setPickerVersion]=useState(0);
@@ -80,6 +83,7 @@ export default function Dashboard() {
     const cancel = refresh();
     return () => { cancel(); requestVersion.current += 1; };
   }, [refresh]);
+  useDadosVivos(async valido=>{const data=await request<DadosPainel>('/api/admin/dashboard',{method:'GET'});if(!valido())return;const month=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit'}).format(new Date()).slice(0,7);setSummary({...empty,total:data.orders.length,counts:data.counts});setWeekly(data.orders);setMonthly(data.orders.filter(o=>o.entry.slice(0,7)===month));setActiveOrders(data.orders.filter(o=>!['entregue','cancelada'].includes(o.status)));setOldest(data.oldest);setTeam(data.employees)},loaded&&!loading);
   const weeklySeries = useMemo(() => {
     const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const [year, month, day] = today.split('-').map(Number);
@@ -130,9 +134,9 @@ export default function Dashboard() {
   function goOrder(orderId: number | null) { if (orderId) navigate(`/ordens-de-servico/${orderId}`); else navigate('/ordens-de-servico'); }
 
   return <div className="orders-viewport dashboard-viewport">
-    <MenuAdmin collapsed={collapsed} onUnavailable={() => {}} />
+    
     <div className="orders-main dashboard-main">
-      <CabecalhoAdmin title="Dashboard" subtitle="Visão geral da oficina" name={user?.nome ?? 'Administrador'} onLogout={handleLogout} collapsed={collapsed} onToggle={() => setCollapsed(value => !value)} />
+      
       <main className="dashboard-content">
         <div className="dashboard-title-row"><div><h2>Visão geral da oficina</h2><p>Acompanhe sua operação. Priorize o que precisa de atenção.</p></div><button className="dashboard-refresh" onClick={() => refresh()} disabled={loading}><img src="/assets/services/reload-double.svg" width="16" height="16" alt=""/>{loading ? 'Atualizando' : 'Atualizar painel'}</button></div>
         {error && <div className="dashboard-error" role="alert"><span>{error}</span><button onClick={() => refresh()}>Tentar novamente</button></div>}

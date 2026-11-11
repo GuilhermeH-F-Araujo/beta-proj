@@ -63,6 +63,7 @@ export function rotasFuncionarios(autorizar:(req:Request,res:Response)=>Promise<
     if(error){const {error:cleanupError}=await adminDb.auth.admin.deleteUser(auth.user.id);if(cleanupError)return res.status(500).json({message:'A conta de acesso foi criada, mas o cadastro falhou. Contate o administrador antes de tentar novamente.'});if(error.code==='23505')return res.status(409).json({message:'Este CPF ou e-mail já pertence a outro funcionário.'});throw error;}
     return res.status(201).json({id});
   }catch(error){next(error);}});
+  router.get('/options',async(_req,res,next)=>{try{const {data,error}=await db(res).from('funcionario').select('nome,cargo,departamento,situacao').eq('situacao','ativo').order('nome');if(error)throw error;res.json({itens:(data??[]).filter(p=>(p.cargo??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()==='mecanico')});}catch(e){next(e)}});
   router.get('/',async(req,res,next)=>{try{
     const mes=mesSchema.safeParse(req.query.mes??mesAtual());if(!mes.success)return res.status(400).json({message:'Mês inválido.'});
     const [pessoas,ordens]=await Promise.all([

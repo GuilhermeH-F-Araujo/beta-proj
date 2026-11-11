@@ -42,3 +42,11 @@ autorização expressa; preparar os arquivos não altera o banco.
 | **NHTSA vPIC API** | Sugestões adicionais de marcas. Se estiver indisponível, o catálogo de marcas principais do código continua disponível. | `server/src/marcasMotocicleta.ts` |
 
 Os links de contato abrem `wa.me` e o aplicativo de email do usuário (`mailto:`); não há integração com a API oficial do WhatsApp. A interface usa **React**, **React Router** e **Vite**; a API usa **Express**, **Zod** e **supabase-js**. As chaves de Supabase e dos provedores de imagem são usadas no servidor.
+
+## Versão v78
+
+Menus renderizados por uma única estrutura compartilhada, atualização automática de listas/cards, consulta de CEP, rascunhos locais por conta e skeletons. Agenda e catálogo agora possuem persistência compartilhada versionada. Ler `docs/ATUALIZACAO-V78.md` e executar as novas migrações de `ATUALIZAR-BANCO-V78.sql` antes da publicação.
+
+## Versão v79
+
+Menu lateral normal e sessão compartilhada entre páginas, sem nova validação na navegação. Revalidação silenciosa e 101 testes aprovados. Consultar `docs/ATUALIZACAO-V79.md`. As duas alterações da v78 já foram aplicadas ao Supabase `estacao-motos`; a v79 não exige migração adicional.

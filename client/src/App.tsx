@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import Skeleton from './components/Skeleton';
 import Entrar from './pages/Entrar';
 import RotaProtegida from './components/RotaProtegida';
 
@@ -15,10 +16,11 @@ const Funcionarios=lazy(()=>import('./pages/Funcionarios'));
 const Agendamentos=lazy(()=>import('./pages/Agendamentos'));
 const Servicos=lazy(()=>import('./pages/Servicos'));
 const Dashboard=lazy(()=>import('./pages/Dashboard'));
+const Configuracoes=lazy(()=>import('./pages/Configuracoes'));
 
 export default function App() {
   return (
-    <Suspense fallback={null}><Routes>
+    <Suspense fallback={<Skeleton/>}><Routes>
       <Route path="/login" element={<Entrar />} />
       <Route path="/esqueci-a-senha" element={<EsqueciSenha />} />
       <Route path="/redefinir-senha" element={<RedefinirSenha />} />
@@ -31,6 +33,7 @@ export default function App() {
       <Route path="/funcionarios/:id/*" element={<Funcionarios />} />
       <Route path="/agendamentos" element={<Agendamentos />} />
       <Route path="/servicos" element={<Servicos />} />
+      <Route path="/configuracoes" element={<Configuracoes />} />
       <Route path="/meu-perfil" element={<MeuPerfil />} />
       <Route path="/clientes/:id" element={<Clientes />} />
       <Route path="/ordens-de-servico/:id" element={<DetalhesOrdem />} />

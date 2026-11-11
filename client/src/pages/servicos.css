@@ -234,3 +234,5 @@
 
 .services-field input:focus-visible,.services-field textarea:focus-visible{outline:0}.services-field input,.services-field textarea,.services-app .category-modal-body .services-field input,.services-app .category-modal-body .services-field textarea{font-size:13px}.services-toast.error{border-color:#f0c4ce;color:#b72843;background:#fff8fa}.icon-picker-link b{font-size:12px}.icon-picker-link small{font-size:11px}.icon-picker-link input{font-size:12px}
 .services-content>*{flex:none}
+
+.services-app[data-catalog-readonly="true"] .service-editor-card{display:none}.services-app[data-catalog-readonly="true"] .services-workspace{grid-template-columns:minmax(0,1fr)}

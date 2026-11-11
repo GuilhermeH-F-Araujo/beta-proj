@@ -1,12 +1,15 @@
+import {useUsuarioAdmin} from '../components/RotaProtegida';
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import Skeleton from '../components/Skeleton';
+import {useDadosVivos} from '../hooks/useDadosVivos';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
 import SeletorFiltro from '../components/SeletorFiltro';
-import MenuAdmin,{Icon} from '../components/MenuAdmin';
+import { Icon } from '../components/MenuAdmin';
 import ModalEditarMotocicleta from '../components/ModalEditarMotocicleta';
 import ModalVerMotocicleta from '../components/ModalVerMotocicleta';
 import ModalPreviaModelo from '../components/ModalPreviaModelo';
-import { ErroRequisicaoApi, buscarUsuarioAtual, buscarMotocicletas, logout, type ItemMotocicleta, type StatusMotocicleta, type RespostaMotocicletas } from '../services/apiAutenticacao';
+import { ErroRequisicaoApi, buscarMotocicletas, logout, type ItemMotocicleta, type StatusMotocicleta, type RespostaMotocicletas } from '../services/apiAutenticacao';
 import { useMiniaturaModeloMotocicleta } from '../services/miniaturasMotocicletas';
 import './ordens-servico.css';
 import './motocicletas.css';
@@ -46,7 +49,7 @@ function pagesToShow(page:number,last:number):(number|'…')[]{if(last<=6)return
 export default function Motocicletas(){
   const navigate=useNavigate();
   const [name,setName]=useState('Administrador');
-  const [authorized,setAuthorized]=useState(false);
+  const usuario=useUsuarioAdmin(),authorized=!!usuario;
   const [authError,setAuthError]=useState('');
   const [collapsed,setCollapsed]=useState(false);
   const [data,setData]=useState<RespostaMotocicletas>(empty);
@@ -68,10 +71,7 @@ export default function Motocicletas(){
   const [viewing,setViewing]=useState<ItemMotocicleta|null>(null);
   const [deleting,setDeleting]=useState<ItemMotocicleta|null>(null);
   const [imageRevision,setImageRevision]=useState(0);
-  useEffect(()=>{let live=true;buscarUsuarioAtual().then(({user})=>{if(live){setName(user.nome);setAuthorized(true);}}).catch(cause=>{
-    if(!live)return;if(cause instanceof ErroRequisicaoApi&&[401,403].includes(cause.status))navigate('/login',{replace:true});
-    else setAuthError(cause instanceof Error?cause.message:'Não foi possível verificar seu acesso.');
-  });return()=>{live=false;};},[navigate]);
+  
   async function reload(){setLoading(true);setError('');try{setData(await buscarMotocicletas());}catch(cause){setError(cause instanceof Error?cause.message:'Falha ao carregar motocicletas.');}finally{setLoading(false);}}
   useEffect(()=>{if(authorized)void reload();},[authorized]);
   useEffect(()=>{setPage(1);},[search,status,brand,year,pageSize]);
@@ -79,6 +79,7 @@ export default function Motocicletas(){
   useEffect(()=>{if(!pageSizeOpen)return;const close=(event:PointerEvent)=>{if(!pageSizeRef.current?.contains(event.target as Node))setPageSizeOpen(false);};const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setPageSizeOpen(false);};document.addEventListener('pointerdown',close);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',escape);};},[pageSizeOpen]);
   useEffect(()=>{if(!filtersOpen)return;const close=(event:PointerEvent)=>{if(!filtersRef.current?.contains(event.target as Node))setFiltersOpen(false);};const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setFiltersOpen(false);};document.addEventListener('pointerdown',close);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',escape);};},[filtersOpen]);
   useEffect(()=>{if(!deleting)return;const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setDeleting(null);};document.addEventListener('keydown',escape);return()=>document.removeEventListener('keydown',escape);},[deleting]);
+  useDadosVivos(async valido=>{try{const result=await buscarMotocicletas();if(valido()){setData(result);setError('')}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar as motos.')}},authorized&&!loading);
   const brands=useMemo(()=>[...new Set(data.items.map(item=>item.model.split(' ')[0]))].sort(),[data.items]);
   const years=useMemo(()=>[...new Set(data.items.map(item=>item.year).filter((value):value is number=>value!==null))].sort((a,b)=>b-a),[data.items]);
   const filtered=useMemo(()=>data.items.filter(item=>{
@@ -91,10 +92,10 @@ export default function Motocicletas(){
   const currentPage=Math.min(page,lastPage);
   const visible=filtered.slice((currentPage-1)*pageSize,currentPage*pageSize);
   async function signOut(){await logout();navigate('/login',{replace:true});}
-  if(!authorized)return <div className="orders-auth-loading">{authError||'Validando acesso…'}{authError&&<button onClick={()=>window.location.reload()}>Tentar novamente</button>}</div>;
-  return <div className="orders-viewport bikes-viewport"><MenuAdmin collapsed={collapsed} onUnavailable={label=>setToast(`${label} ainda não possui uma página neste projeto.`)}/>
-    <div className="orders-main"><CabecalhoAdmin title="Motocicletas" name={name} onLogout={signOut} collapsed={collapsed} onToggle={()=>setCollapsed(value=>!value)} search={{value:search,onChange:setSearch,ariaLabel:'Busca rápida'}}/>
-    <main className="bikes-content"><div className="bikes-heading"><div><h1>Motocicletas</h1><p>Cadastre e gerencie as motocicletas dos seus clientes.</p></div><button type="button" className="bikes-new" onClick={()=>setEditing(null)}><Icon name="plus" size={15}/> Nova motocicleta</button></div>
+  if(!authorized)return <div className="orders-auth-loading">{authError||<Skeleton/>}{authError&&<button onClick={()=>window.location.reload()}>Tentar novamente</button>}</div>;
+  return <div className="orders-viewport bikes-viewport">
+    <div className="orders-main">
+    <main className="bikes-content"><ConteudoCarregando carregando={loading&&!error}><div className="bikes-heading"><div><h1>Motocicletas</h1><p>Cadastre e gerencie as motocicletas dos seus clientes.</p></div><button type="button" className="bikes-new" onClick={()=>setEditing(null)}><Icon name="plus" size={15}/> Nova motocicleta</button></div>
       <div className="bikes-stats">{statuses.map(card=><button type="button" key={card.key} className={`bikes-stat ${card.shade}${status===card.key?' selected':''}`} aria-pressed={status===card.key} onClick={()=>setStatus(card.key)}><span className="bikes-stat-icon"><Icon name={card.icon} size={18}/></span><span><strong>{data.counts[card.key]}</strong><small>{card.label}</small><em>{card.key==='all'?'Todas as cadastradas':`${data.counts.all?Math.round((data.counts[card.key]/data.counts.all)*100):0}% do total`}</em></span></button>)}</div>
       <section className="bikes-panel" aria-label="Lista de motocicletas">
         <div className="bikes-filters">
@@ -111,7 +112,7 @@ export default function Motocicletas(){
         <div className="bikes-table-wrap"><table><thead><tr><th>Motocicleta</th><th>Placa</th><th>Cliente</th><th>Ano/Modelo</th><th>Quilometragem</th><th>Status</th><th>Última OS</th><th>Ações</th></tr></thead><tbody>{loading?<tr><td colSpan={8} className="bikes-empty">Carregando motocicletas…</td></tr>:visible.length===0?<tr><td colSpan={8} className="bikes-empty">{error?'Não foi possível carregar a lista. Tente novamente pelo aviso no canto da tela.':'Nenhuma motocicleta encontrada. Ajuste os filtros ou cadastre uma nova.'}</td></tr>:visible.map(item=><tr key={item.id}><td><div className="bikes-name"><BikeThumb item={item} revision={imageRevision}/><span><strong>{item.model}</strong><small>Cor: {item.color||'Não informada'}</small></span></div></td><td className="bikes-plate">{item.plate}</td><td><div className="bikes-client"><strong>{item.client}</strong>{item.phone&&<a target="_blank" rel="noopener noreferrer" href={`https://wa.me/${item.phone.replace(/\D/g,'').replace(/^55(?=\d{10,11}$)/,'').replace(/^(?=\d{10,11}$)/,'55')}`}>{item.phone} <Icon name="whatsapp" size={10}/></a>}</div></td><td>{item.year??'—'}/{item.modelYear??item.year??'—'}</td><td>{item.mileage===null?'—':`${item.mileage.toLocaleString('pt-BR')} km`}</td><td><StatusBadge value={item.status}/></td><td>{item.lastOrder?<button type="button" className="bikes-last-os" onClick={()=>navigate(`/ordens-de-servico/${item.lastOrder!.id}`)}><strong>OS #{item.lastOrder.id}</strong><small>{dateBR(item.lastOrder.date)}</small></button>:<span className="bikes-muted">—</span>}</td><td><div className="bikes-actions"><button type="button" title="Ver motocicleta" aria-label={`Ver ${item.model}`} onClick={()=>setViewing(item)}><Icon name="eye" size={14}/></button><button type="button" title="Editar motocicleta" aria-label={`Editar ${item.model}`} onClick={()=>setEditing(item)}><Icon name="pencil" size={14}/></button><button type="button" className="delete" title="Excluir motocicleta" aria-label={`Excluir ${item.model}`} onClick={()=>setDeleting(item)}><Icon name="trash" size={14}/></button></div></td></tr>)}</tbody></table></div>
         <div className="bikes-footer"><span>Mostrando {filtered.length?`${(currentPage-1)*pageSize+1} a ${Math.min(currentPage*pageSize,filtered.length)}`:'0'} de {filtered.length} motocicletas</span><div><div className="bikes-page-size" ref={pageSizeRef}><span>Itens por página:</span><button type="button" className="bikes-page-size-trigger" aria-label={`Itens por página: ${pageSize}`} aria-expanded={pageSizeOpen} aria-haspopup="menu" onClick={()=>setPageSizeOpen(open=>!open)}>{pageSize}<Icon name="chevron" size={12}/></button>{pageSizeOpen&&<div className="bikes-page-size-options" role="menu" aria-label="Itens por página">{[10,15,25].map(size=><button role="menuitemradio" aria-checked={pageSize===size} type="button" key={size} onClick={()=>{setPageSize(size);setPageSizeOpen(false);}}>{size}<span>{pageSize===size?'✓':''}</span></button>)}</div>}</div><button type="button" onClick={()=>setPage(Math.max(1,currentPage-1))} disabled={currentPage===1} aria-label="Página anterior"><Icon name="left" size={13}/></button>{pagesToShow(currentPage,lastPage).map((n,index)=>n==='…'?<span key={`dots${index}`}>…</span>:<button type="button" key={n} className={n===currentPage?'current':''} onClick={()=>setPage(n)}>{n}</button>)}<button type="button" onClick={()=>setPage(Math.min(lastPage,currentPage+1))} disabled={currentPage===lastPage} aria-label="Próxima página"><Icon name="right" size={13}/></button></div></div>
       </section>
-    </main></div>
+    </ConteudoCarregando></main></div>
     {(toast||error&&!deleting)&&<div className="bikes-notice" role={error?'alert':'status'}><span className="bikes-notice-mark"><Icon name={error?'close':'check'} size={14}/></span><span>{error||toast}</span>{error&&<button type="button" onClick={()=>void reload()}>Tentar novamente</button>}<button type="button" className="bikes-notice-close" onClick={()=>{setToast('');setError('');}} aria-label="Fechar aviso"><Icon name="close" size={14}/></button></div>}
     {editing!==undefined&&<ModalEditarMotocicleta item={editing} clients={data.clients} onClose={()=>setEditing(undefined)} onSaved={()=>{setEditing(undefined);setToast('Motocicleta salva com sucesso.');void reload();}} onImage={bike=>{setEditing(undefined);setImageEdit(bike);}}/>}
     {imageEdit&&<ModalPreviaModelo motorcycleId={imageEdit.id} currentModel={imageEdit.model} onClose={()=>setImageEdit(null)} onChanged={()=>{setImageRevision(value=>value+1);void reload();}}/>}

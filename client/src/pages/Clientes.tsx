@@ -1,12 +1,16 @@
+import {useUsuarioAdmin} from '../components/RotaProtegida';
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import Skeleton from '../components/Skeleton';
+import {useDadosVivos} from '../hooks/useDadosVivos';
+import { escalaAtual } from '../services/preferenciasGlobais';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
-import MenuAdmin, { Icon } from '../components/MenuAdmin';
+import { Icon } from '../components/MenuAdmin';
 import ModalEditarCliente from '../components/ModalEditarCliente';
 import PerfilCliente from '../components/PerfilCliente';
 import {
-  ErroRequisicaoApi, excluirCliente, buscarPerfilCliente, buscarClientes, buscarUsuarioAtual, buscarFotoDiretorioCliente, logout,
+  ErroRequisicaoApi, excluirCliente, buscarPerfilCliente, buscarClientes, buscarFotoDiretorioCliente, logout,
   type ItemCliente, type DadosPerfilCliente, type SituacaoCliente, type RespostaClientes,
 } from '../services/apiAutenticacao';
 import './ordens-servico.css';
@@ -71,7 +75,7 @@ export default function Clientes() {
   const { id } = useParams();
   const profileId = id ? Number(id) : null;
   const [name, setName] = useState('Administrador');
-  const [authorized, setAuthorized] = useState(false);
+  const usuario=useUsuarioAdmin(), authorized=!!usuario;
   const [authError, setAuthError] = useState('');
   const [retry, setRetry] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
@@ -93,16 +97,7 @@ export default function Clientes() {
   const [deletingError, setDeletingError] = useState('');
   const [deletingReason, setDeletingReason] = useState('');
 
-  useEffect(() => {
-    let live = true;
-    buscarUsuarioAtual().then(result => { if (live) { setName(result.user.nome); setAuthorized(true); setAuthError(''); } })
-      .catch(err => {
-        if (!live) return;
-        if (err instanceof ErroRequisicaoApi && [401, 403].includes(err.status)) navigate('/login', { replace: true });
-        else setAuthError(err instanceof Error ? err.message : 'Não foi possível verificar o acesso.');
-      });
-    return () => { live = false; };
-  }, [navigate, retry]);
+  
 
   useEffect(() => {
     if (!authorized) return;
@@ -138,6 +133,7 @@ export default function Clientes() {
     };
   }, [action]);
 
+  useDadosVivos(async valido=>{try{if(profileId){const result=await buscarPerfilCliente(profileId);if(valido())setProfile(result)}else{const result=await buscarClientes();if(valido())setData(result)}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar os clientes.')}},authorized&&!loading,String(profileId));
   const filtered = useMemo(() => {
     const needle = searchable(search.trim());
     const result = data.items.filter(client => {
@@ -161,7 +157,7 @@ export default function Clientes() {
   function toggleActions(client: ItemCliente, button: HTMLButtonElement) {
     if (action === client.id) { setAction(null); return; }
     const rect = button.getBoundingClientRect();
-    const menuWidth = 184, menuHeight = 130;
+    const menuWidth = 184*escalaAtual(), menuHeight = 130*escalaAtual();
     const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
     const above = rect.bottom + menuHeight + 10 >= window.innerHeight;
     setActionPosition({
@@ -200,18 +196,18 @@ export default function Clientes() {
   }
   if (!authorized) return <div className="orders-auth-loading">{authError
     ? <div><p>{authError}</p><button onClick={() => setRetry(n => n + 1)}>Tentar novamente</button></div>
-    : 'Validando acesso…'}</div>;
+    : <Skeleton/>}</div>;
 
   return <div className="orders-viewport clients-viewport">
-    <MenuAdmin collapsed={collapsed} onUnavailable={label => setToast(`${label} ainda não possui uma página neste projeto.`)} />
+    
     <div className="orders-main">
-      <CabecalhoAdmin title="Clientes" name={name} onLogout={signOut} collapsed={collapsed} onToggle={()=>setCollapsed(!collapsed)} search={{value:search,onChange:value=>{if(profileId)navigate('/clientes');setSearch(value);},ariaLabel:'Busca rápida'}}/>
-      {profileId ? <main className="clients-content clients-profile-content">
+      
+      {profileId ? <main className="clients-content clients-profile-content"><ConteudoCarregando carregando={loading&&!error}>
         <div className="client-crumb"><button onClick={() => navigate('/dashboard')}>Dashboard</button><span>/</span><button onClick={() => navigate('/clientes')}>Clientes</button><span>/</span><strong>{profile?.name || 'Perfil'}</strong></div>
         {loading ? <p className="clients-inline-state">Carregando cliente…</p> : error ? <p role="alert" className="clients-inline-state">{error} <button onClick={() => navigate('/clientes')}>Voltar aos clientes</button></p> : profile && <>
           <PerfilCliente profile={profile} onToast={setToast} onUpdated={async () => { setProfile(await buscarPerfilCliente(profile.id)); }}/>
         </>}
-      </main> : <main className="clients-content">
+      </ConteudoCarregando></main> : <main className="clients-content"><ConteudoCarregando carregando={loading&&!error}>
         <div className="client-crumb"><span>Dashboard</span><span>/</span><strong>Clientes</strong></div>
         <div className="clients-heading"><h1>Clientes</h1><p>Gerencie relacionamentos, motocicletas e históricos de atendimento.</p></div>
         <div className="clients-stats">{cardInfo.map(card => <button key={card.key} type="button" className={`clients-stat ${card.tone}${filter === card.key && filter !== 'all' ? ' is-selected' : ''}`} title={card.tip} aria-label={`${card.label}: ${data.counts[card.key]}. ${card.tip}`} aria-pressed={filter === card.key} onClick={() => setFilter(filter === card.key && card.key !== 'all' ? 'all' : card.key)}><span className="clients-stat-icon"><Icon name={card.icon} size={18}/></span><span><strong>{data.counts[card.key]}</strong><small>{card.label}</small></span></button>)}</div>
@@ -233,9 +229,9 @@ export default function Clientes() {
           </tbody></table></div>
           <div className="clients-panel-footer"><span>Mostrando {start} a {end} de {filtered.length} clientes</span><nav className="clients-pagination" aria-label="Páginas de clientes"><button aria-label="Página anterior" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><Icon name="left" size={13}/></button>{pagesToShow(page, pageCount).map((item, n) => item === '…' ? <span key={`gap-${n}`}>…</span> : <button key={item} className={page === item ? 'current' : ''} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}>{item}</button>)}<button aria-label="Próxima página" disabled={page >= pageCount || loading} onClick={() => setPage(page + 1)}><Icon name="right" size={13}/></button></nav></div>
         </section>
-      </main>}
+      </ConteudoCarregando></main>}
     </div>
-    {action !== null && actionPosition && data.items.find(client => client.id === action) && createPortal(<div className={`clients-action-menu${actionPosition.above ? ' menu-above' : ''}`} role="menu" aria-label={`Ações de ${data.items.find(client => client.id === action)?.name}`} style={{ left: actionPosition.left, top: actionPosition.top, '--arrow-left': `${actionPosition.arrowLeft}px` } as CSSProperties}>
+    {action !== null && actionPosition && data.items.find(client => client.id === action) && createPortal(<div className={`clients-action-menu${actionPosition.above ? ' menu-above' : ''}`} role="menu" aria-label={`Ações de ${data.items.find(client => client.id === action)?.name}`} style={{ left: actionPosition.left/escalaAtual(), top: actionPosition.top/escalaAtual(), '--arrow-left': `${actionPosition.arrowLeft/escalaAtual()}px` } as CSSProperties}>
       <button type="button" role="menuitem" onClick={() => void editFromList(data.items.find(client => client.id === action)!)}><span className="clients-menu-icon edit"><Icon name="pencil" size={16}/></span>Editar cliente</button>
       <button type="button" role="menuitem" onClick={() => viewClientOrders(data.items.find(client => client.id === action)!)}><span className="clients-menu-icon orders"><Icon name="clipboard" size={16}/></span>Ver ordens</button>
       <button type="button" role="menuitem" className="clients-menu-delete" onClick={() => { setDeletingError(''); setDeletingReason(''); setDeletingClient(data.items.find(client => client.id === action)!); setAction(null); }}><span className="clients-menu-icon delete"><Icon name="trash" size={16}/></span>Excluir cliente</button>

@@ -1,3 +1,5 @@
+import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
+import {limparRascunho,temRascunho} from '../services/rascunhos';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './MenuAdmin';
@@ -29,12 +31,12 @@ export default function ModalPreviaModelo({orderId,motorcycleId,currentModel,onC
   orderId?:number;motorcycleId?:number;currentModel:string;onClose:()=>void;onChanged:()=>void;
 }) {
   const locked=motorcycleId!==undefined;
-  const [model,setModel]=useState(currentModel);
-  const [variant,setVariant]=useState('');
-  const [notes,setNotes]=useState('');
-  const [references,setReferences]=useState<Reference[]>([]);
-  const [draft,setDraft]=useState<{draftId:string;image:string;model:string}>();
-  const [candidate,setCandidate]=useState<string>();
+  const [model,setModel]=useEstadoRascunho(`previa-${orderId??currentModel}`,'model',currentModel);
+  const [variant,setVariant]=useEstadoRascunho(`previa-${orderId??currentModel}`,'variant','');
+  const [notes,setNotes]=useEstadoRascunho(`previa-${orderId??currentModel}`,'notes','');
+  const [references,setReferences]=useEstadoRascunho<Reference[]>(`previa-${orderId??currentModel}`,'references',[]);
+  const [draft,setDraft]=useEstadoRascunho<{draftId:string;image:string;model:string}|undefined>(`previa-${orderId??currentModel}`,'draft',undefined);
+  const [candidate,setCandidate]=useEstadoRascunho<string|undefined>(`previa-${orderId??currentModel}`,'candidate',undefined);
   const [queueStatus,setQueueStatus]=useState<StatusMiniatura|null>(null);
   const [research,setResearch]=useState<PesquisaModelo|null>(null);
   const [suggestions,setSuggestions]=useState<SugestaoModelo[]>([]);
@@ -135,7 +137,7 @@ export default function ModalPreviaModelo({orderId,motorcycleId,currentModel,onC
       }
       if(draft){if(locked)await aprovarRascunhoMoto(motorcycleId,draft.draftId);else await aprovarRascunhoMotocicleta(orderId!,draft.draftId);}
       else {if(locked)await aprovarCandidatoMoto(motorcycleId);else await aprovarCandidatoDaFila(orderId!);}
-      onChanged();onClose();
+      limparRascunho(`previa-${orderId??currentModel}`);onChanged();onClose();
     } catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível aprovar a miniatura.');}
     finally{setBusy(false);}
   }

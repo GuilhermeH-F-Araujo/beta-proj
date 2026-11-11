@@ -1,3 +1,4 @@
+import {useAcessoConta,moduloPagina,pode} from '../services/acessoConta';
 import './menu-admin.css';
 import { NavLink } from 'react-router-dom';
 
@@ -28,6 +29,10 @@ export function Icon({ name, size = 14 }: { name: string; size?: number }) {
     menu: <path d="M4 6h16M4 12h16M4 18h16"/>,
     search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
+    volume: <><path d="m11 4-6 5H2v6h3l6 5V4Z"/><path d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></>,
+    music: <><path d="M9 18V5l12-2v13M9 8l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/></>,
+    upload: <><path d="M12 17V3m-5 5 5-5 5 5M4 16v5h16v-5"/></>,
+    play: <path d="m8 5 11 7-11 7V5Z"/>,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></>,
     chevron: <path d="m6 9 6 6 6-6"/>,
     left: <path d="m15 18-6-6 6-6"/>,
@@ -60,6 +65,7 @@ export function Icon({ name, size = 14 }: { name: string; size?: number }) {
     pin: <><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
     close: <path d="M5 5 19 19M19 5 5 19"/>,
     lock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></>,
+    shield: <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></>,
     refresh: <><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.4-3"/></>,
     hash: <><path d="M4 9h16M4 15h16M10 3 7 21M17 3l-3 18"/></>,
     gauge: <><path d="M4.8 18a9 9 0 1 1 14.4 0H4.8Z"/><path d="m12 14 4-5"/><circle cx="12" cy="14" r="1"/></>,
@@ -68,9 +74,10 @@ export function Icon({ name, size = 14 }: { name: string; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-export default function MenuAdmin({ collapsed = false, onUnavailable }: { collapsed?: boolean; onUnavailable?: (label: string) => void }) {
+export default function MenuAdmin({ collapsed = false, onUnavailable, aguardandoAcesso=false }: { aguardandoAcesso?:boolean; collapsed?: boolean; onUnavailable?: (label: string) => void }) {
+  useAcessoConta();
   return <aside className={`admin-menu${collapsed ? ' collapsed' : ''}`}>
     <div className="admin-menu-brand"><img src="/assets/estacao-motos-logo-sidebar.png" alt="Estação Motos" /></div>
-    <nav aria-label="Menu principal">{items.map(item => ['/dashboard', '/ordens-de-servico', '/clientes','/motocicletas','/funcionarios','/agendamentos','/servicos'].includes(item.path) ? <NavLink key={item.path} to={item.path} title={item.label} className={({isActive}) => `admin-menu-link${isActive ? ' selected' : ''}`}><Icon name={item.icon} size={11}/><span>{item.label}</span></NavLink> : <button key={item.path} className="admin-menu-link" title={item.label} onClick={() => onUnavailable?.(item.label)}><Icon name={item.icon} size={11}/><span>{item.label}</span></button>)}</nav>
+    <nav aria-label="Menu principal">{items.filter(item=>{const mod=moduloPagina(item.path);return aguardandoAcesso||!mod||pode(mod)}).map(item => ['/dashboard', '/ordens-de-servico', '/clientes','/motocicletas','/funcionarios','/agendamentos','/servicos','/configuracoes'].includes(item.path) ? <NavLink key={item.path} to={item.path} aria-disabled={aguardandoAcesso||undefined} onClick={event=>{if(aguardandoAcesso)event.preventDefault()}} title={item.label} className={({isActive}) => `admin-menu-link${isActive ? ' selected' : ''}`}><Icon name={item.icon} size={11}/><span>{item.label}</span></NavLink> : <button key={item.path} className="admin-menu-link" title={item.label} onClick={() => onUnavailable?.(item.label)}><Icon name={item.icon} size={11}/><span>{item.label}</span></button>)}</nav>
   </aside>;
 }

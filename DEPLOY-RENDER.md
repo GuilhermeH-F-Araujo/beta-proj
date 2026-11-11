@@ -33,3 +33,11 @@ Verificação antes de enviar:
 Devem aparecer os nove arquivos TypeScript do servidor. Os erros TS18003/TS2307 indicam fontes ausentes ou raiz/pasta errada; trocar `include` não recupera arquivos ausentes. O `render.yaml` fixa `rootDir: .` e o comando de build confere as fontes do servidor e do cliente antes de compilar, com uma mensagem direta se o pacote estiver incompleto.
 
 Os testes de build não validam credenciais, permissões nem as migrations do banco de produção.
+
+## Atualização v78
+
+Antes do deploy desta versão, executar `ATUALIZAR-BANCO-V78.sql` no Supabase correto. As instruções de CEP, dados anteriores e testes estão em `docs/ATUALIZACAO-V78.md`. A API oficial dos Correios requer credenciais de contrato; sem elas, a consulta usa ViaCEP quando permitido. Nenhuma credencial real foi incluída neste pacote.
+
+## Atualização v79
+
+As migrações v78 já foram aplicadas ao projeto `estacao-motos`. Basta publicar o pacote v79 completo para obter a correção da navegação. Nenhuma nova migração ou variável de ambiente foi acrescentada na v79.

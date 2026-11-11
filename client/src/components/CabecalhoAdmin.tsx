@@ -54,7 +54,7 @@ export default function CabecalhoAdmin({
             <Icon name="search" size={15} />
             <input
               aria-label={search?.ariaLabel ?? 'Buscar ordens de serviço'}
-              placeholder={search?.placeholder ?? 'Buscar OS, cliente, moto...'}
+              placeholder={search?.placeholder ?? 'Buscar ordens de serviço…'}
               value={searchValue}
               onChange={event => (search?.onChange ?? setLocalSearch)(event.target.value)}
               onKeyDown={event => {

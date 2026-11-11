@@ -1,3 +1,7 @@
+import {useDadosVivos} from '../hooks/useDadosVivos';
+import Skeleton from './Skeleton';
+import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
+import {limparRascunho,temRascunho} from '../services/rascunhos';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
 import { Icon } from './MenuAdmin';
 import ModalNovoUsuario from './ModalNovoUsuario';
@@ -47,31 +51,31 @@ export default function ModalNovaOrdem({ onClose, onCreated }: { onClose: () => 
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
-  const [clientMode, setClientMode] = useState<'existing' | 'new'>('existing');
-  const [clientId, setClientId] = useState<number | null>(null);
-  const [clientSearch, setClientSearch] = useState('');
+  const [clientMode, setClientMode] = useEstadoRascunho<'existing' | 'new'>('nova-os','clientMode','existing');
+  const [clientId, setClientId] = useEstadoRascunho<number | null>('nova-os','clientId',null);
+  const [clientSearch, setClientSearch] = useEstadoRascunho('nova-os','clientSearch','');
   const [clientOpen, setClientOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [cpf, setCpf] = useState('');
-  const [motoMode, setMotoMode] = useState<'existing' | 'new'>('existing');
-  const [motorcycleId, setMotorcycleId] = useState<number | null>(null);
-  const [model, setModel] = useState('');
-  const [plate, setPlate] = useState('');
-  const [year, setYear] = useState('');
-  const [color, setColor] = useState('');
-  const [mileage, setMileage] = useState('');
-  const [entryAt, setEntryAt] = useState(localDateTime);
-  const [forecastAt, setForecastAt] = useState('');
-  const [forecastAcknowledged, setForecastAcknowledged] = useState(false);
-  const [mechanicId, setMechanicId] = useState('');
+  const [name, setName] = useEstadoRascunho('nova-os','name','');
+  const [phone, setPhone] = useEstadoRascunho('nova-os','phone','');
+  const [email, setEmail] = useEstadoRascunho('nova-os','email','');
+  const [cpf, setCpf] = useEstadoRascunho('nova-os','cpf','');
+  const [motoMode, setMotoMode] = useEstadoRascunho<'existing' | 'new'>('nova-os','motoMode','existing');
+  const [motorcycleId, setMotorcycleId] = useEstadoRascunho<number | null>('nova-os','motorcycleId',null);
+  const [model, setModel] = useEstadoRascunho('nova-os','model','');
+  const [plate, setPlate] = useEstadoRascunho('nova-os','plate','');
+  const [year, setYear] = useEstadoRascunho('nova-os','year','');
+  const [color, setColor] = useEstadoRascunho('nova-os','color','');
+  const [mileage, setMileage] = useEstadoRascunho('nova-os','mileage','');
+  const [entryAt, setEntryAt] = useEstadoRascunho('nova-os','entryAt',localDateTime);
+  const [forecastAt, setForecastAt] = useEstadoRascunho('nova-os','forecastAt','');
+  const [forecastAcknowledged, setForecastAcknowledged] = useEstadoRascunho('nova-os','forecastAcknowledged',false);
+  const [mechanicId, setMechanicId] = useEstadoRascunho('nova-os','mechanicId','');
   const [mechanicOpen, setMechanicOpen] = useState(false);
   const mechanicRef = useRef<HTMLDivElement>(null);
-  const [problem, setProblem] = useState('');
-  const [observations, setObservations] = useState('');
-  const [photos, setPhotos] = useState<(string | null)[]>([null, null, null, null]);
+  const [problem, setProblem] = useEstadoRascunho('nova-os','problem','');
+  const [observations, setObservations] = useEstadoRascunho('nova-os','observations','');
+  const [photos, setPhotos] = useEstadoRascunho<(string | null)[]>('nova-os','photos',[null, null, null, null]);
   const [preparing, setPreparing] = useState<number | null>(null);
   const clientSection = useRef<HTMLElement>(null);
   const bikeSection = useRef<HTMLElement>(null);
@@ -101,6 +105,7 @@ export default function ModalNovaOrdem({ onClose, onCreated }: { onClose: () => 
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
   }, [mechanicOpen]);
+  useDadosVivos(async valido=>{const data=await buscarOpcoesNovaOrdem();if(valido())setOptions(data)},!loading&&!busy);
   function pickClient(id: number | null) {
     const client = options?.clients.find(item => item.id === id);
     setClientId(id); setClientSearch(client?.name ?? ''); setClientOpen(false);
@@ -174,7 +179,7 @@ export default function ModalNovaOrdem({ onClose, onCreated }: { onClose: () => 
         entryAt, forecastAt, problem: problem.trim(), observations: observations.trim(),
         photos: photos.filter((photo): photo is string => !!photo).map(data => ({ data })),
       });
-      onCreated(result.id);
+      limparRascunho('nova-os');onCreated(result.id);
     } catch (err) { setError(err instanceof Error ? err.message : 'Não foi possível abrir a OS.'); setBusy(false); }
   }
   const completed = [clientMode === 'existing' ? !!clientId : name.trim().length >= 2 && digits(phone).length >= 10,

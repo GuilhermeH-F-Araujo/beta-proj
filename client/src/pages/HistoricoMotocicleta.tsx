@@ -1,10 +1,12 @@
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import Skeleton from '../components/Skeleton';
+import {useDadosVivos} from '../hooks/useDadosVivos';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
 import { rotulosStatusOrdem } from '../services/statusOrdem';
-import MenuAdmin, { Icon } from '../components/MenuAdmin';
+import { Icon } from '../components/MenuAdmin';
 import SeletorPeriodo, { type DateRange } from '../components/SeletorPeriodo';
-import { ErroRequisicaoApi, buscarUsuarioAtual, buscarHistoricoMotocicleta, logout, type HistoricoMotocicleta, type StatusOrdem } from '../services/apiAutenticacao';
+import { ErroRequisicaoApi, buscarHistoricoMotocicleta, logout, type HistoricoMotocicleta, type StatusOrdem } from '../services/apiAutenticacao';
 import { useMiniaturaMotocicleta } from '../services/miniaturasMotocicletas';
 import './ordens-servico.css';
 import './historico-motocicleta.css';
@@ -39,8 +41,8 @@ export default function PaginaHistoricoMotocicleta() {
   useEffect(() => {
     if (!Number.isSafeInteger(orderId) || orderId < 1) { setError('Número da OS inválido.'); return; }
     let mounted = true;
-    Promise.all([buscarUsuarioAtual(), buscarHistoricoMotocicleta(orderId)]).then(([identity, history]) => {
-      if (mounted) { setName(identity.user.nome); setData(history); setError(''); }
+    buscarHistoricoMotocicleta(orderId).then((history) => {
+      if (mounted) { setData(history); setError(''); }
     }).catch(err => {
       if (!mounted) return;
       if (err instanceof ErroRequisicaoApi && (err.status === 401 || err.status === 403)) navigate('/login', { replace: true });
@@ -49,6 +51,7 @@ export default function PaginaHistoricoMotocicleta() {
     return () => { mounted = false; };
   }, [orderId, navigate]);
 
+  useDadosVivos(async valido=>{try{const result=await buscarHistoricoMotocicleta(orderId);if(valido()){setData(result);setError('')}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar o histórico.')}},!!data,String(orderId));
   const years = useMemo(() => [...new Set((data?.orders ?? []).map(order => order.entry.slice(0, 4)))].sort().reverse(), [data]);
   const filtered = useMemo(() => (data?.orders ?? []).filter(order => {
     const needle = query.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -68,10 +71,10 @@ export default function PaginaHistoricoMotocicleta() {
   function resetFilters() { setQuery(''); setStatus('todos'); setYear('todos'); setDateRange(null); setVisible(6); }
 
   return <div className="orders-viewport history-viewport">
-    <MenuAdmin collapsed={collapsed} onUnavailable={label => setToast(`${label} ainda não possui uma página neste projeto.`)} />
+    
     <div className="orders-main">
-      <CabecalhoAdmin title="Histórico da Motocicleta" collapsed={collapsed} onToggle={()=>setCollapsed(value=>!value)} name={name} onLogout={handleLogout}/>
-      <main className="history-scroll">
+      
+      <main className="history-scroll"><ConteudoCarregando carregando={!data&&!error}>
         {error ? <div className="details-error"><p>{error}</p><button onClick={() => navigate(`/ordens-de-servico/${orderId}`)}>Voltar aos detalhes</button></div> : !data ? <div className="details-loading">Carregando histórico da motocicleta...</div> : <div className="history-body">
           <h1>Histórico da Motocicleta</h1><div className="history-breadcrumb"><button onClick={() => navigate(`/ordens-de-servico/${orderId}`)}>Voltar aos detalhes da OS</button><Icon name="right" size={10}/><span>Histórico</span></div>
           <div className="history-columns">
@@ -102,7 +105,7 @@ export default function PaginaHistoricoMotocicleta() {
             </aside>
           </div>
         </div>}
-      </main>
+      </ConteudoCarregando></main>
     </div>
     {toast && <div className="orders-toast" role="status" onClick={() => setToast('')}>{toast}</div>}
   </div>;

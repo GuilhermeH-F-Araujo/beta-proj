@@ -1,7 +1,10 @@
+import {buscarCompartilhado,salvarCompartilhado} from './dadosCompartilhados';
+import {pode} from './acessoConta';
 export type CategoriaServico={id:string;nome:string;descricao:string;cor:string;icone:string};
 export type ItemCatalogoServico={id:string;nome:string;categoriaId:string;descricao:string;preco:number;custo:number;duracao:string;ativo:boolean;icone:string;adicional:string};
 export type CatalogoServicos={categorias:CategoriaServico[];servicos:ItemCatalogoServico[]};
 
+let catalogoMemoria:CatalogoServicos|undefined;
 const STORAGE_KEY='estacao-motos-catalogo-servicos-v1';
 export const CATALOGO_SERVICOS_EVENT='estacao-motos-catalogo-servicos-atualizado';
 export const categoriasIniciais:CategoriaServico[]=[
@@ -25,6 +28,7 @@ export const servicosIniciais:ItemCatalogoServico[]=[
 const defaults:CatalogoServicos={categorias:categoriasIniciais,servicos:servicosIniciais};
 
 export function lerCatalogoServicos():CatalogoServicos{
+  if(catalogoMemoria)return catalogoMemoria;
   try{
     const raw=localStorage.getItem(STORAGE_KEY);
     if(!raw)return defaults;
@@ -33,12 +37,22 @@ export function lerCatalogoServicos():CatalogoServicos{
     return {categorias:value.categorias,servicos:value.servicos};
   }catch{return defaults;}
 }
-export function salvarCatalogoServicos(catalogo:CatalogoServicos){
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(catalogo));
+export async function salvarCatalogoServicos(catalogo:CatalogoServicos){
+  const anterior=lerCatalogoServicos();
+  if(catalogo.servicos.some(s=>!anterior.servicos.some(a=>a.id===s.id))&&!pode('servicos','criar')||anterior.servicos.some(s=>!catalogo.servicos.some(a=>a.id===s.id))&&!pode('servicos','excluir')||catalogo.servicos.some(s=>{const a=anterior.servicos.find(a=>a.id===s.id);return a&&JSON.stringify(a)!==JSON.stringify(s)})&&!pode('servicos','editar')||JSON.stringify(catalogo.categorias)!==JSON.stringify(anterior.categorias)&&!pode('servicos','editar'))throw new Error('Seu cargo não permite alterar este item do catálogo.');
+  await salvarCompartilhado('catalogo',catalogo);
+  receberCatalogo(catalogo);
+}
+export function receberCatalogo(catalogo:CatalogoServicos){
+  catalogoMemoria=catalogo;
+  try{const antigo=localStorage.getItem(STORAGE_KEY);if(antigo&&!localStorage.getItem(STORAGE_KEY+'-backup-pre-v78'))localStorage.setItem(STORAGE_KEY+'-backup-pre-v78',antigo);localStorage.setItem(STORAGE_KEY,JSON.stringify(catalogo));}catch{/* A gravação no servidor já foi confirmada; cache indisponível não desfaz a operação. */}
   window.dispatchEvent(new CustomEvent(CATALOGO_SERVICOS_EVENT));
 }
 export function observarCatalogoServicos(callback:()=>void){
   window.addEventListener(CATALOGO_SERVICOS_EVENT,callback);
-  window.addEventListener('storage',callback);
-  return()=>{window.removeEventListener(CATALOGO_SERVICOS_EVENT,callback);window.removeEventListener('storage',callback);};
+  const changed=(event:StorageEvent)=>{if(event.key===STORAGE_KEY){catalogoMemoria=undefined;callback()}};
+  window.addEventListener('storage',changed);
+  return()=>{window.removeEventListener(CATALOGO_SERVICOS_EVENT,callback);window.removeEventListener('storage',changed);};
 }
+
+export async function atualizarCatalogoCompartilhado(){const result=await buscarCompartilhado<CatalogoServicos>('catalogo');if(result){receberCatalogo(result);return result}if(!pode('servicos','criar')){const empty={categorias:[],servicos:[]};receberCatalogo(empty);return empty}const local=lerCatalogoServicos();const saved=await salvarCompartilhado('catalogo',local);receberCatalogo(saved);return saved}

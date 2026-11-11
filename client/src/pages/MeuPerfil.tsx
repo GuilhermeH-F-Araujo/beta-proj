@@ -1,8 +1,10 @@
+import {useUsuarioAdmin} from '../components/RotaProtegida';
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import Skeleton from '../components/Skeleton';
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import CabecalhoAdmin from '../components/CabecalhoAdmin';
-import MenuAdmin, { Icon } from '../components/MenuAdmin';
-import { ErroRequisicaoApi, alterarMinhaSenha, buscarUsuarioAtual, logout, atualizarMinhaFoto, atualizarMeuPerfil } from '../services/apiAutenticacao';
+import { Icon } from '../components/MenuAdmin';
+import { ErroRequisicaoApi, alterarMinhaSenha, logout, atualizarMinhaFoto, atualizarMeuPerfil } from '../services/apiAutenticacao';
 import './ordens-servico.css';
 import './meu-perfil.css';
 
@@ -26,6 +28,7 @@ async function prepareAvatar(file: File) {
 
 export default function MeuPerfil() {
   const navigate = useNavigate();
+  const usuario=useUsuarioAdmin();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -41,12 +44,7 @@ export default function MeuPerfil() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNew, setShowNew] = useState(false);
-  useEffect(() => {
-    let active = true;
-    buscarUsuarioAtual().then(({user}) => { if (active) { setName(user.nome); setPhone(user.telefone ?? ''); setEmail(user.email ?? ''); setReady(true); } })
-      .catch(err => { if (!active) return; if (err instanceof ErroRequisicaoApi && [401,403].includes(err.status)) navigate('/login', {replace:true}); else setError(err instanceof Error ? err.message : 'Falha ao abrir seu perfil.'); });
-    return () => { active = false; };
-  }, [navigate]);
+  useEffect(()=>{if(usuario){setName(usuario.nome);setPhone(usuario.telefone??'');setEmail(usuario.email??'');setReady(true)}},[usuario?.id]);
   async function handleLogout() { await logout(); navigate('/login', {replace:true}); }
   async function saveDetails(event: FormEvent) {
     event.preventDefault(); setError(''); setNotice(''); setBusy(true);
@@ -71,10 +69,10 @@ export default function MeuPerfil() {
     finally { setBusy(false); }
   }
   return <div className="orders-viewport my-profile-page">
-    <MenuAdmin collapsed={collapsed} />
+    
     <div className="orders-main">
-      <CabecalhoAdmin title="Meu perfil" name={name || 'Admin'} onLogout={handleLogout} collapsed={collapsed} onToggle={() => setCollapsed(value => !value)} />
-      <main className="my-profile-content">
+      
+      <main className="my-profile-content"><ConteudoCarregando carregando={!ready&&!error}>
         <button type="button" className="my-profile-back" onClick={() => navigate(-1)}><Icon name="left" size={16}/> Voltar</button>
         <div className="my-profile-heading">
           <div><span>MINHA CONTA</span><h2>Seu espaço na Estação Motos</h2><p>Cuide do seu acesso e vá direto ao que precisa administrar.</p></div>
@@ -112,7 +110,7 @@ export default function MeuPerfil() {
             <button type="button" onClick={() => navigate('/motocicletas')}><Icon name="bike" size={17}/> Motocicletas <Icon name="right" size={14}/></button>
           </nav>
         </>}
-      </main>
+      </ConteudoCarregando></main>
     </div>
   </div>;
 }

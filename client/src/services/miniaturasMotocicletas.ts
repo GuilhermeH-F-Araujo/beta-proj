@@ -3,7 +3,7 @@ import { ilustracaoModelo } from './ilustracoesModelos';
 
 export type StatusMiniatura = 'pendente' | 'processando' | 'aguardando_cota' | 'tentar_novamente' | 'aguardando_revisao' | 'concluido';
 
-const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API_URL = (import.meta.env?.VITE_API_URL || '').replace(/\/$/, '');
 async function imageApi<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { method: body ? 'POST' : 'GET', credentials: 'include', cache: 'no-store', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
   const data = await response.json().catch(() => null) as (T & { message?: string }) | null;

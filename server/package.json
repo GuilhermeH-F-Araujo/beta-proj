@@ -16,7 +16,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test:employees": "npm run build && node --test scripts/funcionarios.test.mjs",
-    "test:dashboard": "npm run build && node --test scripts/painel-admin.test.mjs"
+    "test:dashboard": "npm run build && node --test scripts/painel-admin.test.mjs",
+    "test:settings": "npm run build && node --test scripts/configuracoes.test.mjs scripts/preferencias-conta.test.mjs && node --import tsx --test scripts/notificacoes.test.mjs scripts/preferencias-globais.test.mjs scripts/central-notificacoes.test.mjs scripts/sincronizacao-conta.test.mjs scripts/navegacao-configuracoes.test.mjs",
+    "test:roles": "npm run build && node --test scripts/cargos.test.mjs && node --import tsx --test scripts/cargos-locais.test.mjs",
+    "test:shared": "node --import tsx --test scripts/cep-compartilhados.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",
