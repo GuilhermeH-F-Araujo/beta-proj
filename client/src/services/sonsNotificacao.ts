@@ -1,57 +1,48 @@
-import { contaPreferenciasAtual,enviarSomConta,buscarSomConta } from './sincronizacaoConta';
 import {
   chaveNotificacoes,
-  lerConfigNotificacoes,
+  lerConfiguracaoNotificacoes,
   somDoEvento,
-} from "./preferenciasNotificacoes";
-export type SomPredefinido = "brisa" | "sino" | "madeira" | "toque";
-export type SomNotificacao = SomPredefinido | "personalizado";
+} from './preferenciasNotificacoes';
+import { buscarSomConta, contaPreferenciasAtual, enviarSomConta } from './sincronizacaoConta';
+export type SomPredefinido = 'brisa' | 'sino' | 'madeira' | 'toque';
+export type SomNotificacao = SomPredefinido | 'personalizado';
 
 export const sonsPredefinidos: {
   id: SomPredefinido;
   nome: string;
   descricao: string;
 }[] = [
-  { id: "brisa", nome: "Brisa", descricao: "Dois tons leves e curtos" },
+  { id: 'brisa', nome: 'Brisa', descricao: 'Dois tons leves e curtos' },
   {
-    id: "sino",
-    nome: "Sino suave",
-    descricao: "Um toque discreto e acolhedor",
+    id: 'sino',
+    nome: 'Sino suave',
+    descricao: 'Um toque discreto e acolhedor',
   },
-  { id: "madeira", nome: "Madeira", descricao: "Dois cliques macios" },
-  { id: "toque", nome: "Toque curto", descricao: "Um único tom breve" },
+  { id: 'madeira', nome: 'Madeira', descricao: 'Dois cliques macios' },
+  { id: 'toque', nome: 'Toque curto', descricao: 'Um único tom breve' },
 ];
 
-const DB_NAME = "estacao-motos-preferencias";
-const STORE_NAME = "sons";
-const recordKey = () => chaveNotificacoes("audio");
-const MAX_BYTES = 1_500_000;
-const MAX_SECONDS = 8;
-const acceptedExtensions = new Set([
-  "wav",
-  "mp3",
-  "ogg",
-  "oga",
-  "m4a",
-  "aac",
-  "webm",
-  "flac",
-]);
-const acceptedMimeTypes = new Set([
-  "audio/wav",
-  "audio/x-wav",
-  "audio/wave",
-  "audio/vnd.wave",
-  "audio/x-m4a",
-  "audio/mp3",
-  "audio/x-flac",
-  "audio/mpeg",
-  "audio/ogg",
-  "audio/mp4",
-  "audio/aac",
-  "audio/webm",
-  "audio/flac",
-  "application/ogg",
+const NOME_BANCO = 'estacao-motos-preferencias';
+const NOME_ARMAZENAMENTO = 'sons';
+const registroChave = () => chaveNotificacoes('audio');
+const MAXIMO_BYTES = 1_500_000;
+const MAXIMO_SEGUNDOS = 8;
+const acceptedExtensions = new Set(['wav', 'mp3', 'ogg', 'oga', 'm4a', 'aac', 'webm', 'flac']);
+const acceptedTipoArquivoTypes = new Set([
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/vnd.wave',
+  'audio/x-m4a',
+  'audio/mp3',
+  'audio/x-flac',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/webm',
+  'audio/flac',
+  'application/ogg',
 ]);
 
 export type SomPersonalizadoMeta = {
@@ -59,220 +50,260 @@ export type SomPersonalizadoMeta = {
   duration: number;
   size: number;
 };
-type SomRecord = SomPersonalizadoMeta & {
-  versao?:string|null; blob: Blob; mimeType: string };
+type SomRegistro = SomPersonalizadoMeta & {
+  versao?: string | null;
+  blob: Blob;
+  mimeType: string;
+};
 
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (!("indexedDB" in window))
-      return reject(
-        new Error(
-          "Este navegador não oferece armazenamento seguro para o som.",
-        ),
-      );
-    const request = indexedDB.open(DB_NAME, 1);
+function abertoDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolver, rejeitar) => {
+    if (!('indexedDB' in window))
+      return rejeitar(new Error('Este navegador não oferece armazenamento seguro para o som.'));
+    const request = indexedDB.open(NOME_BANCO, 1);
     request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME))
-        db.createObjectStore(STORE_NAME);
+      const banco = request.result;
+      if (!banco.objectStoreNames.contains(NOME_ARMAZENAMENTO))
+        banco.createObjectStore(NOME_ARMAZENAMENTO);
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(new Error("Não foi possível abrir o armazenamento local."));
+    request.onsuccess = () => resolver(request.result);
+    request.onerror = () => rejeitar(new Error('Não foi possível abrir o armazenamento local.'));
   });
 }
 
-function storeRequest<T>(
-  mode: IDBTransactionMode,
-  action: (store: IDBObjectStore) => IDBRequest<T>,
+function armazenamentoRequisicao<T>(
+  modo: IDBTransactionMode,
+  acao: (armazenamento: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
-  return openDatabase().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, mode);
-        const request = action(tx.objectStore(STORE_NAME));
-        tx.oncomplete = () => {
-          db.close();
-          resolve(request.result);
+  return abertoDatabase().then(
+    (banco) =>
+      new Promise<T>((resolver, rejeitar) => {
+        const transacao = banco.transaction(NOME_ARMAZENAMENTO, modo);
+        const request = acao(transacao.objectStore(NOME_ARMAZENAMENTO));
+        transacao.oncomplete = () => {
+          banco.close();
+          resolver(request.result);
         };
-        tx.onerror = () => {
-          db.close();
-          reject(
-            new Error("Não foi possível salvar o arquivo neste navegador."),
-          );
+        transacao.onerror = () => {
+          banco.close();
+          rejeitar(new Error('Não foi possível salvar o arquivo neste navegador.'));
         };
-        tx.onabort = () => {
-          db.close();
-          reject(new Error("O armazenamento local cancelou a operação."));
+        transacao.onabort = () => {
+          banco.close();
+          rejeitar(new Error('O armazenamento local cancelou a operação.'));
         };
       }),
   );
 }
 
-function getExtension(name: string): string {
-  return name.split(".").pop()?.trim().toLowerCase() ?? "";
+function obterExtensao(nomeLocal: string): string {
+  return nomeLocal.split('.').pop()?.trim().toLowerCase() ?? '';
 }
 
-function validateDeclaredType(file: File): void {
-  const extension = getExtension(file.name);
-  if (!acceptedExtensions.has(extension))
-    throw new Error("Use um arquivo WAV, MP3, OGG, M4A, AAC, WEBM ou FLAC.");
-  if (file.type && !acceptedMimeTypes.has(file.type.toLowerCase()))
-    throw new Error(
-      "O tipo do arquivo não corresponde a um formato de áudio aceito.",
-    );
-  if (file.size <= 0)
-    throw new Error("O arquivo está vazio. Escolha outro áudio.");
-  if (file.size > MAX_BYTES)
-    throw new Error("O arquivo deve ter no máximo 1,5 MB.");
+function validateDeclaredTipo(arquivo: File): void {
+  const extensao = obterExtensao(arquivo.name);
+  if (!acceptedExtensions.has(extensao))
+    throw new Error('Use um arquivo WAV, MP3, OGG, M4A, AAC, WEBM ou FLAC.');
+  if (arquivo.type && !acceptedTipoArquivoTypes.has(arquivo.type.toLowerCase()))
+    throw new Error('O tipo do arquivo não corresponde a um formato de áudio aceito.');
+  if (arquivo.size <= 0) throw new Error('O arquivo está vazio. Escolha outro áudio.');
+  if (arquivo.size > MAXIMO_BYTES) throw new Error('O arquivo deve ter no máximo 1,5 MB.');
 }
 
-async function verificarDuracao(file: File): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+async function verificarDuracao(arquivo: File): Promise<void> {
+  await new Promise<void>((resolver, rejeitar) => {
+    const url = URL.createObjectURL(arquivo);
     const audio = new Audio();
-    const timer = window.setTimeout(
+    const temporizador = window.setTimeout(
       () =>
-        finish(
-          new Error(
-            "O áudio demorou demais para ser verificado. Escolha outro arquivo.",
-          ),
-        ),
+        finalizar(new Error('O áudio demorou demais para ser verificado. Escolha outro arquivo.')),
       5000,
     );
-    let finished = false;
-    function finish(error?: Error) {
-      if (finished) return;
-      finished = true;
-      window.clearTimeout(timer);
-      audio.removeAttribute("src");
+    let finalizado = false;
+    function finalizar(erro?: Error) {
+      if (finalizado) return;
+      finalizado = true;
+      window.clearTimeout(temporizador);
+      audio.removeAttribute('src');
       audio.load();
       URL.revokeObjectURL(url);
-      error ? reject(error) : resolve();
+      erro ? rejeitar(erro) : resolver();
     }
-    audio.preload = "metadata";
+    audio.preload = 'metadata';
     audio.onloadedmetadata = () =>
-      finish(
+      finalizar(
         !Number.isFinite(audio.duration) ||
           audio.duration < 0.25 ||
-          audio.duration > MAX_SECONDS
-          ? new Error("O som precisa ter entre 0,25 e 8 segundos.")
+          audio.duration > MAXIMO_SEGUNDOS
+          ? new Error('O som precisa ter entre 0,25 e 8 segundos.')
           : undefined,
       );
     audio.onerror = () =>
-      finish(
-        new Error(
-          "O áudio não pôde ser validado. Escolha um arquivo de áudio válido.",
-        ),
-      );
+      finalizar(new Error('O áudio não pôde ser validado. Escolha um arquivo de áudio válido.'));
     audio.src = url;
   });
 }
-function audioLimpo(decoded: AudioBuffer): Blob {
-  const rate = Math.min(44100, decoded.sampleRate),
-    channels = decoded.numberOfChannels,
-    length = Math.floor(decoded.duration * rate);
-  const buffer = new ArrayBuffer(44 + length * channels * 2);
-  const view = new DataView(buffer);
-  const text = (offset: number, value: string) => {
-    for (let i = 0; i < value.length; i++)
-      view.setUint8(offset + i, value.charCodeAt(i));
+function audioLimpo(decodificado: AudioBuffer): Blob {
+  const taxa = Math.min(44100, decodificado.sampleRate);
+  const canais = decodificado.numberOfChannels;
+  const comprimento = Math.floor(decodificado.duration * taxa);
+  const buffer = new ArrayBuffer(44 + comprimento * canais * 2);
+  const visualizacao = new DataView(buffer);
+  const texto = (deslocamento: number, valor: string) => {
+    for (let indice = 0; indice < valor.length; indice++)
+      visualizacao.setUint8(deslocamento + indice, valor.charCodeAt(indice));
   };
-  text(0, "RIFF");
-  view.setUint32(4, buffer.byteLength - 8, true);
-  text(8, "WAVE");
-  text(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, channels, true);
-  view.setUint32(24, rate, true);
-  view.setUint32(28, rate * channels * 2, true);
-  view.setUint16(32, channels * 2, true);
-  view.setUint16(34, 16, true);
-  text(36, "data");
-  view.setUint32(40, buffer.byteLength - 44, true);
-  const data = Array.from({ length: channels }, (_, i) =>
-    decoded.getChannelData(i),
-  );
-  let offset = 44;
-  for (let i = 0; i < length; i++) {
-    const source = Math.min(
-      decoded.length - 1,
-      Math.floor((i * decoded.sampleRate) / rate),
+  texto(0, 'RIFF');
+  visualizacao.setUint32(4, buffer.byteLength - 8, true);
+  texto(8, 'WAVE');
+  texto(12, 'fmt ');
+  visualizacao.setUint32(16, 16, true);
+  visualizacao.setUint16(20, 1, true);
+  visualizacao.setUint16(22, canais, true);
+  visualizacao.setUint32(24, taxa, true);
+  visualizacao.setUint32(28, taxa * canais * 2, true);
+  visualizacao.setUint16(32, canais * 2, true);
+  visualizacao.setUint16(34, 16, true);
+  texto(36, 'data');
+  visualizacao.setUint32(40, buffer.byteLength - 44, true);
+  const dados = Array.from({ length: canais }, (_, indice) => decodificado.getChannelData(indice));
+  let deslocamento = 44;
+  for (let indice = 0; indice < comprimento; indice++) {
+    const origemDados = Math.min(
+      decodificado.length - 1,
+      Math.floor((indice * decodificado.sampleRate) / taxa),
     );
-    for (let channel = 0; channel < channels; channel++) {
-      const sample = Math.max(-1, Math.min(1, data[channel][source])) * 0.85;
-      view.setInt16(offset, Math.round(sample * 32767), true);
-      offset += 2;
+    for (let canal = 0; canal < canais; canal++) {
+      const amostra = Math.max(-1, Math.min(1, dados[canal][origemDados])) * 0.85;
+      visualizacao.setInt16(deslocamento, Math.round(amostra * 32767), true);
+      deslocamento += 2;
     }
   }
-  return new Blob([buffer], { type: "audio/wav" });
+  return new Blob([buffer], { type: 'audio/wav' });
 }
-export async function salvarSomPersonalizado(
-  file: File,
-): Promise<SomPersonalizadoMeta> {
-  const owner=contaPreferenciasAtual();const key=recordKey();
-  validateDeclaredType(file);
-  if (!("AudioContext" in window))
-    throw new Error("Este navegador não consegue verificar arquivos de áudio.");
-  await verificarDuracao(file);
-  const context = new AudioContext();
+export async function salvarSomPersonalizado(arquivo: File): Promise<SomPersonalizadoMeta> {
+  const responsavel = contaPreferenciasAtual();
+  const chave = registroChave();
+  validateDeclaredTipo(arquivo);
+  if (!('AudioContext' in window))
+    throw new Error('Este navegador não consegue verificar arquivos de áudio.');
+  await verificarDuracao(arquivo);
+  const contexto = new AudioContext();
   try {
-    const decoded = await context.decodeAudioData(await file.arrayBuffer());
+    const decodificado = await contexto.decodeAudioData(await arquivo.arrayBuffer());
     if (
-      !Number.isFinite(decoded.duration) ||
-      decoded.duration < 0.25 ||
-      decoded.duration > MAX_SECONDS
+      !Number.isFinite(decodificado.duration) ||
+      decodificado.duration < 0.25 ||
+      decodificado.duration > MAXIMO_SEGUNDOS
     )
-      throw new Error("O som precisa ter entre 0,25 e 8 segundos.");
+      throw new Error('O som precisa ter entre 0,25 e 8 segundos.');
     if (
-      decoded.sampleRate > 192000 ||
-      decoded.numberOfChannels < 1 ||
-      decoded.numberOfChannels > 2
+      decodificado.sampleRate > 192000 ||
+      decodificado.numberOfChannels < 1 ||
+      decodificado.numberOfChannels > 2
     )
-      throw new Error("O arquivo tem características de áudio não aceitas.");
-    const blob = audioLimpo(decoded);
+      throw new Error('O arquivo tem características de áudio não aceitas.');
+    const blob = audioLimpo(decodificado);
     const meta = {
-      name: file.name.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 100),
-      duration: decoded.duration,
+      name: arquivo.name.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100),
+      duration: decodificado.duration,
       size: blob.size,
     };
-    if(owner!==contaPreferenciasAtual())throw new Error('A conta mudou durante o envio do áudio.');
-    const versao=owner?await enviarSomConta({name:meta.name,base64:await base64DoBlob(blob)}):undefined;
-    versaoRemotaSom=versao;
-    await storeRequest<IDBValidKey>('readwrite',store=>store.put({...meta,blob,mimeType:'audio/wav',versao},key));
-    if(owner!==contaPreferenciasAtual())throw new Error('A conta mudou durante o envio do áudio.');
-    return meta;
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      /O som|características|armazenamento|navegador|conta|conexão|salva|áudio/.test(error.message)
-    )
-      throw error;
-    throw new Error(
-      "O áudio não pôde ser validado. Tente outro arquivo WAV, MP3 ou OGG.",
+    if (responsavel !== contaPreferenciasAtual())
+      throw new Error('A conta mudou durante o envio do áudio.');
+    const versao = responsavel
+      ? await enviarSomConta({ name: meta.name, base64: await base64DoBlob(blob) })
+      : undefined;
+    versaoRemotaSom = versao;
+    await armazenamentoRequisicao<IDBValidKey>('readwrite', (armazenamento) =>
+      armazenamento.put({ ...meta, blob, mimeType: 'audio/wav', versao }, chave),
     );
+    if (responsavel !== contaPreferenciasAtual())
+      throw new Error('A conta mudou durante o envio do áudio.');
+    return meta;
+  } catch (erro) {
+    if (
+      erro instanceof Error &&
+      /O som|características|armazenamento|navegador|conta|conexão|salva|áudio/.test(erro.message)
+    )
+      throw erro;
+    throw new Error('O áudio não pôde ser validado. Tente outro arquivo WAV, MP3 ou OGG.');
   } finally {
-    await context.close().catch(() => undefined);
+    await contexto.close().catch(() => undefined);
   }
 }
 
-let versaoRemotaSom:string|null|undefined;
-export function definirVersaoSomConta(value:string|null){versaoRemotaSom=value;}
-async function base64DoBlob(blob:Blob):Promise<string>{const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
-async function registroSomConta():Promise<SomRecord|undefined>{
- const owner=contaPreferenciasAtual();const key=recordKey();
- let local=await storeRequest<SomRecord|undefined>('readonly',store=>store.get(key));
- if(owner!==contaPreferenciasAtual())throw new Error('A conta mudou durante a consulta do áudio.');
- if(!contaPreferenciasAtual()||versaoRemotaSom===undefined)return local;
- if(local&&versaoRemotaSom===null){const versao=await enviarSomConta({name:local.name,base64:await base64DoBlob(local.blob)});local={...local,versao};versaoRemotaSom=versao;await storeRequest<IDBValidKey>('readwrite',store=>store.put(local,key));return local;}
- if(local&&local.versao===versaoRemotaSom)return local;
- if(!local&&versaoRemotaSom===null)return undefined;
- const remote=await buscarSomConta();if(!remote?.som){await storeRequest<undefined>('readwrite',store=>store.delete(key));return undefined;}
- const bytes=Uint8Array.from(atob(remote.som.base64),c=>c.charCodeAt(0));const record:SomRecord={name:remote.som.name,duration:remote.som.duration,size:bytes.length,blob:new Blob([bytes],{type:'audio/wav'}),mimeType:'audio/wav',versao:remote.versao};versaoRemotaSom=remote.versao;await storeRequest<IDBValidKey>('readwrite',store=>store.put(record,key));return record;
+let versaoRemotaSom: string | null | undefined;
+export function setVersaoSomConta(valor: string | null) {
+  versaoRemotaSom = valor;
 }
-export async function buscarSomPersonalizadoMeta():Promise<SomPersonalizadoMeta|null>{const record=await registroSomConta();return record?{name:record.name,duration:record.duration,size:record.size}:null;}
-export async function removerSomPersonalizado():Promise<void>{const key=recordKey();if(contaPreferenciasAtual())versaoRemotaSom=await enviarSomConta(null);await storeRequest<undefined>('readwrite',store=>store.delete(key));}
+async function base64DoBlob(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binario = '';
+  for (let indice = 0; indice < bytes.length; indice += 32768)
+    binario += String.fromCharCode(...bytes.subarray(indice, indice + 32768));
+  return btoa(binario);
+}
+async function registroSomConta(): Promise<SomRegistro | undefined> {
+  const responsavel = contaPreferenciasAtual();
+  const chave = registroChave();
+  let local = await armazenamentoRequisicao<SomRegistro | undefined>('readonly', (armazenamento) =>
+    armazenamento.get(chave),
+  );
+  if (responsavel !== contaPreferenciasAtual())
+    throw new Error('A conta mudou durante a consulta do áudio.');
+  if (!contaPreferenciasAtual() || versaoRemotaSom === undefined) return local;
+  if (local && versaoRemotaSom === null) {
+    const versao = await enviarSomConta({
+      name: local.name,
+      base64: await base64DoBlob(local.blob),
+    });
+    local = { ...local, versao };
+    versaoRemotaSom = versao;
+    await armazenamentoRequisicao<IDBValidKey>('readwrite', (armazenamento) =>
+      armazenamento.put(local, chave),
+    );
+    return local;
+  }
+  if (local && local.versao === versaoRemotaSom) return local;
+  if (!local && versaoRemotaSom === null) return undefined;
+  const remoto = await buscarSomConta();
+  if (!remoto?.som) {
+    await armazenamentoRequisicao<undefined>('readwrite', (armazenamento) =>
+      armazenamento.delete(chave),
+    );
+    return undefined;
+  }
+  const bytes = Uint8Array.from(atob(remoto.som.base64), (elementoAtual) =>
+    elementoAtual.charCodeAt(0),
+  );
+  const registro: SomRegistro = {
+    name: remoto.som.name,
+    duration: remoto.som.duration,
+    size: bytes.length,
+    blob: new Blob([bytes], { type: 'audio/wav' }),
+    mimeType: 'audio/wav',
+    versao: remoto.versao,
+  };
+  versaoRemotaSom = remoto.versao;
+  await armazenamentoRequisicao<IDBValidKey>('readwrite', (armazenamento) =>
+    armazenamento.put(registro, chave),
+  );
+  return registro;
+}
+export async function buscarSomPersonalizadoMeta(): Promise<SomPersonalizadoMeta | null> {
+  const registro = await registroSomConta();
+  return registro
+    ? { name: registro.name, duration: registro.duration, size: registro.size }
+    : null;
+}
+export async function removerSomPersonalizado(): Promise<void> {
+  const chave = registroChave();
+  if (contaPreferenciasAtual()) versaoRemotaSom = await enviarSomConta(null);
+  await armazenamentoRequisicao<undefined>('readwrite', (armazenamento) =>
+    armazenamento.delete(chave),
+  );
+}
 
 let contextoCompartilhado: AudioContext | null = null;
 const fontesPrevia = new Set<AudioScheduledSourceNode>();
@@ -285,149 +316,128 @@ export function pararPreviaSom() {
   fontesPrevia.clear();
 }
 function contextoAudio() {
-  if (!contextoCompartilhado || contextoCompartilhado.state === "closed")
+  if (!contextoCompartilhado || contextoCompartilhado.state === 'closed')
     contextoCompartilhado = new AudioContext();
   return contextoCompartilhado;
 }
-export async function prepararAudioNotificacoes(
-  forcar = false,
-): Promise<boolean> {
+export async function prepararAudioNotificacoes(forcar = false): Promise<boolean> {
   try {
-    if (!forcar && !lerConfigNotificacoes().ativo) return false;
-    const context = contextoAudio();
-    if (context.state === "running") return true;
-    await context.resume();
-    return String(context.state) === "running";
+    if (!forcar && !lerConfiguracaoNotificacoes().ativo) return false;
+    const contexto = contextoAudio();
+    if (contexto.state === 'running') return true;
+    await contexto.resume();
+    return String(contexto.state) === 'running';
   } catch {
     return false;
   }
 }
-const patterns: Record<
+const padroesSonoros: Record<
   SomPredefinido,
   { notes: [number, number, OscillatorType, number][]; volume: number }
 > = {
   brisa: {
     notes: [
-      [740, 0, "sine", 0.16],
-      [988, 0.19, "sine", 0.2],
+      [740, 0, 'sine', 0.16],
+      [988, 0.19, 'sine', 0.2],
     ],
     volume: 0.035,
   },
   sino: {
     notes: [
-      [659, 0, "sine", 0.34],
-      [988, 0.015, "sine", 0.27],
-      [1318, 0.03, "sine", 0.2],
+      [659, 0, 'sine', 0.34],
+      [988, 0.015, 'sine', 0.27],
+      [1318, 0.03, 'sine', 0.2],
     ],
     volume: 0.025,
   },
   madeira: {
     notes: [
-      [523, 0, "triangle", 0.12],
-      [659, 0.16, "triangle", 0.13],
+      [523, 0, 'triangle', 0.12],
+      [659, 0.16, 'triangle', 0.13],
     ],
     volume: 0.035,
   },
-  toque: { notes: [[784, 0, "sine", 0.18]], volume: 0.032 },
+  toque: { notes: [[784, 0, 'sine', 0.18]], volume: 0.032 },
 };
 
 async function contextoPronto() {
-  const context = contextoAudio();
-  if (context.state !== "running") {
+  const contexto = contextoAudio();
+  if (contexto.state !== 'running') {
     await Promise.race([
-      context.resume(),
-      new Promise((_, reject) =>
+      contexto.resume(),
+      new Promise((_, rejeitar) =>
         window.setTimeout(
           () =>
-            reject(
-              new Error(
-                "Clique em “Ouvir som” para habilitar o áudio neste navegador.",
-              ),
-            ),
+            rejeitar(new Error('Clique em “Ouvir som” para habilitar o áudio neste navegador.')),
           1500,
         ),
       ),
     ]);
   }
-  if (context.state !== "running")
-    throw new Error(
-      "O áudio ainda está bloqueado pelo navegador. Clique em “Ouvir som”.",
-    );
-  return context;
+  if (contexto.state !== 'running')
+    throw new Error('O áudio ainda está bloqueado pelo navegador. Clique em “Ouvir som”.');
+  return contexto;
 }
-export async function reproduzirSom(
-  id: SomNotificacao,
-  preview = true,
-  volume = 35,
-): Promise<void> {
-  if (!["brisa", "sino", "madeira", "toque", "personalizado"].includes(id))
-    throw new Error("Som inválido. Escolha um dos sons disponíveis.");
+export async function reproduzirSom(id: SomNotificacao, previa = true, volume = 35): Promise<void> {
+  if (!['brisa', 'sino', 'madeira', 'toque', 'personalizado'].includes(id))
+    throw new Error('Som inválido. Escolha um dos sons disponíveis.');
   volume = Number.isFinite(volume) ? Math.min(100, Math.max(0, volume)) : 35;
-  if (preview) pararPreviaSom();
+  if (previa) pararPreviaSom();
   if (volume === 0) return;
-  const context = await contextoPronto();
-  if (id === "personalizado") {
-    const record = await registroSomConta();
-    if (!record)
-      throw new Error("Adicione um áudio personalizado antes de selecioná-lo.");
-    const buffer = await context.decodeAudioData(
-      await record.blob.arrayBuffer(),
-    );
-    if (buffer.duration > 8.01)
-      throw new Error("O áudio armazenado excede a duração permitida.");
-    const source = context.createBufferSource();
-    const gain = context.createGain();
-    source.buffer = buffer;
-    gain.gain.value = (volume / 100) * 0.7;
-    source.connect(gain);
-    gain.connect(context.destination);
-    if (preview) fontesPrevia.add(source);
-    source.onended = () => {
-      fontesPrevia.delete(source);
-      source.disconnect();
-      gain.disconnect();
+  const contexto = await contextoPronto();
+  if (id === 'personalizado') {
+    const registro = await registroSomConta();
+    if (!registro) throw new Error('Adicione um áudio personalizado antes de selecioná-lo.');
+    const buffer = await contexto.decodeAudioData(await registro.blob.arrayBuffer());
+    if (buffer.duration > 8.01) throw new Error('O áudio armazenado excede a duração permitida.');
+    const origemDados = contexto.createBufferSource();
+    const ganho = contexto.createGain();
+    origemDados.buffer = buffer;
+    ganho.gain.value = (volume / 100) * 0.7;
+    origemDados.connect(ganho);
+    ganho.connect(contexto.destination);
+    if (previa) fontesPrevia.add(origemDados);
+    origemDados.onended = () => {
+      fontesPrevia.delete(origemDados);
+      origemDados.disconnect();
+      ganho.disconnect();
     };
-    source.start();
+    origemDados.start();
     return;
   }
-  const start = context.currentTime + 0.025;
-  for (const [frequency, offset, waveform, duration] of patterns[id].notes) {
-    const oscillator = context.createOscillator();
-    const envelope = context.createGain();
-    oscillator.type = waveform;
-    oscillator.frequency.setValueAtTime(frequency, start + offset);
-    envelope.gain.setValueAtTime(0.0001, start + offset);
-    envelope.gain.exponentialRampToValueAtTime(
-      Math.max(0.0001, (patterns[id].volume * volume) / 35),
-      start + offset + 0.025,
+  const inicio = contexto.currentTime + 0.025;
+  for (const [frequencia, deslocamento, formaOnda, duracao] of padroesSonoros[id].notes) {
+    const oscilador = contexto.createOscillator();
+    const envoltoria = contexto.createGain();
+    oscilador.type = formaOnda;
+    oscilador.frequency.setValueAtTime(frequencia, inicio + deslocamento);
+    envoltoria.gain.setValueAtTime(0.0001, inicio + deslocamento);
+    envoltoria.gain.exponentialRampToValueAtTime(
+      Math.max(0.0001, (padroesSonoros[id].volume * volume) / 35),
+      inicio + deslocamento + 0.025,
     );
-    envelope.gain.exponentialRampToValueAtTime(
-      0.0001,
-      start + offset + duration,
-    );
-    oscillator.connect(envelope);
-    envelope.connect(context.destination);
-    if (preview) fontesPrevia.add(oscillator);
-    oscillator.onended = () => {
-      fontesPrevia.delete(oscillator);
-      oscillator.disconnect();
-      envelope.disconnect();
+    envoltoria.gain.exponentialRampToValueAtTime(0.0001, inicio + deslocamento + duracao);
+    oscilador.connect(envoltoria);
+    envoltoria.connect(contexto.destination);
+    if (previa) fontesPrevia.add(oscilador);
+    oscilador.onended = () => {
+      fontesPrevia.delete(oscilador);
+      oscilador.disconnect();
+      envoltoria.disconnect();
     };
-    oscillator.start(start + offset);
-    oscillator.stop(start + offset + duration + 0.015);
+    oscilador.start(inicio + deslocamento);
+    oscilador.stop(inicio + deslocamento + duracao + 0.015);
   }
 }
 let ultimaNotificacao = 0;
-export async function reproduzirSomDeNotificacaoNovo(
-  tipos: string[],
-): Promise<void> {
+export async function reproduzirSomDeNotificacaoNovo(tipos: string[]): Promise<void> {
   try {
-    const config = lerConfigNotificacoes();
-    const som = tipos.map((tipo) => somDoEvento(tipo, config)).find(Boolean);
+    const configuracao = lerConfiguracaoNotificacoes();
+    const som = tipos.map((tipo) => somDoEvento(tipo, configuracao)).find(Boolean);
     if (!som || Date.now() - ultimaNotificacao < 1500) return;
-    await reproduzirSom(som, false, config.volume);
+    await reproduzirSom(som, false, configuracao.volume);
     ultimaNotificacao = Date.now();
   } catch {
-    /* Uma falha de áudio nunca bloqueia os avisos. */
+    /* Uma falha de audio nunca bloqueia os avisos. */
   }
 }

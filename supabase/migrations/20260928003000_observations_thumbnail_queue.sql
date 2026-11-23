@@ -1,4 +1,4 @@
--- Execute após as migrations anteriores. Todas as mutações da fila ocorrem no servidor.
+-- Execute apos as migrations anteriores. Todas as mutacoes da fila ocorrem no servidor.
 create table if not exists public.order_observation_history (
   id bigint generated always as identity primary key,
   order_id integer not null,
@@ -13,7 +13,7 @@ revoke all on public.order_observation_history from public, anon, authenticated;
 grant select, insert on public.order_observation_history to service_role;
 grant usage, select on sequence public.order_observation_history_id_seq to service_role;
 
--- Cópia privada integral antes de limpar o campo legado. Não contém senhas.
+-- Copia privada integral antes de limpar o campo legado. Nao contem senhas.
 create table if not exists public.order_observation_migration_backup (
   order_id integer primary key,
   original_body text not null,
@@ -27,8 +27,8 @@ select id_os,observacoes from public.ordem_servico
 where observacoes like '%[Mudança de status]%'
 on conflict (order_id) do nothing;
 
--- As notas antigas de status já estão em order_status_history. Remover só as linhas
--- adicionadas pela função antiga, mantendo a observação principal intacta.
+-- As notas antigas de status ja estao em order_status_history. Remover so as linhas
+-- adicionadas pela funcao antiga, mantendo a observacao principal intacta.
 update public.ordem_servico
 set observacoes = nullif(btrim(regexp_replace(observacoes, E'(^|\\n)\\[Mudança de status\\][^\\n]*', '', 'g')), '')
 where observacoes like '%[Mudança de status]%';
@@ -91,11 +91,11 @@ language sql immutable set search_path = '' as $$
   select regexp_replace(translate(lower(btrim(p_model)), 'áàâãäéèêëíìîïóòôõöúùûüç', 'aaaaaeeeeiiiiooooouuuuc'), '\s+', ' ', 'g')
 $$;
 revoke all on function app_private.motorcycle_model_key(text) from public,anon,authenticated;
--- A RPC de reconciliação usa esta função sob service_role.
+-- A RPC de reconciliacao usa esta funcao sob service_role.
 grant usage on schema app_private to service_role;
 grant execute on function app_private.motorcycle_model_key(text) to service_role;
 
--- O gatilho alcança também OS criadas diretamente pelo aplicativo móvel.
+-- O gatilho alcanca tambem OS criadas diretamente pelo aplicativo movel.
 create or replace function app_private.enqueue_motorcycle_model(p_model text) returns void
 language plpgsql security definer set search_path = '' as $$
 declare k text;
@@ -180,7 +180,7 @@ end $$;
 revoke all on function public.scan_motorcycle_thumbnail_jobs() from public,anon,authenticated;
 grant execute on function public.scan_motorcycle_thumbnail_jobs() to service_role;
 
--- A edição existente preserva o autor no histórico da observação anterior.
+-- A edicao existente preserva o autor no historico da observacao anterior.
 create or replace function public.admin_order_edit(
   p_id_os integer, p_name text, p_phone text, p_email text, p_cpf text,
   p_model text, p_plate text, p_year integer, p_color text,

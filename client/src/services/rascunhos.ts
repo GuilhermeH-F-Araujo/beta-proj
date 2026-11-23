@@ -1,106 +1,120 @@
-// Drafts stay on this browser, partitioned by authenticated account. Passwords and
-// credentials must never be passed to this module. Large photos/files use IndexedDB.
-let usuario = "";
+import { normalizarChaveArmazenamento } from './migrarArmazenamento';
+// Rascunhos pertencem a conta e ficam neste navegador por ate sete dias.
+// Senhas nao sao persistidas. Fotos e arquivos maiores usam IndexedDB.
+let usuario = '';
 const memoria = new Map<string, { valor: unknown; ate: number }>();
-let dbPromise: Promise<IDBDatabase | null> | undefined;
-const TTL = 7 * 86400000,
-  prefix = "estacao-rascunho-v78:";
+let bancoPromessa: Promise<IDBDatabase | null> | undefined;
+const TTL = 7 * 86400000;
+const prefixo = 'estacao-rascunho:';
 function banco() {
-  return (dbPromise ??= new Promise((resolve) => {
-    if (typeof indexedDB === "undefined") return resolve(null);
-    const request = indexedDB.open("estacao-rascunhos", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("campos");
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => resolve(null);
-    request.onblocked = () => resolve(null);
+  return (bancoPromessa ??= new Promise((resolver) => {
+    if (typeof indexedDB === 'undefined') return resolver(null);
+    const request = indexedDB.open('estacao-rascunhos', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('campos');
+    request.onsuccess = () => resolver(request.result);
+    request.onerror = () => resolver(null);
+    request.onblocked = () => resolver(null);
   }));
 }
-const chave = (scope: string, field: string) =>
-  prefix + usuario + ":" + scope + ":" + field;
+const chave = (escopo: string, campo: string) => prefixo + usuario + ':' + escopo + ':' + campo;
 export async function iniciarRascunhos(id: string) {
   usuario = id;
   memoria.clear();
   try {
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i)!;
-      if (key.startsWith(prefix + id + ":")) {
-        const x = JSON.parse(sessionStorage.getItem(key)!);
-        if (x.ate > Date.now()) memoria.set(key, x);
-        else sessionStorage.removeItem(key);
+    for (let indice = 0; indice < sessionStorage.length; indice++) {
+      const chaveLocal = sessionStorage.key(indice)!;
+      if (chaveLocal.startsWith(prefixo + id + ':')) {
+        const itemAtual = JSON.parse(sessionStorage.getItem(chaveLocal)!);
+        if (itemAtual.ate > Date.now()) memoria.set(chaveLocal, itemAtual);
+        else sessionStorage.removeItem(chaveLocal);
       }
     }
   } catch {}
-  const db = await banco();
-  if (!db) return;
-  await new Promise<void>((resolve) => {
-    const transaction = db.transaction("campos", "readwrite"),
-      cursor = transaction.objectStore("campos").openCursor();
+  const bancoLocal = await banco();
+  if (!bancoLocal) return;
+  await new Promise<void>((resolver) => {
+    const transacao = bancoLocal.transaction('campos', 'readwrite');
+    const cursor = transacao.objectStore('campos').openCursor();
     cursor.onsuccess = () => {
-      const c = cursor.result;
-      if (!c) return;
-      const key = String(c.key);
-      if (c.value.ate <= Date.now()) c.delete();
-      else if (key.startsWith(prefix + id + ":")) memoria.set(key, c.value);
-      c.continue();
+      const elementoAtual = cursor.result;
+      if (!elementoAtual) return;
+      const chaveOriginal = String(elementoAtual.key);
+      const chaveLocal = normalizarChaveArmazenamento(chaveOriginal);
+      if (chaveLocal !== chaveOriginal && elementoAtual.value.ate > Date.now()) {
+        const armazenamento = transacao.objectStore('campos');
+        const existente = armazenamento.get(chaveLocal);
+        existente.onsuccess = () => {
+          if (!existente.result || existente.result.ate < elementoAtual.value.ate)
+            armazenamento.put(elementoAtual.value, chaveLocal);
+        };
+        elementoAtual.delete();
+      }
+      if (elementoAtual.value.ate <= Date.now()) elementoAtual.delete();
+      else if (chaveLocal.startsWith(prefixo + id + ':')) {
+        const anterior = memoria.get(chaveLocal);
+        if (!anterior || anterior.ate < elementoAtual.value.ate)
+          memoria.set(chaveLocal, elementoAtual.value);
+      }
+      elementoAtual.continue();
     };
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => resolve();
-    transaction.onabort = () => resolve();
+    transacao.oncomplete = () => resolver();
+    transacao.onerror = () => resolver();
+    transacao.onabort = () => resolver();
   });
 }
-export function temRascunho(scope: string, field: string) {
-  return !!usuario && !!memoria.get(chave(scope, field));
+export function temRascunho(escopo: string, campo: string) {
+  return !!usuario && !!memoria.get(chave(escopo, campo));
 }
-export function lerRascunho<T>(scope: string, field: string, inicial: T): T {
+export function lerRascunho<T>(escopo: string, campo: string, inicial: T): T {
   if (!usuario) return inicial;
-  const item = memoria.get(chave(scope, field));
+  const item = memoria.get(chave(escopo, campo));
   return item && item.ate > Date.now() ? (item.valor as T) : inicial;
 }
-export function gravarRascunho(scope: string, field: string, valor: unknown) {
-  if (!usuario || /password|senha|token|secret|credencial/i.test(field)) return;
-  const key = chave(scope, field),
-    item = { valor, ate: Date.now() + TTL };
-  memoria.set(key, item);
+export function gravarRascunho(escopo: string, campo: string, valor: unknown) {
+  if (!usuario || /password|senha|token|secret|credencial/i.test(campo)) return;
+  const chaveLocal = chave(escopo, campo);
+  const item = { valor, ate: Date.now() + TTL };
+  memoria.set(chaveLocal, item);
   try {
-    const json = JSON.stringify(item, (_, v) =>
-      typeof v === "number" && !Number.isFinite(v) ? null : v,
+    const conteudoConteudoConteudoJson = JSON.stringify(item, (_, valorAtual) =>
+      typeof valorAtual === 'number' && !Number.isFinite(valorAtual) ? null : valorAtual,
     );
     if (
-      json.length < 120000 &&
-      !/"data:[^"]*base64/.test(json) &&
+      conteudoConteudoConteudoJson.length < 120000 &&
+      !/"data:[^"]*base64/.test(conteudoConteudoConteudoJson) &&
       !(valor instanceof File)
     )
-      sessionStorage.setItem(key, json);
-    else sessionStorage.removeItem(key);
+      sessionStorage.setItem(chaveLocal, conteudoConteudoConteudoJson);
+    else sessionStorage.removeItem(chaveLocal);
   } catch {}
-  void banco().then((db) => {
-    if (!db) return;
+  void banco().then((bancoLocal) => {
+    if (!bancoLocal) return;
     try {
-      const tx = db.transaction("campos", "readwrite");
-      tx.objectStore("campos").put(item, key);
-      tx.onerror = () => window.dispatchEvent(new Event("draft-storage-error"));
+      const transacaoLocal = bancoLocal.transaction('campos', 'readwrite');
+      transacaoLocal.objectStore('campos').put(item, chaveLocal);
+      transacaoLocal.onerror = () => window.dispatchEvent(new Event('draft-storage-error'));
     } catch {
-      window.dispatchEvent(new Event("draft-storage-error"));
+      window.dispatchEvent(new Event('draft-storage-error'));
     }
   });
 }
-export function limparRascunho(scope: string) {
-  const start = prefix + usuario + ":" + scope + ":";
-  for (const key of [...memoria.keys()])
-    if (key.startsWith(start)) {
-      memoria.delete(key);
+export function limparRascunho(escopo: string) {
+  const inicio = prefixo + usuario + ':' + escopo + ':';
+  for (const chaveLocal of [...memoria.keys()])
+    if (chaveLocal.startsWith(inicio)) {
+      memoria.delete(chaveLocal);
       try {
-        sessionStorage.removeItem(key);
+        sessionStorage.removeItem(chaveLocal);
       } catch {}
-      void banco().then((db) => {
-        if (db) {
-          const tx = db.transaction("campos", "readwrite");
-          tx.objectStore("campos").delete(key);
+      void banco().then((bancoLocal) => {
+        if (bancoLocal) {
+          const transacaoLocal = bancoLocal.transaction('campos', 'readwrite');
+          transacaoLocal.objectStore('campos').delete(chaveLocal);
         }
       });
     }
 }
 export function suspenderRascunhos() {
-  usuario = "";
+  usuario = '';
   memoria.clear();
 }

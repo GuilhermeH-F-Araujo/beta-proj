@@ -1,169 +1,154 @@
 import { spawn, spawnSync } from 'node:child_process';
 
-const isWindows = process.platform === 'win32';
-const npm = isWindows ? 'npm.cmd' : 'npm';
+const sistemaEhWindows = process.platform === 'win32';
+const npm = sistemaEhWindows ? 'npm.cmd' : 'npm';
 
-// Verifica se as dependências podem ser importadas.
+// Verifica se as dependencias podem ser importadas.
 // Caso estejam ausentes ou incompletas, restaura pelo package-lock.json.
-for (const [label, prefix, modules] of [
-  ['API', 'server', ['zod', 'tsx', '@supabase/supabase-js', 'express', 'dotenv']],
+for (const [rotulo, prefixo, modulos] of [
+  [
+    'API',
+    'server',
+    ['zod', 'tsx', '@supabase/supabase-js', 'express', 'dotenv', 'sharp', 'cheerio'],
+  ],
   ['Web', 'client', ['vite', '@vitejs/plugin-react', 'react']],
 ]) {
-  const verify = () => {
-    const result = spawnSync(
+  const verificarDependencias = () => {
+    const resultado = spawnSync(
       process.execPath,
       [
         '--input-type=module',
         '-e',
-        `await Promise.all(${JSON.stringify(modules)}.map(name => import(name)))`,
+        `await Promise.all(${JSON.stringify(modulos)}.map(nome => import(nome)))`,
       ],
       {
-        cwd: prefix,
+        cwd: prefixo,
         stdio: 'ignore',
       },
     );
 
-    return !result.error && result.status === 0;
+    return !resultado.error && resultado.status === 0;
   };
 
-  if (verify()) continue;
+  if (verificarDependencias()) continue;
 
-  console.log(
-    `${label}: dependências ausentes ou incompletas. Restaurando com npm ci...`,
-  );
+  console.log(`${rotulo}: dependências ausentes ou incompletas. Restaurando com npm ci...`);
 
-  const installed = spawnSync(
-    npm,
-    ['--prefix', prefix, 'ci', '--no-audit', '--no-fund'],
-    {
-      stdio: 'inherit',
-      shell: isWindows,
-    },
-  );
+  const instalado = spawnSync(npm, ['--prefix', prefixo, 'ci', '--no-audit', '--no-fund'], {
+    stdio: 'inherit',
+    shell: sistemaEhWindows,
+  });
 
-  if (installed.error) {
+  if (instalado.error) {
+    console.error(`${rotulo}: erro ao executar npm ci: ${instalado.error.message}`);
+    process.exit(1);
+  }
+
+  if (instalado.status !== 0 || !verificarDependencias()) {
     console.error(
-      `${label}: erro ao executar npm ci: ${installed.error.message}`,
+      `${rotulo}: não foi possível restaurar as dependências. ` +
+        `Confira a conexão e execute npm --prefix ${prefixo} ci.`,
     );
     process.exit(1);
   }
 
-  if (installed.status !== 0 || !verify()) {
-    console.error(
-      `${label}: não foi possível restaurar as dependências. ` +
-      `Confira a conexão e execute npm --prefix ${prefix} ci.`,
-    );
-    process.exit(1);
-  }
-
-  console.log(`${label}: dependências restauradas.`);
+  console.log(`${rotulo}: dependências restauradas.`);
 }
 
-// Confere a configuração local antes de iniciar os serviços.
-const check = spawnSync(
-  process.execPath,
-  ['server/scripts/verificar-ambiente.mjs'],
-  {
-    stdio: 'inherit',
-  },
-);
+// Confere a configuracao local antes de iniciar os servicos.
+const verificar = spawnSync(process.execPath, ['server/scripts/verificar-ambiente.mjs'], {
+  stdio: 'inherit',
+});
 
-if (check.error) {
-  console.error(
-    `Não foi possível verificar o ambiente: ${check.error.message}`,
-  );
+if (verificar.error) {
+  console.error(`Não foi possível verificar o ambiente: ${verificar.error.message}`);
   process.exit(1);
 }
 
-if (check.status !== 0) {
-  process.exit(check.status ?? 1);
+if (verificar.status !== 0) {
+  process.exit(verificar.status ?? 1);
 }
 
-const children = [];
-let stopping = false;
+// Permite validar o preparo local sem abrir portas nem executar a fila.
+if (process.argv.includes('--check')) process.exit(0);
 
-function stop(code = 0) {
-  if (stopping) return;
+const conteudo = [];
+let encerrando = false;
 
-  stopping = true;
-  process.exitCode = code;
+function parar(codigo = 0) {
+  if (encerrando) return;
 
-  for (const child of children) {
-    if (!child.pid) continue;
+  encerrando = true;
+  process.exitCode = codigo;
+
+  for (const filho of conteudo) {
+    if (!filho.pid) continue;
 
     try {
-      if (isWindows) {
-        // Encerra também os processos iniciados pelo npm.
-        spawnSync(
-          'taskkill',
-          ['/pid', String(child.pid), '/T', '/F'],
-          { stdio: 'ignore' },
-        );
+      if (sistemaEhWindows) {
+        // Encerra tambem os processos iniciados pelo npm.
+        spawnSync('taskkill', ['/pid', String(filho.pid), '/T', '/F'], { stdio: 'ignore' });
       } else {
-        process.kill(-child.pid, 'SIGTERM');
+        process.kill(-filho.pid, 'SIGTERM');
       }
     } catch {
-      // O processo pode já ter sido encerrado.
+      // O processo pode ja ter sido encerrado.
     }
   }
 }
 
 // Inicia a API e o painel.
-for (const [label, prefix] of [
+for (const [rotulo, prefixo] of [
   ['API', 'server'],
   ['Web', 'client'],
 ]) {
-  let child;
+  let filho;
 
   try {
-    child = spawn(
-      npm,
-      ['--prefix', prefix, 'run', 'dev'],
-      {
-        stdio: 'inherit',
-        shell: isWindows,
-        detached: !isWindows,
-      },
-    );
-  } catch (error) {
-    console.error(`${label}: ${error.message}`);
-    stop(1);
+    filho = spawn(npm, ['--prefix', prefixo, 'run', 'dev'], {
+      stdio: 'inherit',
+      shell: sistemaEhWindows,
+      detached: !sistemaEhWindows,
+    });
+  } catch (erro) {
+    console.error(`${rotulo}: ${erro.message}`);
+    parar(1);
     break;
   }
 
-  children.push(child);
+  conteudo.push(filho);
 
-  child.on('error', error => {
-    console.error(`${label}: ${error.message}`);
-    stop(1);
+  filho.on('error', (erro) => {
+    console.error(`${rotulo}: ${erro.message}`);
+    parar(1);
   });
 
-  child.on('exit', (code, signal) => {
-    if (stopping) return;
+  filho.on('exit', (codigo, sinal) => {
+    if (encerrando) return;
 
     console.error(
-      `${label} encerrou (${signal ?? `código ${code}`}). ` +
-      'Os dois serviços precisam estar ativos.',
+      `${rotulo} encerrou (${sinal ?? `código ${codigo}`}). ` +
+        'Os dois serviços precisam estar ativos.',
     );
 
-    stop(code || 1);
+    parar(codigo || 1);
   });
 }
 
-process.on('SIGINT', () => stop());
-process.on('SIGTERM', () => stop());
+process.on('SIGINT', () => parar());
+process.on('SIGTERM', () => parar());
 
-const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const pausar = (milissegundos) => new Promise((resolver) => setTimeout(resolver, milissegundos));
 
-async function ready(url, init, status) {
+async function pronto(url, inicializacao, situacao) {
   try {
     const response = await fetch(url, {
-      ...init,
+      ...inicializacao,
       signal: AbortSignal.timeout(1_000),
     });
 
     return (
-      response.status === status &&
+      response.status === situacao &&
       (response.headers.get('content-type') ?? '').includes('application/json')
     );
   } catch {
@@ -172,42 +157,29 @@ async function ready(url, init, status) {
 }
 
 // Aguarda a API e verifica se o painel encaminha as chamadas corretamente.
-for (let attempt = 0; attempt < 30 && !stopping; attempt++) {
-  const api = await ready(
-    'http://localhost:3001/health',
-    {},
-    200,
-  );
+for (let tentativa = 0; tentativa < 30 && !encerrando; tentativa++) {
+  const api = await pronto('http://localhost:3001/health', {}, 200);
 
-  if (stopping) break;
+  if (encerrando) break;
 
-  const proxy = api && await ready(
-    'http://localhost:5173/api/auth/login',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    },
-    400,
-  );
+  // Valide o proxy sem enviar um login propositalmente inválido. O POST /login
+  // retornava 400 corretamente, mas poluía o console como se fosse falha real.
+  const proxy = api && (await pronto('http://localhost:5173/health', {}, 200));
 
-  if (stopping) break;
+  if (encerrando) break;
 
   if (proxy) {
-    console.log(
-      'API e site prontos; proxy do login validado. ' +
-      'Abra http://localhost:5173',
-    );
+    console.log('API e site prontos; proxy do login validado. ' + 'Abra http://localhost:5173');
     break;
   }
 
-  if (attempt === 29) {
+  if (tentativa === 29) {
     console.error(
       'O login pelo proxy não respondeu em JSON. ' +
-      'Confira os erros acima e as portas 3001/5173.',
+        'Confira os erros acima e as portas 3001/5173.',
     );
-    stop(1);
+    parar(1);
   } else {
-    await pause(500);
+    await pausar(500);
   }
 }

@@ -1,46 +1,33 @@
-import { Router, type Request, type Response } from "express";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { z } from "zod";
-import { permitir } from "./cargos.js";
-const text = (max: number) => z.string().max(max),
-  id = text(100).min(1);
+// A revisao recebida deve corresponder ao registro salvo.
+// Uma alteracao concorrente retorna conflito para impedir sobrescrita silenciosa.
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { Router, type Request, type Response } from 'express';
+import { z } from 'zod';
+import { permitir } from './cargos.js';
+import { conectarEventosCatalogo } from './catalogoEventos.js';
+const texto = (maximo: number) => z.string().max(maximo);
+const id = texto(100).min(1);
 const categoria = z
   .object({
     id,
-    nome: text(150).min(1),
-    descricao: text(1000),
+    nome: texto(150).min(1),
+    descricao: texto(1000),
     cor: z.string().regex(/^#[a-f\d]{6}$/i),
-    icone: text(500),
+    icone: texto(500),
   })
   .strict();
 const servico = z
   .object({
     id,
-    nome: text(150).min(1),
+    nome: texto(150).min(1),
     categoriaId: id,
-    descricao: text(3000),
+    descricao: texto(3000),
     preco: z.number().finite().nonnegative(),
     custo: z.number().finite().nonnegative(),
-    duracao: text(100),
+    duracao: texto(100),
     ativo: z.boolean(),
-    icone: text(500),
-    adicional: text(3000),
-  })
-  .strict();
-const agenda = z
-  .object({
-    id: z.number().int().positive(),
-    cliente: text(150).min(1),
-    telefone: text(30),
-    moto: text(150),
-    placa: text(15),
-    servico: text(150),
-    status: z.enum(["Confirmado", "Pendente", "Concluído", "Cancelado"]),
-    data: z.iso.date(),
-    hora: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
-    mecanico: text(150),
-    duracao: text(100),
-    observacoes: text(3000),
+    icone: texto(500),
+    adicional: texto(3000),
   })
   .strict();
 export const schemasCompartilhados = {
@@ -50,158 +37,205 @@ export const schemasCompartilhados = {
       servicos: z.array(servico).max(10000),
     })
     .strict(),
-  agenda: z.array(agenda).max(10000),
 };
-function listas(data: any, key: string) {
-  return key === "agenda"
-    ? [data ?? []]
-    : [data?.servicos ?? [], data?.categorias ?? []];
+type RegistroCompartilhado = { id: string | number; categoriaId?: string };
+type ColecoesCatalogo = {
+  servicos: RegistroCompartilhado[];
+  categorias: RegistroCompartilhado[];
+};
+type AcaoAlterada = 'criar' | 'editar' | 'excluir';
+
+function separarColecoes(dados: unknown): RegistroCompartilhado[][] {
+  // A rota valida o formato com Zod antes de comparar os registros.
+  const catalogo = dados as Partial<ColecoesCatalogo> | null;
+  return [catalogo?.servicos ?? [], catalogo?.categorias ?? []];
 }
-export function acoesAlteradas(before: unknown, after: unknown, key: string) {
-  const actions = new Set<string>();
-  const old = listas(before, key),
-    next = listas(after, key);
-  for (let i = 0; i < next.length; i++) {
-    const anteriores = new Map(old[i].map((x: any) => [x.id, x]));
-    for (const item of next[i]) {
-      const original = anteriores.get(item.id);
-      if (!original) actions.add("criar");
-      else if (JSON.stringify(original) !== JSON.stringify(item))
-        actions.add("editar");
-      anteriores.delete(item.id);
+
+export function acoesAlteradas(antes: unknown, depois: unknown) {
+  const acoes = new Set<AcaoAlterada>();
+  const colecoesAnteriores = separarColecoes(antes);
+  const colecoesAtuais = separarColecoes(depois);
+
+  for (let indice = 0; indice < colecoesAtuais.length; indice++) {
+    const registrosAnteriores = new Map(
+      colecoesAnteriores[indice].map((registro) => [registro.id, registro]),
+    );
+    for (const registro of colecoesAtuais[indice]) {
+      const anterior = registrosAnteriores.get(registro.id);
+      if (!anterior) acoes.add('criar');
+      else if (JSON.stringify(anterior) !== JSON.stringify(registro)) acoes.add('editar');
+      registrosAnteriores.delete(registro.id);
     }
-    if (anteriores.size) actions.add("excluir");
+    if (registrosAnteriores.size) acoes.add('excluir');
   }
-  return [...actions];
+  return [...acoes];
 }
-export function dadosUnicos(data: any, key: string) {
-  const lists = listas(data, key);
-  if (
-    lists.some(
-      (list) => new Set(list.map((x: any) => x.id)).size !== list.length,
-    )
-  )
-    return false;
-  if (key === "catalogo") {
-    const cats = new Set(data.categorias.map((x: any) => x.id));
-    if (data.servicos.some((x: any) => !cats.has(x.categoriaId))) return false;
-  }
-  return true;
+
+export function dadosUnicos(dados: unknown, chave: string) {
+  const colecoes = separarColecoes(dados);
+  const possuiIdsRepetidos = colecoes.some(
+    (registros) => new Set(registros.map((registro) => registro.id)).size !== registros.length,
+  );
+  if (possuiIdsRepetidos) return false;
+  if (chave !== 'catalogo') return true;
+
+  const [servicos, categorias] = colecoes;
+  const idsCategorias = new Set(categorias.map((categoria) => categoria.id));
+  return servicos.every((servico) => idsCategorias.has(servico.categoriaId ?? ''));
 }
+
 export function rotasDadosCompartilhados(
   autorizar: (req: Request, res: Response) => Promise<SupabaseClient | null>,
 ) {
-  const router = Router();
-  router.get("/:chave", async (req, res) => {
+  const roteador = Router();
+  roteador.get('/:chave/stream', async (req, res) => {
     const db = await autorizar(req, res);
     if (!db) return;
-    const key = String(req.params.chave);
-    if (!Object.hasOwn(schemasCompartilhados, key)) {
-      res.status(404).json({ message: "Cadastro não encontrado." });
+    if (String(req.params.chave) !== 'catalogo') {
+      res.status(404).json({ message: 'Cadastro não encontrado.' });
       return;
     }
-    const { data, error } = await db
-      .from("oficina_painel")
-      .select("dados,versao")
-      .eq("chave", key)
-      .maybeSingle();
-    if (error) {
-      res
-        .status(503)
-        .json({
-          message:
-            "Não foi possível carregar os dados compartilhados. Confira a implantação do banco.",
-        });
-      return;
-    }
-    res.setHeader("Cache-Control", "no-store");
-    res.json({ dados: data?.dados ?? null, versao: data?.versao ?? 0 });
+    conectarEventosCatalogo(res);
   });
-  router.put("/:chave", async (req, res) => {
+  roteador.get('/:chave', async (req, res) => {
     const db = await autorizar(req, res);
     if (!db) return;
-    const key = String(req.params.chave);
-    if (!Object.hasOwn(schemasCompartilhados, key)) {
-      res.status(404).json({ message: "Cadastro não encontrado." });
+    const chaveLocal = String(req.params.chave);
+    if (chaveLocal !== 'catalogo') {
+      res.status(404).json({ message: 'Cadastro não encontrado.' });
       return;
     }
-    const input = z
+    const [categorias, servicos, versao] = await Promise.all([
+      db.from('categorias_servico').select('id,nome,descricao,cor,icone').order('id'),
+      db
+        .from('servicos')
+        .select('id,nome,categoria_id,descricao,preco,custo,duracao,ativo,icone,adicional')
+        .order('id'),
+      db.from('servicos_catalogo_versao').select('versao').eq('id', true).maybeSingle(),
+    ]);
+    const erro = categorias.error || servicos.error || versao.error;
+    if (erro) {
+      res.status(503).json({
+        message:
+          'Não foi possível carregar os dados compartilhados. Confira a implantação do banco.',
+      });
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      dados: {
+        categorias: (categorias.data ?? []).map((item) => ({ ...item })),
+        servicos: (servicos.data ?? []).map((item) => ({
+          id: item.id,
+          nome: item.nome,
+          categoriaId: item.categoria_id,
+          descricao: item.descricao,
+          preco: Number(item.preco),
+          custo: Number(item.custo),
+          duracao: item.duracao,
+          ativo: item.ativo,
+          icone: item.icone,
+          adicional: item.adicional,
+        })),
+      },
+      versao: versao.data?.versao ?? 0,
+    });
+  });
+  roteador.put('/:chave', async (req, res) => {
+    const db = await autorizar(req, res);
+    if (!db) return;
+    const chaveLocal = String(req.params.chave);
+    if (chaveLocal !== 'catalogo') {
+      res.status(404).json({ message: 'Cadastro não encontrado.' });
+      return;
+    }
+    const entrada = z
       .object({ versao: z.number().int().nonnegative(), dados: z.unknown() })
       .strict()
       .safeParse(req.body);
-    const parsed = input.success
-      ? schemasCompartilhados[
-          key as keyof typeof schemasCompartilhados
-        ].safeParse(input.data.dados)
+    const validado = entrada.success
+      ? schemasCompartilhados[chaveLocal as keyof typeof schemasCompartilhados].safeParse(
+          entrada.data.dados,
+        )
       : null;
-    if (!input.success || !parsed?.success || !dadosUnicos(parsed.data, key)) {
-      res.status(400).json({ message: "Confira os dados antes de salvar." });
+    if (!entrada.success || !validado?.success || !dadosUnicos(validado.data, chaveLocal)) {
+      res.status(400).json({ message: 'Confira os dados antes de salvar.' });
       return;
     }
-    const existing = await db
-      .from("oficina_painel")
-      .select("dados,versao")
-      .eq("chave", key)
-      .maybeSingle();
-    if (existing.error) {
-      res
-        .status(503)
-        .json({
-          message: "Não foi possível acessar o cadastro compartilhado.",
-        });
+    const [categoriasAtuais, servicosAtuais, versaoAtual] = await Promise.all([
+      db.from('categorias_servico').select('id,nome,descricao,cor,icone'),
+      db
+        .from('servicos')
+        .select('id,nome,categoria_id,descricao,preco,custo,duracao,ativo,icone,adicional'),
+      db.from('servicos_catalogo_versao').select('versao').eq('id', true).maybeSingle(),
+    ]);
+    const erroConsulta = categoriasAtuais.error || servicosAtuais.error || versaoAtual.error;
+    if (erroConsulta) {
+      res.status(503).json({
+        message: 'Não foi possível acessar o cadastro compartilhado.',
+      });
       return;
     }
-    if ((existing.data?.versao ?? 0) !== input.data.versao) {
-      res
-        .status(409)
-        .json({
-          message:
-            "Outra pessoa atualizou este cadastro. Os dados foram atualizados; confira seu rascunho e salve novamente.",
-        });
+    const dadosAntes = {
+      categorias: categoriasAtuais.data ?? [],
+      servicos: (servicosAtuais.data ?? []).map((item) => ({
+        id: item.id,
+        nome: item.nome,
+        categoriaId: item.categoria_id,
+        descricao: item.descricao,
+        preco: Number(item.preco),
+        custo: Number(item.custo),
+        duracao: item.duracao,
+        ativo: item.ativo,
+        icone: item.icone,
+        adicional: item.adicional,
+      })),
+    };
+    if ((versaoAtual.data?.versao ?? 0) !== entrada.data.versao) {
+      res.status(409).json({
+        message:
+          'Outra pessoa atualizou este cadastro. Os dados foram atualizados; confira seu rascunho e salve novamente.',
+      });
       return;
     }
-    const modulo = key === "agenda" ? "agendamentos" : "servicos";
+    const modulo = 'servicos';
     if (
-      acoesAlteradas(existing.data?.dados, parsed.data, key).some(
-        (action) => !permitir(res.locals.acesso, modulo, action),
+      acoesAlteradas(dadosAntes, validado.data).some(
+        (acao) => !permitir(res.locals.acesso, modulo, acao),
       )
     ) {
-      res
-        .status(403)
-        .json({ message: "Seu acesso não permite esta alteração." });
+      res.status(403).json({ message: 'Seu acesso não permite esta alteração.' });
       return;
     }
-    const row = {
-      chave: key,
-      dados: parsed.data,
-      versao: input.data.versao + 1,
-      atualizado_em: new Date().toISOString(),
-    };
-    const result = existing.data
-      ? await db
-          .from("oficina_painel")
-          .update(row)
-          .eq("chave", key)
-          .eq("versao", input.data.versao)
-          .select("versao")
-          .maybeSingle()
-      : await db
-          .from("oficina_painel")
-          .insert(row)
-          .select("versao")
-          .maybeSingle();
-    if (result.error || !result.data) {
-      res
-        .status(result.error && result.error.code !== "23505" ? 503 : 409)
-        .json({
-          message:
-            result.error && result.error.code !== "23505"
-              ? "Não foi possível salvar. Seu rascunho foi preservado."
-              : "Outra pessoa atualizou este cadastro. Confira e tente salvar novamente.",
-        });
+    const dadosCatalogo = validado.data as z.infer<typeof schemasCompartilhados.catalogo>;
+    const resultado = await db.rpc('substituir_catalogo_servicos', {
+      p_versao: entrada.data.versao,
+      p_categorias: dadosCatalogo.categorias,
+      p_servicos: dadosCatalogo.servicos.map((item) => ({
+        id: item.id,
+        nome: item.nome,
+        categoria_id: item.categoriaId,
+        descricao: item.descricao,
+        preco: item.preco,
+        custo: item.custo,
+        duracao: item.duracao,
+        ativo: item.ativo,
+        icone: item.icone,
+        adicional: item.adicional,
+      })),
+      p_actor: res.locals.adminUserId,
+    });
+    if (resultado.error || typeof resultado.data !== 'number') {
+      const conflito = resultado.error?.code === '40001';
+      res.status(conflito ? 409 : resultado.error?.code === '23505' ? 409 : 503).json({
+        message:
+          conflito || resultado.error?.code === '23505'
+            ? 'Outra pessoa atualizou este cadastro. Confira e tente salvar novamente.'
+            : 'Não foi possível salvar. Seu rascunho foi preservado.',
+      });
       return;
     }
-    res.json({ dados: parsed.data, versao: result.data.versao });
+    res.json({ dados: validado.data, versao: resultado.data });
   });
-  return router;
+  return roteador;
 }

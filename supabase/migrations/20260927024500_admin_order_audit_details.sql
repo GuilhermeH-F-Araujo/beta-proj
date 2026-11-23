@@ -1,4 +1,4 @@
--- Mantém a razão da exclusão e um resumo da OS no log privado.
+-- Mantem a razao da exclusao e um resumo da OS no log privado.
 drop function if exists public.admin_order_delete(integer,uuid);
 
 create function public.admin_order_delete(p_id_os integer, p_actor uuid, p_reason text)

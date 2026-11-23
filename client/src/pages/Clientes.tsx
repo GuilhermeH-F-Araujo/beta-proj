@@ -1,243 +1,818 @@
-import {useUsuarioAdmin} from '../components/RotaProtegida';
-import ConteudoCarregando from '../components/ConteudoCarregando';
-import Skeleton from '../components/Skeleton';
-import {useDadosVivos} from '../hooks/useDadosVivos';
-import { escalaAtual } from '../services/preferenciasGlobais';
+import CartaoIndicador from '../components/CartaoIndicador';
+import { useCargaInicial } from '../hooks/useCargaInicial';
+import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
+import { useCartoesPagina, useCartaoVisivel } from '../hooks/useCartoesPagina';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Icon } from '../components/MenuAdmin';
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import SkeletonLinhasTabela from '../components/SkeletonLinhasTabela';
+import SkeletonPagina from '../components/SkeletonPagina';
+import { Icone } from '../components/MenuAdmin';
 import ModalEditarCliente from '../components/ModalEditarCliente';
 import PerfilCliente from '../components/PerfilCliente';
+import { useUsuarioAdministrador } from '../components/RotaProtegida';
+import { useDadosVivos } from '../hooks/useDadosVivos';
+import { correspondeBusca } from '../utils/buscaAproximada';
 import {
-  ErroRequisicaoApi, excluirCliente, buscarPerfilCliente, buscarClientes, buscarFotoDiretorioCliente, logout,
-  type ItemCliente, type DadosPerfilCliente, type SituacaoCliente, type RespostaClientes,
+  buscarClientes,
+  buscarFotoDiretorioCliente,
+  buscarPerfilCliente,
+  ErroRequisicaoApi,
+  excluirCliente,
+  type DadosPerfilCliente,
+  type ItemCliente,
+  type RespostaClientes,
+  type SituacaoCliente,
 } from '../services/apiAutenticacao';
-import './ordens-servico.css';
+import { escalaAtual } from '../services/preferenciasGlobais';
 import './clientes.css';
+import './ordens-servico.css';
 
-type Filter = 'all' | 'active' | 'return' | 'new' | SituacaoCliente;
-type Sort = 'recent' | 'oldest' | 'none';
-const empty: RespostaClientes = { items: [], counts: { all: 0, active: 0, return: 0, new: 0 }, models: [] };
-const pageSize = 6;
-const statusLabels: Record<SituacaoCliente, string> = {
-  'em andamento': 'OS em andamento', 'aguardando peça': 'Aguardando peça', pronto: 'OS pronta',
-  aguardando: 'OS aberta', retorno: 'Retorno sugerido', entregue: 'Serviço finalizado',
-  cancelada: 'Sem OS ativa', 'sem-os': 'Sem OS ativa',
+type Filtro = 'all' | 'active' | 'return' | 'new' | SituacaoCliente;
+type Ordenacao = 'recent' | 'oldest' | 'none';
+const vazio: RespostaClientes = {
+  items: [],
+  counts: { all: 0, active: 0, return: 0, new: 0 },
+  models: [],
 };
-const cardInfo = [
-  { key: 'all', label: 'Clientes', icon: 'users', tone: 'rose', tip: 'Todos os clientes cadastrados' },
-  { key: 'active', label: 'Com OS ativa', icon: 'wrench', tone: 'sky', tip: 'Clientes com uma OS aberta, em andamento, aguardando peça ou pronta' },
-  { key: 'return', label: 'Aguardando retorno', icon: 'clock', tone: 'amber', tip: 'Sem OS ativa e há pelo menos 90 dias do último serviço concluído' },
-  { key: 'new', label: 'Novos este mês', icon: 'trending', tone: 'mint', tip: 'Clientes cujo primeiro atendimento registrado foi neste mês' },
+const tamanhoPagina = 6;
+const rotulosSituacao: Record<SituacaoCliente, string> = {
+  'em andamento': 'OS em andamento',
+  'aguardando peça': 'Aguardando peça',
+  pronto: 'OS pronta',
+  aguardando: 'OS aberta',
+  retorno: 'Retorno sugerido',
+  entregue: 'Serviço finalizado',
+  cancelada: 'Sem OS ativa',
+  'sem-os': 'Sem OS ativa',
+};
+const cartaoInformacao = [
+  {
+    key: 'all',
+    label: 'Clientes',
+    icon: 'users',
+    tone: 'blue',
+    tip: 'Todos os clientes cadastrados',
+  },
+  {
+    key: 'active',
+    label: 'Com OS ativa',
+    icon: 'wrench',
+    tone: 'sky',
+    tip: 'Clientes com uma OS aberta, em andamento, aguardando peça ou pronta',
+  },
+  {
+    key: 'return',
+    label: 'Aguardando retorno',
+    icon: 'clock',
+    tone: 'amber',
+    tip: 'Sem OS ativa e há pelo menos 90 dias do último serviço concluído',
+  },
+  {
+    key: 'new',
+    label: 'Novos este mês',
+    icon: 'trending',
+    tone: 'mint',
+    tip: 'Clientes cujo primeiro atendimento registrado foi neste mês',
+  },
 ] as const;
 
-function dateOnly(value: string | null) {
-  if (!value) return '—';
-  const [y, m, d] = value.slice(0, 10).split('-');
-  return y && m && d ? `${d}/${m}/${y}` : '—';
+function dadosOnly(valor: string | null) {
+  if (!valor) return '—';
+  const [outroItem, mesAtual, dadosAtual] = valor.slice(0, 10).split('-');
+  return outroItem && mesAtual && dadosAtual ? `${dadosAtual}/${mesAtual}/${outroItem}` : '—';
 }
-function initials(value: string) { return value.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase(); }
-function searchable(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
-function whatsappLink(phone: string) {
-  const digits = phone.replace(/\D/g, '');
-  return `https://wa.me/${digits.startsWith('55') && digits.length >= 12 ? digits : `55${digits}`}`;
+function iniciais(valor: string) {
+  return valor
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((palavra) => palavra[0])
+    .join('')
+    .toUpperCase();
 }
-function pagesToShow(current: number, total: number): (number | '…')[] {
-  if (total <= 5) return Array.from({ length: total }, (_, n) => n + 1);
-  const choices = [...new Set([1, total, current - 1, current, current + 1, ...(current < 3 ? [2, 3] : [])])]
-    .filter(n => n >= 1 && n <= total).sort((a, b) => a - b);
-  return choices.flatMap((n, i) => i && n - choices[i - 1] > 1 ? ['…' as const, n] : [n]);
+function whatsappLigacao(telefone: string) {
+  const digitos = telefone.replace(/\D/g, '');
+  return `https://wa.me/${digitos.startsWith('55') && digitos.length >= 12 ? digitos : `55${digitos}`}`;
+}
+function paginasExibidas(atual: number, total: number): (number | '…')[] {
+  if (total <= 5) return Array.from({ length: total }, (_, numero) => numero + 1);
+  const escolhas = [
+    ...new Set([1, total, atual - 1, atual, atual + 1, ...(atual < 3 ? [2, 3] : [])]),
+  ]
+    .filter((numero) => numero >= 1 && numero <= total)
+    .sort((primeiroElemento, segundoElemento) => primeiroElemento - segundoElemento);
+  return escolhas.flatMap((numero, indice) =>
+    indice && numero - escolhas[indice - 1] > 1 ? ['…' as const, numero] : [numero],
+  );
 }
 
-function ClientAvatar({ id, name, hasPhoto, photoUrl, size = 'small' }: { id: number; name: string; hasPhoto: boolean; photoUrl: string | null; size?: 'small' | 'large' }) {
+function ClienteAvatar({
+  id,
+  name: nome,
+  hasPhoto: temFoto,
+  photoUrl: fotoUrl,
+  size: tamanho = 'small',
+}: {
+  id: number;
+  name: string;
+  hasPhoto: boolean;
+  photoUrl: string | null;
+  size?: 'small' | 'large';
+}) {
   const [url, setUrl] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [falhou, setFalhou] = useState(false);
   useEffect(() => {
-    if (!hasPhoto || photoUrl) return;
-    let live = true;
-    let objectUrl = '';
-    buscarFotoDiretorioCliente(id).then(blob => {
-      objectUrl = URL.createObjectURL(blob);
-      if (live) setUrl(objectUrl); else URL.revokeObjectURL(objectUrl);
-    }).catch(() => { if (live) setUrl(''); });
-    return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [id, hasPhoto, photoUrl]);
-  const photo = url || (!failed && photoUrl) || '';
-  return <span className={`client-avatar ${size === 'large' ? 'large' : ''}`}>
-    {photo ? <img src={photo} alt={`Foto de ${name}`} onError={() => { setUrl(''); setFailed(true); }} referrerPolicy="no-referrer" />
-      : <span className="client-avatar-initials" role="img" aria-label={`Iniciais de ${name}`}>{initials(name)}</span>}
-  </span>;
+    if (!temFoto || fotoUrl) return;
+    let atualizacaoContinua = true;
+    let urlObjeto = '';
+    buscarFotoDiretorioCliente(id)
+      .then((blob) => {
+        urlObjeto = URL.createObjectURL(blob);
+        if (atualizacaoContinua) setUrl(urlObjeto);
+        else URL.revokeObjectURL(urlObjeto);
+      })
+      .catch(() => {
+        if (atualizacaoContinua) setUrl('');
+      });
+    return () => {
+      atualizacaoContinua = false;
+      if (urlObjeto) URL.revokeObjectURL(urlObjeto);
+    };
+  }, [id, temFoto, fotoUrl]);
+  const foto = url || (!falhou && fotoUrl) || '';
+  return (
+    <span className={`client-avatar ${tamanho === 'large' ? 'large' : ''}`}>
+      {foto ? (
+        <img
+          src={foto}
+          alt={`Foto de ${nome}`}
+          onError={() => {
+            setUrl('');
+            setFalhou(true);
+          }}
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <span className="client-avatar-initials" role="img" aria-label={`Iniciais de ${nome}`}>
+          {iniciais(nome)}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export default function Clientes() {
-  const navigate = useNavigate();
+  const exibirCartao = useCartaoVisivel('clientes');
+  const cartoesVisiveis = useCartoesPagina('clientes', cartaoInformacao, (item) => item.key);
+  const navegar = useNavigate();
   const { id } = useParams();
-  const profileId = id ? Number(id) : null;
-  const [name, setName] = useState('Administrador');
-  const usuario=useUsuarioAdmin(), authorized=!!usuario;
-  const [authError, setAuthError] = useState('');
-  const [retry, setRetry] = useState(0);
-  const [collapsed, setCollapsed] = useState(false);
-  const [toast, setToast] = useState('');
-  const [data, setData] = useState<RespostaClientes>(empty);
-  const [profile, setProfile] = useState<DadosPerfilCliente | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
-  const [sort, setSort] = useState<Sort>('recent');
-  const [model, setModel] = useState('all');
-  const [page, setPage] = useState(1);
-  const [action, setAction] = useState<number | null>(null);
-  const [actionPosition, setActionPosition] = useState<{ left: number; top: number; arrowLeft: number; above: boolean } | null>(null);
-  const [editingClient, setEditingClient] = useState<DadosPerfilCliente | null>(null);
-  const [deletingClient, setDeletingClient] = useState<ItemCliente | null>(null);
-  const [deletingBusy, setDeletingBusy] = useState(false);
-  const [deletingError, setDeletingError] = useState('');
-  const [deletingReason, setDeletingReason] = useState('');
-
-  
+  const perfilId = id ? Number(id) : null;
+  const usuario = useUsuarioAdministrador();
+  const autorizado = !!usuario;
+  const [avisoTemporario, setAvisoTemporario] = useState('');
+  const [dados, setDados] = useState<RespostaClientes>(vazio);
+  const [perfil, setPerfil] = useState<DadosPerfilCliente | null>(null);
+  const [carregandoLocal, setCarregando] = useState(true);
+  const primeiraCarga = useCargaInicial(carregandoLocal);
+  const [erro, setErro] = useState('');
+  const [busca, setBusca] = useState('');
+  usePesquisaPagina(setBusca);
+  const [filtro, setFiltro] = useState<Filtro>('all');
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>('recent');
+  const [modelo, setModelo] = useState('all');
+  const [pagina, setPagina] = useState(1);
+  const [acao, setAcao] = useState<number | null>(null);
+  const [acaoPosicao, setAcaoPosicao] = useState<{
+    left: number;
+    top: number;
+    arrowLeft: number;
+    above: boolean;
+  } | null>(null);
+  const [editandoCliente, setEditandoCliente] = useState<DadosPerfilCliente | null>(null);
+  const [excluindoCliente, setExcluindoCliente] = useState<ItemCliente | null>(null);
+  const [excluindoOcupado, setExcluindoOcupado] = useState(false);
+  const [excluindoErro, setExcluindoErro] = useState('');
+  const [excluindoMotivo, setExcluindoMotivo] = useState('');
 
   useEffect(() => {
-    if (!authorized) return;
-    let live = true;
-    setLoading(true); setError('');
-    const task = profileId ? buscarPerfilCliente(profileId).then(result => { if (live) setProfile(result); })
-      : buscarClientes().then(result => { if (live) setData(result); });
-    task.catch(err => {
-      if (!live) return;
-      if (err instanceof ErroRequisicaoApi && [401, 403].includes(err.status)) navigate('/login', { replace: true });
-      else setError(err instanceof Error ? err.message : 'Não foi possível carregar os clientes.');
-    }).finally(() => { if (live) setLoading(false); });
-    return () => { live = false; };
-  }, [authorized, profileId, navigate]);
-  useEffect(() => { setPage(1); setAction(null); }, [search, filter, sort, model]);
-  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3500); return () => clearTimeout(timer); }, [toast]);
-  useEffect(() => {
-    if (action === null) return;
-    const outside = (event: PointerEvent) => {
-      if (!(event.target instanceof Element) || !event.target.closest('.clients-action-menu,.clients-more')) setAction(null);
-    };
-    const close = () => setAction(null);
-    const keydown = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
-    document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', keydown);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
+    if (!autorizado) return;
+    let atualizacaoContinua = true;
+    setCarregando(true);
+    setErro('');
+    const tarefa = perfilId
+      ? buscarPerfilCliente(perfilId).then((resultado) => {
+          if (atualizacaoContinua) setPerfil(resultado);
+        })
+      : buscarClientes().then((resultado) => {
+          if (atualizacaoContinua) setDados(resultado);
+        });
+    tarefa
+      .catch((erroCapturado) => {
+        if (!atualizacaoContinua) return;
+        if (
+          erroCapturado instanceof ErroRequisicaoApi &&
+          [401, 403].includes(erroCapturado.situacao)
+        )
+          navegar('/login', { replace: true });
+        else
+          setErro(
+            erroCapturado instanceof Error
+              ? erroCapturado.message
+              : 'Não foi possível carregar os clientes.',
+          );
+      })
+      .finally(() => {
+        if (atualizacaoContinua) setCarregando(false);
+      });
     return () => {
-      document.removeEventListener('pointerdown', outside);
-      document.removeEventListener('keydown', keydown);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
+      atualizacaoContinua = false;
     };
-  }, [action]);
+  }, [autorizado, perfilId, navegar]);
+  useEffect(() => {
+    setPagina(1);
+    setAcao(null);
+  }, [busca, filtro, ordenacao, modelo]);
+  useEffect(() => {
+    if (!avisoTemporario) return;
+    const temporizador = setTimeout(() => setAvisoTemporario(''), 3500);
+    return () => clearTimeout(temporizador);
+  }, [avisoTemporario]);
+  useEffect(() => {
+    if (acao === null) return;
+    const fora = (evento: PointerEvent) => {
+      if (
+        !(evento.target instanceof Element) ||
+        !evento.target.closest('.clients-action-menu,.clients-more')
+      )
+        setAcao(null);
+    };
+    const fechar = () => setAcao(null);
+    const teclaPressionada = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') fechar();
+    };
+    document.addEventListener('pointerdown', fora);
+    document.addEventListener('keydown', teclaPressionada);
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('resize', fechar);
+    return () => {
+      document.removeEventListener('pointerdown', fora);
+      document.removeEventListener('keydown', teclaPressionada);
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('resize', fechar);
+    };
+  }, [acao]);
 
-  useDadosVivos(async valido=>{try{if(profileId){const result=await buscarPerfilCliente(profileId);if(valido())setProfile(result)}else{const result=await buscarClientes();if(valido())setData(result)}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar os clientes.')}},authorized&&!loading,String(profileId));
-  const filtered = useMemo(() => {
-    const needle = searchable(search.trim());
-    const result = data.items.filter(client => {
-      const matches = filter === 'all' || (filter === 'active' && client.active) ||
-        (filter === 'return' && client.awaitingReturn) || (filter === 'new' && client.newThisMonth) ||
-        client.situation === filter;
-      return matches && (model === 'all' || client.motorcycles.some(bike => bike.model === model)) &&
-        (!needle || searchable(`${client.name} ${client.phone ?? ''} ${client.motorcycles.map(bike => `${bike.model} ${bike.plate ?? ''}`).join(' ')}`).includes(needle));
+  useDadosVivos(
+    async (valido) => {
+      try {
+        if (perfilId) {
+          const resultado = await buscarPerfilCliente(perfilId);
+          if (valido()) setPerfil(resultado);
+        } else {
+          const resultado = await buscarClientes();
+          if (valido()) setDados(resultado);
+        }
+      } catch (erroCapturado) {
+        if (valido())
+          setErro(
+            erroCapturado instanceof Error
+              ? erroCapturado.message
+              : 'Não foi possível atualizar os clientes.',
+          );
+      }
+    },
+    autorizado && !carregandoLocal,
+    String(perfilId),
+  );
+  const filtrado = useMemo(() => {
+    const resultado = dados.items.filter((cliente) => {
+      const correspondencias =
+        filtro === 'all' ||
+        (filtro === 'active' && cliente.active) ||
+        (filtro === 'return' && cliente.awaitingReturn) ||
+        (filtro === 'new' && cliente.newThisMonth) ||
+        cliente.situation === filtro;
+      return (
+        correspondencias &&
+        (modelo === 'all' ||
+          cliente.motorcycles.some((motocicleta) => motocicleta.model === modelo)) &&
+        correspondeBusca(
+          busca,
+          `${cliente.name} ${cliente.phone ?? ''} ${cliente.motorcycles.map((motocicleta) => `${motocicleta.model} ${motocicleta.plate ?? ''}`).join(' ')}`,
+        )
+      );
     });
-    if (sort === 'none') return result.filter(client => !client.lastAttendance);
-    return result.sort((a, b) => sort === 'recent'
-      ? (b.lastAttendance ?? '').localeCompare(a.lastAttendance ?? '') || a.name.localeCompare(b.name, 'pt-BR')
-      : (a.lastAttendance ?? '9999').localeCompare(b.lastAttendance ?? '9999') || a.name.localeCompare(b.name, 'pt-BR'));
-  }, [data, search, filter, sort, model]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const start = filtered.length ? (page - 1) * pageSize + 1 : 0;
-  const end = Math.min(page * pageSize, filtered.length);
-  const reset = () => { setSearch(''); setFilter('all'); setSort('recent'); setModel('all'); };
-  const visit = (client: ItemCliente) => { setAction(null); navigate(`/clientes/${client.id}`); };
-  function toggleActions(client: ItemCliente, button: HTMLButtonElement) {
-    if (action === client.id) { setAction(null); return; }
-    const rect = button.getBoundingClientRect();
-    const menuWidth = 184*escalaAtual(), menuHeight = 130*escalaAtual();
-    const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
-    const above = rect.bottom + menuHeight + 10 >= window.innerHeight;
-    setActionPosition({
-      left,
-      top: above ? Math.max(8, rect.top - menuHeight - 10) : rect.bottom + 10,
-      arrowLeft: Math.max(15, Math.min(menuWidth - 15, rect.left + rect.width / 2 - left)),
-      above,
+    if (ordenacao === 'none') return resultado.filter((cliente) => !cliente.lastAttendance);
+    return resultado.sort((primeiroElemento, segundoElemento) =>
+      ordenacao === 'recent'
+        ? (segundoElemento.lastAttendance ?? '').localeCompare(
+            primeiroElemento.lastAttendance ?? '',
+          ) || primeiroElemento.name.localeCompare(segundoElemento.name, 'pt-BR')
+        : (primeiroElemento.lastAttendance ?? '9999').localeCompare(
+            segundoElemento.lastAttendance ?? '9999',
+          ) || primeiroElemento.name.localeCompare(segundoElemento.name, 'pt-BR'),
+    );
+  }, [dados, busca, filtro, ordenacao, modelo]);
+  const quantidadePaginas = Math.max(1, Math.ceil(filtrado.length / tamanhoPagina));
+  const visivel = filtrado.slice((pagina - 1) * tamanhoPagina, pagina * tamanhoPagina);
+  const inicio = filtrado.length ? (pagina - 1) * tamanhoPagina + 1 : 0;
+  const fim = Math.min(pagina * tamanhoPagina, filtrado.length);
+  const restaurar = () => {
+    setBusca('');
+    setFiltro('all');
+    setOrdenacao('recent');
+    setModelo('all');
+  };
+  const visitar = (cliente: ItemCliente) => {
+    setAcao(null);
+    navegar(`/clientes/${cliente.id}`);
+  };
+  function alternarAcoes(cliente: ItemCliente, botao: HTMLButtonElement) {
+    if (acao === cliente.id) {
+      setAcao(null);
+      return;
+    }
+    const retangulo = botao.getBoundingClientRect();
+    const menuLargura = 184 * escalaAtual();
+    const alturaMenu = 130 * escalaAtual();
+    const esquerda = Math.max(
+      8,
+      Math.min(window.innerWidth - menuLargura - 8, retangulo.right - menuLargura),
+    );
+    const acima = retangulo.bottom + alturaMenu + 10 >= window.innerHeight;
+    setAcaoPosicao({
+      left: esquerda,
+      top: acima ? Math.max(8, retangulo.top - alturaMenu - 10) : retangulo.bottom + 10,
+      arrowLeft: Math.max(
+        15,
+        Math.min(menuLargura - 15, retangulo.left + retangulo.width / 2 - esquerda),
+      ),
+      above: acima,
     });
-    setAction(client.id);
+    setAcao(cliente.id);
   }
-  async function editFromList(client: ItemCliente) {
-    setAction(null);
-    try { setEditingClient(await buscarPerfilCliente(client.id)); }
-    catch (err) { setToast(err instanceof Error ? err.message : 'Não foi possível abrir o cliente.'); }
-  }
-  function viewClientOrders(client: ItemCliente) {
-    setAction(null);
-    const params = new URLSearchParams({ clientId: String(client.id), clientName: client.name });
-    navigate(`/ordens-de-servico?${params}`);
-  }
-  async function confirmDelete() {
-    if (!deletingClient || deletingBusy) return;
-    if (deletingReason.trim().length < 5) { setDeletingError('Descreva o motivo da exclusão com pelo menos 5 caracteres.'); return; }
-    setDeletingBusy(true); setDeletingError('');
+  async function editarDeLista(cliente: ItemCliente) {
+    setAcao(null);
     try {
-      await excluirCliente(deletingClient.id, deletingReason.trim());
-      setData(await buscarClientes());
-      setPage(1); setDeletingClient(null); setDeletingReason('');
-      setToast('Cliente removido da lista. Motos e histórico de OS foram preservados.');
-    } catch (err) { setDeletingError(err instanceof Error ? err.message : 'Não foi possível excluir o cliente.'); }
-    finally { setDeletingBusy(false); }
+      setEditandoCliente(await buscarPerfilCliente(cliente.id));
+    } catch (erroCapturado) {
+      setAvisoTemporario(
+        erroCapturado instanceof Error
+          ? erroCapturado.message
+          : 'Não foi possível abrir o cliente.',
+      );
+    }
   }
-  async function signOut() {
-    try { await logout(); navigate('/login', { replace: true }); }
-    catch (err) { setToast(err instanceof Error ? err.message : 'Não foi possível sair agora.'); }
+  function visualizacaoClienteOrdens(cliente: ItemCliente) {
+    setAcao(null);
+    const parametros = new URLSearchParams({
+      clientId: String(cliente.id),
+      clientName: cliente.name,
+    });
+    navegar(`/ordens-de-servico?${parametros}`);
   }
-  if (!authorized) return <div className="orders-auth-loading">{authError
-    ? <div><p>{authError}</p><button onClick={() => setRetry(n => n + 1)}>Tentar novamente</button></div>
-    : <Skeleton/>}</div>;
+  async function confirmarExcluir() {
+    if (!excluindoCliente || excluindoOcupado) return;
+    if (excluindoMotivo.trim().length < 5) {
+      setExcluindoErro('Descreva o motivo da exclusão com pelo menos 5 caracteres.');
+      return;
+    }
+    setExcluindoOcupado(true);
+    setExcluindoErro('');
+    try {
+      await excluirCliente(excluindoCliente.id, excluindoMotivo.trim());
+      setDados(await buscarClientes());
+      setPagina(1);
+      setExcluindoCliente(null);
+      setExcluindoMotivo('');
+      setAvisoTemporario('Cliente removido da lista. Motos e histórico de OS foram preservados.');
+    } catch (erroCapturado) {
+      setExcluindoErro(
+        erroCapturado instanceof Error
+          ? erroCapturado.message
+          : 'Não foi possível excluir o cliente.',
+      );
+    } finally {
+      setExcluindoOcupado(false);
+    }
+  }
 
-  return <div className="orders-viewport clients-viewport">
-    
-    <div className="orders-main">
-      
-      {profileId ? <main className="clients-content clients-profile-content"><ConteudoCarregando carregando={loading&&!error}>
-        <div className="client-crumb"><button onClick={() => navigate('/dashboard')}>Dashboard</button><span>/</span><button onClick={() => navigate('/clientes')}>Clientes</button><span>/</span><strong>{profile?.name || 'Perfil'}</strong></div>
-        {loading ? <p className="clients-inline-state">Carregando cliente…</p> : error ? <p role="alert" className="clients-inline-state">{error} <button onClick={() => navigate('/clientes')}>Voltar aos clientes</button></p> : profile && <>
-          <PerfilCliente profile={profile} onToast={setToast} onUpdated={async () => { setProfile(await buscarPerfilCliente(profile.id)); }}/>
-        </>}
-      </ConteudoCarregando></main> : <main className="clients-content"><ConteudoCarregando carregando={loading&&!error}>
-        <div className="client-crumb"><span>Dashboard</span><span>/</span><strong>Clientes</strong></div>
-        <div className="clients-heading"><h1>Clientes</h1><p>Gerencie relacionamentos, motocicletas e históricos de atendimento.</p></div>
-        <div className="clients-stats">{cardInfo.map(card => <button key={card.key} type="button" className={`clients-stat ${card.tone}${filter === card.key && filter !== 'all' ? ' is-selected' : ''}`} title={card.tip} aria-label={`${card.label}: ${data.counts[card.key]}. ${card.tip}`} aria-pressed={filter === card.key} onClick={() => setFilter(filter === card.key && card.key !== 'all' ? 'all' : card.key)}><span className="clients-stat-icon"><Icon name={card.icon} size={18}/></span><span><strong>{data.counts[card.key]}</strong><small>{card.label}</small></span></button>)}</div>
-        <section className="clients-panel" aria-label="Lista de clientes">
-          <div className="clients-filters"><label className="clients-query"><Icon name="search" size={14}/><input aria-label="Buscar clientes" placeholder="Buscar por nome, telefone ou placa" value={search} onChange={event => setSearch(event.target.value)}/></label>
-            <select aria-label="Situação" value={['all', 'active', 'return', 'new'].includes(filter) ? filter : filter} onChange={event => setFilter(event.target.value as Filter)}><option value="all">Situação</option><option value="active">Com OS ativa</option><option value="return">Aguardando retorno</option><option value="new">Novos este mês</option><option value="em andamento">OS em andamento</option><option value="aguardando">OS aberta</option><option value="aguardando peça">Aguardando peça</option><option value="pronto">OS pronta</option><option value="entregue">Serviço finalizado</option><option value="sem-os">Sem OS ativa</option></select>
-            <select aria-label="Ordenar por último atendimento" value={sort} onChange={event => setSort(event.target.value as Sort)}><option value="recent">Último atendimento</option><option value="oldest">Mais antigo primeiro</option><option value="none">Sem atendimento</option></select>
-            <select aria-label="Motocicleta" value={model} onChange={event => setModel(event.target.value)}><option value="all">Motocicleta</option>{data.models.map(item => <option key={item} value={item}>{item}</option>)}</select>
-            <button className="clients-clear" onClick={reset}>Limpar filtros</button>
-          </div>
-          <div className="clients-table-scroll"><table><thead><tr><th>CLIENTE</th><th>CONTATO</th><th>MOTOCICLETA</th><th>ÚLTIMO ATENDIMENTO</th><th>SITUAÇÃO</th><th>AÇÕES</th></tr></thead><tbody>
-            {visible.map(client => <tr key={client.id}><td><div className="client-name-cell"><ClientAvatar id={client.id} name={client.name} hasPhoto={client.hasPhoto} photoUrl={client.photoUrl}/><span><b>{client.name}</b><small>{client.firstAttendance ? `Primeira OS em ${dateOnly(client.firstAttendance)}` : 'Sem atendimento registrado'}</small></span></div></td>
-              <td>{client.phone ? <a className="clients-phone" href={whatsappLink(client.phone)} target="_blank" rel="noreferrer" title="Conversar pelo WhatsApp"><Icon name="phone" size={12}/>{client.phone}</a> : <span className="clients-muted">Não informado</span>}</td>
-              <td><div className="client-bike-cell"><Icon name="bike" size={15}/><span>{client.motorcycle ? <><b>{client.motorcycle}</b><small>{client.plate || 'Sem placa'}{client.motorcycleCount > 1 ? ` · +${client.motorcycleCount - 1} ${client.motorcycleCount === 2 ? 'moto' : 'motos'}` : ''}</small></> : <span className="clients-muted">Não cadastrada</span>}</span></div></td>
-              <td>{dateOnly(client.lastAttendance)}</td>
-              <td><span className={`clients-badge situation-${client.situation.replaceAll(' ', '-')}`}>{statusLabels[client.situation]}</span></td>
-              <td><div className="clients-row-actions"><button className="clients-view" onClick={() => visit(client)}>Ver perfil</button><button className="clients-more" aria-label={`Mais ações de ${client.name}`} aria-expanded={action === client.id} aria-haspopup="menu" onClick={event => toggleActions(client, event.currentTarget)}><Icon name="more" size={16}/></button></div></td></tr>)}
-            {(loading || error || !visible.length) && <tr><td colSpan={6} className="clients-empty" role={error ? 'alert' : undefined}>{loading ? 'Carregando clientes…' : error || 'Nenhum cliente encontrado para esses filtros.'}</td></tr>}
-          </tbody></table></div>
-          <div className="clients-panel-footer"><span>Mostrando {start} a {end} de {filtered.length} clientes</span><nav className="clients-pagination" aria-label="Páginas de clientes"><button aria-label="Página anterior" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}><Icon name="left" size={13}/></button>{pagesToShow(page, pageCount).map((item, n) => item === '…' ? <span key={`gap-${n}`}>…</span> : <button key={item} className={page === item ? 'current' : ''} aria-current={page === item ? 'page' : undefined} onClick={() => setPage(item)}>{item}</button>)}<button aria-label="Próxima página" disabled={page >= pageCount || loading} onClick={() => setPage(page + 1)}><Icon name="right" size={13}/></button></nav></div>
-        </section>
-      </ConteudoCarregando></main>}
+  return (
+    <div className="orders-viewport clients-viewport">
+      <div className="orders-main">
+        {perfilId ? (
+          <main className="clients-content clients-profile-content">
+            <ConteudoCarregando carregando={carregandoLocal && !erro}>
+              <div className="client-crumb">
+                <button onClick={() => navegar('/dashboard')}>Dashboard</button>
+                <span>/</span>
+                <button onClick={() => navegar('/clientes')}>Clientes</button>
+                <span>/</span>
+                <strong>{perfil?.name || 'Perfil'}</strong>
+              </div>
+              {primeiraCarga ? (
+                <SkeletonPagina caminho={`/clientes/${perfilId}`} />
+              ) : erro ? (
+                <p role="alert" className="clients-inline-state">
+                  {erro} <button onClick={() => navegar('/clientes')}>Voltar aos clientes</button>
+                </p>
+              ) : (
+                perfil && (
+                  <>
+                    <PerfilCliente
+                      profile={perfil}
+                      onToast={setAvisoTemporario}
+                      onUpdated={async () => {
+                        setPerfil(await buscarPerfilCliente(perfil.id));
+                      }}
+                    />
+                  </>
+                )
+              )}
+            </ConteudoCarregando>
+          </main>
+        ) : (
+          <main className="clients-content">
+            <ConteudoCarregando carregando={carregandoLocal && !erro}>
+              <div className="client-crumb">
+                <span>Dashboard</span>
+                <span>/</span>
+                <strong>Clientes</strong>
+              </div>
+              <div className="clients-heading">
+                <h1>Clientes</h1>
+                <p>Gerencie relacionamentos, motocicletas e históricos de atendimento.</p>
+              </div>
+              <div
+                className="clients-stats indicadores-grid"
+                data-indicadores
+                data-workspace-custom-cards={cartoesVisiveis.length !== cartaoInformacao.length}
+              >
+                {cartoesVisiveis.map((cartao) => (
+                  <CartaoIndicador
+                    key={cartao.key}
+                    editorId={`clientes:${cartao.key}`}
+                    oculto={!exibirCartao(cartao.key)}
+                    titulo={cartao.label}
+                    valor={dados.counts[cartao.key]}
+                    descricao={
+                      cartao.key === 'all'
+                        ? 'Todos os clientes cadastrados'
+                        : cartao.key === 'active'
+                          ? 'Com atendimento em aberto'
+                          : cartao.key === 'return'
+                            ? 'Há 90 dias sem retornar'
+                            : 'Primeiro atendimento no mês'
+                    }
+                    icone={cartao.icon}
+                    tom={cartao.tone}
+                    ajuda={cartao.tip}
+                    total={dados.counts.all}
+                    ativo={filtro === cartao.key}
+                    aoClicar={() =>
+                      setFiltro(filtro === cartao.key && cartao.key !== 'all' ? 'all' : cartao.key)
+                    }
+                  />
+                ))}
+              </div>
+              <section className="clients-panel" aria-label="Lista de clientes">
+                <div className="clients-filters">
+                  <label className="clients-query">
+                    <Icone name="search" size={14} />
+                    <input
+                      aria-label="Buscar clientes"
+                      placeholder="Buscar por nome, telefone ou placa"
+                      value={busca}
+                      onChange={(evento) => setBusca(evento.target.value)}
+                    />
+                  </label>
+                  <select
+                    aria-label="Situação"
+                    value={['all', 'active', 'return', 'new'].includes(filtro) ? filtro : filtro}
+                    onChange={(evento) => setFiltro(evento.target.value as Filtro)}
+                  >
+                    <option value="all">Situação</option>
+                    <option value="active">Com OS ativa</option>
+                    <option value="return">Aguardando retorno</option>
+                    <option value="new">Novos este mês</option>
+                    <option value="em andamento">OS em andamento</option>
+                    <option value="aguardando">OS aberta</option>
+                    <option value="aguardando peça">Aguardando peça</option>
+                    <option value="pronto">OS pronta</option>
+                    <option value="entregue">Serviço finalizado</option>
+                    <option value="sem-os">Sem OS ativa</option>
+                  </select>
+                  <select
+                    aria-label="Ordenar por último atendimento"
+                    value={ordenacao}
+                    onChange={(evento) => setOrdenacao(evento.target.value as Ordenacao)}
+                  >
+                    <option value="recent">Último atendimento</option>
+                    <option value="oldest">Mais antigo primeiro</option>
+                    <option value="none">Sem atendimento</option>
+                  </select>
+                  <select
+                    aria-label="Motocicleta"
+                    value={modelo}
+                    onChange={(evento) => setModelo(evento.target.value)}
+                  >
+                    <option value="all">Motocicleta</option>
+                    {dados.models.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="clients-clear" onClick={restaurar}>
+                    Limpar filtros
+                  </button>
+                </div>
+                <div className="clients-table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>CLIENTE</th>
+                        <th>CONTATO</th>
+                        <th>MOTOCICLETA</th>
+                        <th>ÚLTIMO ATENDIMENTO</th>
+                        <th>SITUAÇÃO</th>
+                        <th>AÇÕES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visivel.map((cliente) => (
+                        <tr key={cliente.id}>
+                          <td>
+                            <div className="client-name-cell">
+                              <ClienteAvatar
+                                id={cliente.id}
+                                name={cliente.name}
+                                hasPhoto={cliente.hasPhoto}
+                                photoUrl={cliente.photoUrl}
+                              />
+                              <span>
+                                <b>{cliente.name}</b>
+                                <small>
+                                  {cliente.firstAttendance
+                                    ? `Primeira OS em ${dadosOnly(cliente.firstAttendance)}`
+                                    : 'Sem atendimento registrado'}
+                                </small>
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            {cliente.phone ? (
+                              <a
+                                className="clients-phone"
+                                href={whatsappLigacao(cliente.phone)}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="Conversar pelo WhatsApp"
+                              >
+                                <Icone name="phone" size={12} />
+                                {cliente.phone}
+                              </a>
+                            ) : (
+                              <span className="clients-muted">Não informado</span>
+                            )}
+                          </td>
+                          <td>
+                            <div className="client-bike-cell">
+                              <Icone name="bike" size={15} />
+                              <span>
+                                {cliente.motorcycle ? (
+                                  <>
+                                    <b>{cliente.motorcycle}</b>
+                                    <small>
+                                      {cliente.plate || 'Sem placa'}
+                                      {cliente.motorcycleCount > 1
+                                        ? ` · +${cliente.motorcycleCount - 1} ${cliente.motorcycleCount === 2 ? 'moto' : 'motos'}`
+                                        : ''}
+                                    </small>
+                                  </>
+                                ) : (
+                                  <span className="clients-muted">Não cadastrada</span>
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{dadosOnly(cliente.lastAttendance)}</td>
+                          <td>
+                            <span
+                              className={`clients-badge situation-${cliente.situation.replaceAll(' ', '-')}`}
+                            >
+                              {rotulosSituacao[cliente.situation]}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="clients-row-actions">
+                              <button className="clients-view" onClick={() => visitar(cliente)}>
+                                Ver perfil
+                              </button>
+                              <button
+                                className="clients-more"
+                                aria-label={`Mais ações de ${cliente.name}`}
+                                aria-expanded={acao === cliente.id}
+                                aria-haspopup="menu"
+                                onClick={(evento) => alternarAcoes(cliente, evento.currentTarget)}
+                              >
+                                <Icone name="more" size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {!primeiraCarga && (erro || !visivel.length) && (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="clients-empty"
+                            role={erro ? 'alert' : undefined}
+                          >
+                            {erro || 'Nenhum cliente encontrado para esses filtros.'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                  {primeiraCarga && <SkeletonLinhasTabela colunas={6} />}
+                </div>
+                <div className="clients-panel-footer">
+                  <span>
+                    Mostrando {inicio} a {fim} de {filtrado.length} clientes
+                  </span>
+                  <nav className="clients-pagination" aria-label="Páginas de clientes">
+                    <button
+                      aria-label="Página anterior"
+                      disabled={pagina <= 1 || carregandoLocal}
+                      onClick={() => setPagina(pagina - 1)}
+                    >
+                      <Icone name="left" size={13} />
+                    </button>
+                    {paginasExibidas(pagina, quantidadePaginas).map((item, numero) =>
+                      item === '…' ? (
+                        <span key={`gap-${numero}`}>…</span>
+                      ) : (
+                        <button
+                          key={item}
+                          className={pagina === item ? 'current' : ''}
+                          aria-current={pagina === item ? 'page' : undefined}
+                          onClick={() => setPagina(item)}
+                        >
+                          {item}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      aria-label="Próxima página"
+                      disabled={pagina >= quantidadePaginas || carregandoLocal}
+                      onClick={() => setPagina(pagina + 1)}
+                    >
+                      <Icone name="right" size={13} />
+                    </button>
+                  </nav>
+                </div>
+              </section>
+            </ConteudoCarregando>
+          </main>
+        )}
+      </div>
+      {acao !== null &&
+        acaoPosicao &&
+        dados.items.find((cliente) => cliente.id === acao) &&
+        createPortal(
+          <div
+            className={`clients-action-menu${acaoPosicao.above ? ' menu-above' : ''}`}
+            role="menu"
+            aria-label={`Ações de ${dados.items.find((cliente) => cliente.id === acao)?.name}`}
+            style={
+              {
+                left: acaoPosicao.left / escalaAtual(),
+                top: acaoPosicao.top / escalaAtual(),
+                '--arrow-left': `${acaoPosicao.arrowLeft / escalaAtual()}px`,
+              } as CSSProperties
+            }
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() =>
+                void editarDeLista(dados.items.find((cliente) => cliente.id === acao)!)
+              }
+            >
+              <span className="clients-menu-icon edit">
+                <Icone name="pencil" size={16} />
+              </span>
+              Editar cliente
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() =>
+                visualizacaoClienteOrdens(dados.items.find((cliente) => cliente.id === acao)!)
+              }
+            >
+              <span className="clients-menu-icon orders">
+                <Icone name="clipboard" size={16} />
+              </span>
+              Ver ordens
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="clients-menu-delete"
+              onClick={() => {
+                setExcluindoErro('');
+                setExcluindoMotivo('');
+                setExcluindoCliente(dados.items.find((cliente) => cliente.id === acao)!);
+                setAcao(null);
+              }}
+            >
+              <span className="clients-menu-icon delete">
+                <Icone name="trash" size={16} />
+              </span>
+              Excluir cliente
+            </button>
+          </div>,
+          document.body,
+        )}
+      {editandoCliente && (
+        <ModalEditarCliente
+          client={editandoCliente}
+          onClose={() => setEditandoCliente(null)}
+          onSaved={async () => {
+            setDados(await buscarClientes());
+            setAvisoTemporario('Cliente atualizado.');
+          }}
+        />
+      )}
+      {excluindoCliente && (
+        <div
+          className="clients-delete-backdrop"
+          onMouseDown={(evento) => {
+            if (evento.target === evento.currentTarget && !excluindoOcupado)
+              setExcluindoCliente(null);
+          }}
+        >
+          <section
+            className="clients-delete-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clients-delete-title"
+          >
+            <span className="clients-delete-icon">
+              <Icone name="trash" size={22} />
+            </span>
+            <h2 id="clients-delete-title">Excluir cliente?</h2>
+            <p>
+              <strong>{excluindoCliente.name}</strong> deixará de aparecer na lista de clientes. As
+              motos e o histórico de ordens de serviço serão preservados.
+            </p>
+            <label className="clients-delete-reason">
+              Motivo da exclusão <span>(obrigatório)</span>
+              <textarea
+                autoFocus
+                maxLength={500}
+                value={excluindoMotivo}
+                onChange={(evento) => {
+                  setExcluindoMotivo(evento.target.value);
+                  setExcluindoErro('');
+                }}
+                placeholder="Explique por que este cliente deve ser removido da lista..."
+              />
+              <small>{excluindoMotivo.length}/500</small>
+            </label>
+            {excluindoErro && (
+              <p className="clients-delete-error" role="alert">
+                {excluindoErro}
+              </p>
+            )}
+            <div>
+              <button
+                type="button"
+                onClick={() => setExcluindoCliente(null)}
+                disabled={excluindoOcupado}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="clients-delete-confirm"
+                onClick={() => void confirmarExcluir()}
+                disabled={excluindoOcupado || excluindoMotivo.trim().length < 5}
+              >
+                {excluindoOcupado ? 'Excluindo…' : 'Excluir cliente'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {avisoTemporario && (
+        <div className="orders-toast" role="status">
+          {avisoTemporario}
+        </div>
+      )}
     </div>
-    {action !== null && actionPosition && data.items.find(client => client.id === action) && createPortal(<div className={`clients-action-menu${actionPosition.above ? ' menu-above' : ''}`} role="menu" aria-label={`Ações de ${data.items.find(client => client.id === action)?.name}`} style={{ left: actionPosition.left/escalaAtual(), top: actionPosition.top/escalaAtual(), '--arrow-left': `${actionPosition.arrowLeft/escalaAtual()}px` } as CSSProperties}>
-      <button type="button" role="menuitem" onClick={() => void editFromList(data.items.find(client => client.id === action)!)}><span className="clients-menu-icon edit"><Icon name="pencil" size={16}/></span>Editar cliente</button>
-      <button type="button" role="menuitem" onClick={() => viewClientOrders(data.items.find(client => client.id === action)!)}><span className="clients-menu-icon orders"><Icon name="clipboard" size={16}/></span>Ver ordens</button>
-      <button type="button" role="menuitem" className="clients-menu-delete" onClick={() => { setDeletingError(''); setDeletingReason(''); setDeletingClient(data.items.find(client => client.id === action)!); setAction(null); }}><span className="clients-menu-icon delete"><Icon name="trash" size={16}/></span>Excluir cliente</button>
-    </div>, document.body)}
-    {editingClient && <ModalEditarCliente client={editingClient} onClose={() => setEditingClient(null)} onSaved={async () => { setData(await buscarClientes()); setToast('Cliente atualizado.'); }}/>}
-    {deletingClient && <div className="clients-delete-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !deletingBusy) setDeletingClient(null); }}><section className="clients-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="clients-delete-title"><span className="clients-delete-icon"><Icon name="trash" size={22}/></span><h2 id="clients-delete-title">Excluir cliente?</h2><p><strong>{deletingClient.name}</strong> deixará de aparecer na lista de clientes. As motos e o histórico de ordens de serviço serão preservados.</p><label className="clients-delete-reason">Motivo da exclusão <span>(obrigatório)</span><textarea autoFocus maxLength={500} value={deletingReason} onChange={event => { setDeletingReason(event.target.value); setDeletingError(''); }} placeholder="Explique por que este cliente deve ser removido da lista..."/><small>{deletingReason.length}/500</small></label>{deletingError && <p className="clients-delete-error" role="alert">{deletingError}</p>}<div><button type="button" onClick={() => setDeletingClient(null)} disabled={deletingBusy}>Cancelar</button><button type="button" className="clients-delete-confirm" onClick={() => void confirmDelete()} disabled={deletingBusy || deletingReason.trim().length < 5}>{deletingBusy ? 'Excluindo…' : 'Excluir cliente'}</button></div></section></div>}
-    {toast && <div className="orders-toast" role="status">{toast}</div>}
-  </div>;
+  );
 }

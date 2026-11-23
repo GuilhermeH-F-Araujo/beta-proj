@@ -1,4 +1,4 @@
--- Vincular cliente existente somente se CPF e e-mail forem compatíveis.
+-- Vincular cliente existente somente se CPF e e-mail forem compativeis.
 grant update (email,cpf,telefone) on public.cliente to service_role;
 create or replace function public.admin_register_client(p_payload jsonb)
 returns integer language plpgsql security invoker set search_path = '' as $$

@@ -1,4 +1,4 @@
--- Exclusão lógica e registro atômico do motivo no log administrativo privado.
+-- Exclusao logica e registro atomico do motivo no log administrativo privado.
 create table if not exists public.client_admin_audit (
   id bigserial primary key,
   client_id integer not null references public.cliente(id_cliente),

@@ -1,139 +1,124 @@
+import { minutosInatividade, receberInatividadeConta } from './configuracoesSistema';
+import {
+  chaveLeitura,
+  chaveLeituraConta,
+  normalizarLeitura,
+  receberPreferenciasLeitura,
+  setUsuarioLeitura,
+  type PreferenciasLeitura,
+} from './preferenciasGlobais';
+import {
+  lerConfiguracaoNotificacoes,
+  padraoNotificacoes,
+  receberConfiguracaoNotificacoes,
+  salvarConfiguracaoNotificacoes,
+  setUsuarioNotificacoes,
+  type ConfiguracaoNotificacoes,
+} from './preferenciasNotificacoes';
 import {
   buscarPreferenciasConta,
+  concluirCarregamentoConta,
+  contaPreferenciasAtual,
+  enfileirarPreferenciaConta,
   iniciarSincronizacaoConta,
   preferenciaPendente,
-  concluirCarregamentoConta,
-  enfileirarPreferenciaConta,
   sinalizarFalhaSincronizacao,
-  contaPreferenciasAtual,
-} from "./sincronizacaoConta";
-import {
-  definirUsuarioLeitura,
-  receberPreferenciasLeitura,
-  chaveLeituraConta,
-  chaveLeitura,
-  normalizarLeitura,
-  type PreferenciasLeitura,
-} from "./preferenciasGlobais";
-import {
-  definirUsuarioNotificacoes,
-  lerConfigNotificacoes,
-  receberConfigNotificacoes,
-  salvarConfigNotificacoes,
-  padraoNotificacoes,
-  type ConfigNotificacoes,
-} from "./preferenciasNotificacoes";
-import {
-  receberInatividadeConta,
-  minutosInatividade,
-} from "./configuracoesSistema";
-import {
-  definirVersaoSomConta,
-  buscarSomPersonalizadoMeta,
-} from "./sonsNotificacao";
-const objeto = (data: unknown): data is Record<string, unknown> =>
-  !!data &&
-  typeof data === "object" &&
-  !Array.isArray(data) &&
-  Object.keys(data).length > 0;
-const lerCache = (key: string) => {
+} from './sincronizacaoConta';
+import { buscarSomPersonalizadoMeta, setVersaoSomConta } from './sonsNotificacao';
+const objeto = (dados: unknown): dados is Record<string, unknown> =>
+  !!dados && typeof dados === 'object' && !Array.isArray(dados) && Object.keys(dados).length > 0;
+const lerMemoria = (chave: string) => {
   try {
-    return localStorage.getItem(key);
+    return localStorage.getItem(chave);
   } catch {
     return null;
   }
 };
-const gravarCache = (key: string, value: string) => {
+const gravarMemoria = (chave: string, valor: string) => {
   try {
-    localStorage.setItem(key, value);
+    localStorage.setItem(chave, valor);
   } catch {}
 };
 let cargaAtual = 0;
 export async function carregarPreferenciasDaConta(id: string) {
   const token = ++cargaAtual;
-  const legado = lerCache(chaveLeitura);
+  const legado = lerMemoria(chaveLeitura);
   iniciarSincronizacaoConta(id);
-  definirUsuarioLeitura(id);
-  definirUsuarioNotificacoes(id);
-  const tinhaCache = lerCache(chaveLeituraConta(id) + "-confirmada") === "true";
-  const tinhaArquivo = !!lerCache(chaveLeituraConta(id));
+  setUsuarioLeitura(id);
+  setUsuarioNotificacoes(id);
+  const tinhaMemoria = lerMemoria(chaveLeituraConta(id) + '-confirmada') === 'true';
+  const tinhaArquivo = !!lerMemoria(chaveLeituraConta(id));
   let local: Partial<PreferenciasLeitura> = {};
   try {
-    local = JSON.parse(lerCache(chaveLeituraConta(id)) || "{}");
-    if (!tinhaArquivo && !lerCache("estacao-dono-preferencias-antigas")) {
-      local = JSON.parse(legado || "{}");
-      gravarCache("estacao-dono-preferencias-antigas", id);
+    local = JSON.parse(lerMemoria(chaveLeituraConta(id)) || '{}');
+    if (!tinhaArquivo && !lerMemoria('estacao-dono-preferencias-antigas')) {
+      local = JSON.parse(legado || '{}');
+      gravarMemoria('estacao-dono-preferencias-antigas', id);
     }
   } catch {}
   receberPreferenciasLeitura(local);
   try {
-    const remote = await buscarPreferenciasConta();
+    const remoto = await buscarPreferenciasConta();
     if (token !== cargaAtual || contaPreferenciasAtual() !== id) return;
-    if (remote.conta !== id)
-      throw new Error(
-        "A conta mudou. Entre novamente para carregar suas preferências.",
-      );
-    const pendente = preferenciaPendente("leitura");
-    let leitura = pendente || remote.leitura;
+    if (remoto.conta !== id)
+      throw new Error('A conta mudou. Entre novamente para carregar suas preferências.');
+    const pendente = preferenciaPendente('leitura');
+    let leitura = pendente || remoto.leitura;
     if (!objeto(leitura)) {
       leitura = normalizarLeitura(local);
-      enfileirarPreferenciaConta("leitura", leitura);
+      enfileirarPreferenciaConta('leitura', leitura);
     }
     receberPreferenciasLeitura(leitura as Partial<PreferenciasLeitura>);
-    const localNotificacoes = lerConfigNotificacoes();
-    const notificacoes =
-      preferenciaPendente("notificacoes") || remote.notificacoes;
+    const localNotificacoes = lerConfiguracaoNotificacoes();
+    const notificacoes = preferenciaPendente('notificacoes') || remoto.notificacoes;
     if (objeto(notificacoes))
-      receberConfigNotificacoes(notificacoes as ConfigNotificacoes);
+      receberConfiguracaoNotificacoes(notificacoes as ConfiguracaoNotificacoes);
     else {
-      receberConfigNotificacoes(localNotificacoes || padraoNotificacoes());
-      enfileirarPreferenciaConta("notificacoes", lerConfigNotificacoes());
+      receberConfiguracaoNotificacoes(localNotificacoes || padraoNotificacoes());
+      enfileirarPreferenciaConta('notificacoes', lerConfiguracaoNotificacoes());
     }
-    const seguranca = (preferenciaPendente("seguranca") ||
-      remote.seguranca) as { inatividade?: number } | null;
+    const seguranca = (preferenciaPendente('seguranca') || remoto.seguranca) as {
+      inatividade?: number;
+    } | null;
     const inatividade =
       seguranca && [0, 10, 20, 30, 60].includes(seguranca.inatividade ?? -1)
         ? seguranca.inatividade!
         : minutosInatividade(id);
     receberInatividadeConta(id, inatividade);
-    if (!objeto(seguranca))
-      enfileirarPreferenciaConta("seguranca", { inatividade });
-    definirVersaoSomConta(remote.somVersao);
-    const config = lerConfigNotificacoes();
+    if (!objeto(seguranca)) enfileirarPreferenciaConta('seguranca', { inatividade });
+    setVersaoSomConta(remoto.somVersao);
+    const configuracao = lerConfiguracaoNotificacoes();
     if (
-      config.toque === "personalizado" ||
-      Object.values(config.eventos).some((r) => r.toque === "personalizado")
+      configuracao.toque === 'personalizado' ||
+      Object.values(configuracao.eventos).some(
+        (resultadoAtual) => resultadoAtual.toque === 'personalizado',
+      )
     ) {
       const som = await buscarSomPersonalizadoMeta();
       if (token !== cargaAtual || contaPreferenciasAtual() !== id) return;
       if (!som) {
-        const next = {
-          ...config,
-          toque:
-            config.toque === "personalizado"
-              ? ("brisa" as const)
-              : config.toque,
-          eventos: { ...config.eventos },
+        const continuar = {
+          ...configuracao,
+          toque: configuracao.toque === 'personalizado' ? ('brisa' as const) : configuracao.toque,
+          eventos: { ...configuracao.eventos },
         };
-        for (const [tipo, regra] of Object.entries(next.eventos))
-          if (regra.toque === "personalizado")
-            next.eventos[tipo as keyof ConfigNotificacoes["eventos"]] = {
+        for (const [tipo, regra] of Object.entries(continuar.eventos))
+          if (regra.toque === 'personalizado')
+            continuar.eventos[tipo as keyof ConfiguracaoNotificacoes['eventos']] = {
               ...regra,
-              toque: "padrao",
+              toque: 'padrao',
             };
-        salvarConfigNotificacoes(next);
+        salvarConfiguracaoNotificacoes(continuar);
       }
     }
-    gravarCache(chaveLeituraConta(id) + "-confirmada", "true");
+    gravarMemoria(chaveLeituraConta(id) + '-confirmada', 'true');
     concluirCarregamentoConta();
-    window.dispatchEvent(new Event("account-preferences-loaded"));
-  } catch (error) {
+    window.dispatchEvent(new Event('account-preferences-loaded'));
+  } catch (erro) {
     if (token !== cargaAtual || contaPreferenciasAtual() !== id) return;
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Não foi possível carregar suas preferências.";
-    sinalizarFalhaSincronizacao(message);
-    if (!tinhaCache || message.includes("A conta mudou")) throw error;
+    const mensagem =
+      erro instanceof Error ? erro.message : 'Não foi possível carregar suas preferências.';
+    sinalizarFalhaSincronizacao(mensagem);
+    if (!tinhaMemoria || mensagem.includes('A conta mudou')) throw erro;
   }
 }

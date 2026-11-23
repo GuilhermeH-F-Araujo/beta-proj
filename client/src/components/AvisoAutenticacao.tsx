@@ -6,23 +6,32 @@ type Props = {
   onClose: () => void;
 };
 
-export default function AvisoAutenticacao({ type, message, onClose }: Props) {
-  const notice = (
-    <div className={`auth-notice ${type}`} role={type === 'error' ? 'alert' : 'status'}>
+export default function AvisoAutenticacao({
+  type: tipo,
+  message: mensagem,
+  onClose: aoFechar,
+}: Props) {
+  const aviso = (
+    <div className={`auth-notice ${tipo}`} role={tipo === 'error' ? 'alert' : 'status'}>
       <div className="auth-notice-icon" aria-hidden="true">
-        {type === 'error' ? '!' : '✓'}
+        {tipo === 'error' ? '!' : '✓'}
       </div>
       <div className="auth-notice-copy">
-        <strong>{type === 'error' ? 'Não foi possível continuar' : 'Tudo certo'}</strong>
-        <span>{message}</span>
+        <strong>{tipo === 'error' ? 'Não foi possível continuar' : 'Tudo certo'}</strong>
+        <span>{mensagem}</span>
       </div>
-      <button type="button" className="auth-notice-close" onClick={onClose} aria-label="Fechar mensagem">
+      <button
+        type="button"
+        className="auth-notice-close"
+        onClick={aoFechar}
+        aria-label="Fechar mensagem"
+      >
         ×
       </button>
     </div>
   );
 
-  if (typeof document === 'undefined') return notice;
+  if (typeof document === 'undefined') return aviso;
 
-  return createPortal(notice, document.body);
+  return createPortal(aviso, document.body);
 }

@@ -1,266 +1,479 @@
 import { useEffect, useState } from 'react';
 import { ilustracaoModelo } from './ilustracoesModelos';
 
-export type StatusMiniatura = 'pendente' | 'processando' | 'aguardando_cota' | 'tentar_novamente' | 'aguardando_revisao' | 'concluido';
+export type SituacaoMiniatura =
+  | 'pendente'
+  | 'processando'
+  | 'aguardando_cota'
+  | 'tentar_novamente'
+  | 'aguardando_revisao'
+  | 'concluido';
 
-const API_URL = (import.meta.env?.VITE_API_URL || '').replace(/\/$/, '');
-async function imageApi<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, { method: body ? 'POST' : 'GET', credentials: 'include', cache: 'no-store', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
-  const data = await response.json().catch(() => null) as (T & { message?: string }) | null;
-  if (!response.ok) throw new Error(data?.message || `Erro ao preparar miniatura (HTTP ${response.status}).`);
-  return data as T;
+const API_URL = ((import.meta.env?.VITE_URL_API ?? import.meta.env?.VITE_API_URL) || '').replace(
+  /\/$/,
+  '',
+);
+// Uma unica notificacao atende os cards e as paginas sem exigir recarregamento.
+const observadoresMiniaturas = new Set<() => void>();
+let relogioMiniaturas: ReturnType<typeof setInterval> | null = null;
+function useRevisaoMiniaturas() {
+  const [revisao, setRevisao] = useState(0);
+  useEffect(() => {
+    const atualizar = () => setRevisao((atual) => atual + 1);
+    observadoresMiniaturas.add(atualizar);
+    window.addEventListener('miniaturas-publicadas', atualizar);
+    if (!relogioMiniaturas)
+      relogioMiniaturas = setInterval(() => {
+        if (document.visibilityState === 'visible')
+          observadoresMiniaturas.forEach((acao) => acao());
+      }, 60_000);
+    return () => {
+      observadoresMiniaturas.delete(atualizar);
+      window.removeEventListener('miniaturas-publicadas', atualizar);
+      if (!observadoresMiniaturas.size && relogioMiniaturas) {
+        clearInterval(relogioMiniaturas);
+        relogioMiniaturas = null;
+      }
+    };
+  }, []);
+  return revisao;
 }
-export function buscarModelosMotocicleta() { return imageApi<{ models: string[] }>('/api/motorcycle-models'); }
-export function gerarRascunhoMotocicleta(id: number, model: string, notes: string, references: string[], family?:string) {
-  return imageApi<{ draftId: string; model:string; image: string }>(`/api/orders/${id}/model-preview/draft`, { model, family, notes, references });
-}
-export function aprovarRascunhoMotocicleta(id: number, draftId: string) {
-  return imageApi<{ ok: true }>(`/api/orders/${id}/model-preview/approve`, { draftId });
-}
-export type PesquisaModelo={title:string;summary:string;url:string;matched:boolean;warning:string};
-export type SugestaoModelo={name:string;source:'catalog'|'wikipedia';url?:string};
-export function buscarPesquisaModelo(model:string) {
-  return imageApi<{formattedModel:string;research:PesquisaModelo|null;suggestions:SugestaoModelo[]}>(`/api/motorcycle-models/research?model=${encodeURIComponent(model)}`);
-}
-export function buscarCandidatoDaFila(id:number) {
-  return imageApi<{candidate:string|null;status:StatusMiniatura|null}>(`/api/orders/${id}/model-preview/candidate`);
-}
-export function buscarCandidatoMoto(id:number){return imageApi<{candidate:string|null;status:StatusMiniatura|null}>(`/api/motorcycles/${id}/model-preview/candidate`);}
-export function aprovarCandidatoMoto(id:number){return imageApi<{ok:true}>(`/api/motorcycles/${id}/model-preview/candidate/approve`,{confirmed:true});}
-export function gerarRascunhoMoto(id:number,model:string,notes:string,references:string[]){
-  return imageApi<{draftId:string;model:string;image:string}>(`/api/motorcycles/${id}/model-preview/draft`,{model,family:model,notes,references});
-}
-export function aprovarRascunhoMoto(id:number,draftId:string){return imageApi<{ok:true}>(`/api/motorcycles/${id}/model-preview/approve`,{draftId});}
-export function aprovarCandidatoDaFila(id:number) {
-  return imageApi<{ok:true}>(`/api/orders/${id}/model-preview/candidate/approve`,{confirmed:true});
-}
-type Origin = 'catalog' | 'generated' | 'missing';
+type Origem = 'catalog' | 'generated' | 'missing';
 
-type Paint = { rgb: [number, number, number]; mode?: 'white' | 'black' | 'silver' };
-function paintFor(color: string | null): Paint | null {
-  const value = (color || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  if (!value) return null;
-  if (/branc/.test(value)) return { rgb: [255, 255, 255], mode: 'white' };
-  if (/pret|negr/.test(value)) return { rgb: [18, 22, 27], mode: 'black' };
-  if (/prat|cinz|grafite/.test(value)) return { rgb: [172, 181, 191], mode: 'silver' };
-  if (/rox|violet|lilas/.test(value)) return { rgb: [136, 60, 184] };
-  if (/ros|pink/.test(value)) return { rgb: [236, 84, 159] };
-  if (/marrom|cafe/.test(value)) return { rgb: [126, 76, 42] };
-  if (/dourad|ouro/.test(value)) return { rgb: [194, 146, 49] };
-  if (/bege|creme/.test(value)) return { rgb: [195, 172, 130] };
-  if (/ciano|turquesa/.test(value)) return { rgb: [28, 168, 178] };
-  if (/vermelh|bordo/.test(value)) return { rgb: [220, 30, 42] };
-  if (/azul/.test(value)) return { rgb: [30, 83, 193] };
-  if (/verde/.test(value)) return { rgb: [40, 137, 67] };
-  if (/amarel/.test(value)) return { rgb: [246, 179, 28] };
-  if (/laranj/.test(value)) return { rgb: [236, 106, 25] };
-  // Cores específicas cadastradas como #8844cc, rgb(...), hsl(...) ou nomes CSS.
-  if (typeof document !== 'undefined' && CSS.supports('color', value)) {
-    const swatch = document.createElement('canvas'); swatch.width = swatch.height = 1;
-    const context = swatch.getContext('2d');
-    if (context) { context.fillStyle = value; context.fillRect(0, 0, 1, 1); const rgb = context.getImageData(0, 0, 1, 1).data; return { rgb: [rgb[0], rgb[1], rgb[2]] }; }
+type Pintura = { rgb: [number, number, number]; mode?: 'white' | 'black' | 'silver' };
+function pintarPara(cor: string | null): Pintura | null {
+  const valor = (cor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+  if (!valor) return null;
+  if (/branc/.test(valor)) return { rgb: [255, 255, 255], mode: 'white' };
+  if (/pret|negr/.test(valor)) return { rgb: [18, 22, 27], mode: 'black' };
+  if (/prat|cinz|grafite/.test(valor)) return { rgb: [172, 181, 191], mode: 'silver' };
+  if (/rox|violet|lilas/.test(valor)) return { rgb: [136, 60, 184] };
+  if (/ros|pink/.test(valor)) return { rgb: [236, 84, 159] };
+  if (/marrom|cafe/.test(valor)) return { rgb: [126, 76, 42] };
+  if (/dourad|ouro/.test(valor)) return { rgb: [194, 146, 49] };
+  if (/bege|creme/.test(valor)) return { rgb: [195, 172, 130] };
+  if (/ciano|turquesa/.test(valor)) return { rgb: [28, 168, 178] };
+  if (/vermelh|bordo/.test(valor)) return { rgb: [220, 30, 42] };
+  if (/azul/.test(valor)) return { rgb: [30, 83, 193] };
+  if (/verde/.test(valor)) return { rgb: [40, 137, 67] };
+  if (/amarel/.test(valor)) return { rgb: [246, 179, 28] };
+  if (/laranj/.test(valor)) return { rgb: [236, 106, 25] };
+  // Cores especificas cadastradas como #8844cc, rgb(...), hsl(...) ou nomes CSS.
+  if (typeof document !== 'undefined' && CSS.supports('color', valor)) {
+    const amostraCor = document.createElement('canvas');
+    amostraCor.width = amostraCor.height = 1;
+    const contexto = amostraCor.getContext('2d');
+    if (contexto) {
+      contexto.fillStyle = valor;
+      contexto.fillRect(0, 0, 1, 1);
+      const rgb = contexto.getImageData(0, 0, 1, 1).data;
+      return { rgb: [rgb[0], rgb[1], rgb[2]] };
+    }
   }
   return null;
 }
 
-function hue(r: number, g: number, b: number) {
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
-  if (!delta) return 0;
-  const raw = max === r ? (g - b) / delta : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
-  return (raw * 60 + 360) % 360;
+function matiz(resultadoAtual: number, grupoAtual: number, segundoElemento: number) {
+  const maximo = Math.max(resultadoAtual, grupoAtual, segundoElemento);
+  const minimo = Math.min(resultadoAtual, grupoAtual, segundoElemento);
+  const diferenca = maximo - minimo;
+  if (!diferenca) return 0;
+  const bruto =
+    maximo === resultadoAtual
+      ? (grupoAtual - segundoElemento) / diferenca
+      : maximo === grupoAtual
+        ? (segundoElemento - resultadoAtual) / diferenca + 2
+        : (resultadoAtual - grupoAtual) / diferenca + 4;
+  return (bruto * 60 + 360) % 360;
 }
 
-// Só altera a pintura vermelha/azul saturada; transparência, pneus e metal permanecem intactos.
-export function recolorirPintura(pixels: Uint8ClampedArray, sourceHue: number, target: Paint | null) {
-  if (!target) return;
-  for (let i = 0; i < pixels.length; i += 4) {
-    const [r, g, b, alpha] = [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]];
-    if (alpha < 40) continue;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    if (max < 55 || (max - min) / max < 0.36) continue;
-    const distance = Math.abs(hue(r, g, b) - sourceHue);
-    if (Math.min(distance, 360 - distance) > 42) continue;
-    const brightness = max / 255;
-    if (target.mode === 'white') {
-      const shade = Math.round(150 + brightness * 105);
-      pixels[i] = shade; pixels[i + 1] = shade; pixels[i + 2] = shade;
-    } else if (target.mode === 'black') {
-      const shade = Math.round(12 + brightness * 47);
-      pixels[i] = shade; pixels[i + 1] = shade; pixels[i + 2] = shade + 2;
-    } else if (target.mode === 'silver') {
-      const shade = Math.round(86 + brightness * 130);
-      pixels[i] = shade; pixels[i + 1] = shade + 3; pixels[i + 2] = shade + 7;
+// So altera a pintura vermelha/azul saturada; transparencia, pneus e metal permanecem intactos.
+export function recolorirPintura(
+  pixels: Uint8ClampedArray,
+  matizOrigem: number,
+  destino: Pintura | null,
+) {
+  if (!destino) return;
+  for (let indice = 0; indice < pixels.length; indice += 4) {
+    const [resultadoAtual, grupoAtual, segundoElemento, opacidade] = [
+      pixels[indice],
+      pixels[indice + 1],
+      pixels[indice + 2],
+      pixels[indice + 3],
+    ];
+    if (opacidade < 40) continue;
+    const maximo = Math.max(resultadoAtual, grupoAtual, segundoElemento);
+    const minimo = Math.min(resultadoAtual, grupoAtual, segundoElemento);
+    if (maximo < 55 || (maximo - minimo) / maximo < 0.36) continue;
+    const distancia = Math.abs(matiz(resultadoAtual, grupoAtual, segundoElemento) - matizOrigem);
+    if (Math.min(distancia, 360 - distancia) > 42) continue;
+    const brilho = maximo / 255;
+    if (destino.mode === 'white') {
+      const tonalidade = Math.round(150 + brilho * 105);
+      pixels[indice] = tonalidade;
+      pixels[indice + 1] = tonalidade;
+      pixels[indice + 2] = tonalidade;
+    } else if (destino.mode === 'black') {
+      const tonalidade = Math.round(12 + brilho * 47);
+      pixels[indice] = tonalidade;
+      pixels[indice + 1] = tonalidade;
+      pixels[indice + 2] = tonalidade + 2;
+    } else if (destino.mode === 'silver') {
+      const tonalidade = Math.round(86 + brilho * 130);
+      pixels[indice] = tonalidade;
+      pixels[indice + 1] = tonalidade + 3;
+      pixels[indice + 2] = tonalidade + 7;
     } else {
-      const factor = 0.3 + brightness * 0.8;
-      pixels[i] = Math.min(255, target.rgb[0] * factor);
-      pixels[i + 1] = Math.min(255, target.rgb[1] * factor);
-      pixels[i + 2] = Math.min(255, target.rgb[2] * factor);
+      const fator = 0.3 + brilho * 0.8;
+      pixels[indice] = Math.min(255, destino.rgb[0] * fator);
+      pixels[indice + 1] = Math.min(255, destino.rgb[1] * fator);
+      pixels[indice + 2] = Math.min(255, destino.rgb[2] * fator);
     }
   }
 }
 
-// O FLUX devolve JPEG sem canal alfa. Remove apenas o branco conectado às bordas,
-// preservando as peças claras isoladas no interior da silhueta da moto.
-export function removerFundoBranco(pixels: Uint8ClampedArray, width: number, height: number) {
-  const count = width * height;
-  const visited = new Uint8Array(count);
-  const queue = new Int32Array(count);
-  let head = 0, tail = 0;
-  const enqueue = (index: number) => {
-    if (visited[index]) return;
-    const offset = index * 4;
-    const r = pixels[offset], g = pixels[offset + 1], b = pixels[offset + 2];
-    if (Math.min(r, g, b) < 229 || Math.max(r, g, b) - Math.min(r, g, b) > 23) return;
-    visited[index] = 1; queue[tail++] = index;
+// O FLUX devolve JPEG sem canal alfa. Remove apenas o branco conectado as bordas,
+// preservando as pecas claras isoladas no interior da silhueta da moto.
+export function removerFundoBranco(pixels: Uint8ClampedArray, largura: number, altura: number) {
+  const quantidade = largura * altura;
+  const visitados = new Uint8Array(quantidade);
+  const fila = new Int32Array(quantidade);
+  let inicioFila = 0;
+  let fimFila = 0;
+  const enfileirar = (indiceLocal: number) => {
+    if (visitados[indiceLocal]) return;
+    const deslocamento = indiceLocal * 4;
+    const resultadoAtual = pixels[deslocamento];
+    const grupoAtual = pixels[deslocamento + 1];
+    const segundoElemento = pixels[deslocamento + 2];
+    if (
+      Math.min(resultadoAtual, grupoAtual, segundoElemento) < 229 ||
+      Math.max(resultadoAtual, grupoAtual, segundoElemento) -
+        Math.min(resultadoAtual, grupoAtual, segundoElemento) >
+        23
+    )
+      return;
+    visitados[indiceLocal] = 1;
+    fila[fimFila++] = indiceLocal;
   };
-  for (let x = 0; x < width; x++) { enqueue(x); enqueue((height - 1) * width + x); }
-  for (let y = 0; y < height; y++) { enqueue(y * width); enqueue(y * width + width - 1); }
-  while (head < tail) {
-    const index = queue[head++];
-    pixels[index * 4 + 3] = 0;
-    const x = index % width;
-    if (x > 0) enqueue(index - 1);
-    if (x < width - 1) enqueue(index + 1);
-    if (index >= width) enqueue(index - width);
-    if (index < count - width) enqueue(index + width);
+  for (let itemAtual = 0; itemAtual < largura; itemAtual++) {
+    enfileirar(itemAtual);
+    enfileirar((altura - 1) * largura + itemAtual);
+  }
+  for (let outroItem = 0; outroItem < altura; outroItem++) {
+    enfileirar(outroItem * largura);
+    enfileirar(outroItem * largura + largura - 1);
+  }
+  while (inicioFila < fimFila) {
+    const indiceLocal = fila[inicioFila++];
+    pixels[indiceLocal * 4 + 3] = 0;
+    const itemAtual = indiceLocal % largura;
+    if (itemAtual > 0) enfileirar(indiceLocal - 1);
+    if (itemAtual < largura - 1) enfileirar(indiceLocal + 1);
+    if (indiceLocal >= largura) enfileirar(indiceLocal - largura);
+    if (indiceLocal < quantidade - largura) enfileirar(indiceLocal + largura);
   }
 }
 
-async function coloredThumbnail(blob: Blob, sourceHue: number, color: string | null, trimMargins = false): Promise<Blob> {
+async function miniaturaColorida(
+  blob: Blob,
+  matizOrigem: number,
+  cor: string | null,
+  recortarMargens = false,
+): Promise<Blob> {
   const bitmap = await createImageBitmap(blob);
-  const scale = Math.min(1, 768 / bitmap.width);
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) throw new Error('Canvas indisponível');
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const escala = Math.min(1, 768 / bitmap.width);
+  const telaDesenho = document.createElement('canvas');
+  telaDesenho.width = Math.max(1, Math.round(bitmap.width * escala));
+  telaDesenho.height = Math.max(1, Math.round(bitmap.height * escala));
+  const contexto = telaDesenho.getContext('2d', { willReadFrequently: true });
+  if (!contexto) throw new Error('Canvas indisponível');
+  contexto.drawImage(bitmap, 0, 0, telaDesenho.width, telaDesenho.height);
   bitmap.close();
-  const image = context.getImageData(0, 0, canvas.width, canvas.height);
-  const cornerIsWhite = image.data[3] === 255 && Math.min(image.data[0], image.data[1], image.data[2]) > 229;
-  if (blob.type === 'image/jpeg' || cornerIsWhite) removerFundoBranco(image.data, canvas.width, canvas.height);
-  recolorirPintura(image.data, sourceHue, paintFor(color));
-  context.putImageData(image, 0, 0);
-  let output = canvas;
-  if (trimMargins) {
-    let left = canvas.width, top = canvas.height, right = -1, bottom = -1;
-    for (let y = 0; y < canvas.height; y++) {
-      for (let x = 0; x < canvas.width; x++) {
-        if (image.data[(y * canvas.width + x) * 4 + 3] < 96) continue;
-        left = Math.min(left, x); top = Math.min(top, y);
-        right = Math.max(right, x); bottom = Math.max(bottom, y);
+  const imagem = contexto.getImageData(0, 0, telaDesenho.width, telaDesenho.height);
+  const cornerEhWhite =
+    imagem.data[3] === 255 && Math.min(imagem.data[0], imagem.data[1], imagem.data[2]) > 229;
+  if (blob.type === 'image/jpeg' || cornerEhWhite)
+    removerFundoBranco(imagem.data, telaDesenho.width, telaDesenho.height);
+  recolorirPintura(imagem.data, matizOrigem, pintarPara(cor));
+  contexto.putImageData(imagem, 0, 0);
+  let saida = telaDesenho;
+  if (recortarMargens) {
+    let esquerda = telaDesenho.width;
+    let superior = telaDesenho.height;
+    let direita = -1;
+    let inferior = -1;
+    for (let outroItem = 0; outroItem < telaDesenho.height; outroItem++) {
+      for (let itemAtual = 0; itemAtual < telaDesenho.width; itemAtual++) {
+        if (imagem.data[(outroItem * telaDesenho.width + itemAtual) * 4 + 3] < 96) continue;
+        esquerda = Math.min(esquerda, itemAtual);
+        superior = Math.min(superior, outroItem);
+        direita = Math.max(direita, itemAtual);
+        inferior = Math.max(inferior, outroItem);
       }
     }
-    if (right >= left && bottom >= top) {
-      const padding = Math.max(8, Math.round(Math.max(right - left, bottom - top) * 0.06));
-      left = Math.max(0, left - padding); top = Math.max(0, top - padding);
-      right = Math.min(canvas.width - 1, right + padding);
-      bottom = Math.min(canvas.height - 1, bottom + padding);
-      const cropped = document.createElement('canvas');
-      cropped.width = right - left + 1; cropped.height = bottom - top + 1;
-      const croppedContext = cropped.getContext('2d');
-      if (croppedContext) {
-        croppedContext.drawImage(canvas, left, top, cropped.width, cropped.height, 0, 0, cropped.width, cropped.height);
-        output = cropped;
+    if (direita >= esquerda && inferior >= superior) {
+      const espacamento = Math.max(
+        8,
+        Math.round(Math.max(direita - esquerda, inferior - superior) * 0.06),
+      );
+      esquerda = Math.max(0, esquerda - espacamento);
+      superior = Math.max(0, superior - espacamento);
+      direita = Math.min(telaDesenho.width - 1, direita + espacamento);
+      inferior = Math.min(telaDesenho.height - 1, inferior + espacamento);
+      const recortado = document.createElement('canvas');
+      recortado.width = direita - esquerda + 1;
+      recortado.height = inferior - superior + 1;
+      const recortadoContexto = recortado.getContext('2d');
+      if (recortadoContexto) {
+        recortadoContexto.drawImage(
+          telaDesenho,
+          esquerda,
+          superior,
+          recortado.width,
+          recortado.height,
+          0,
+          0,
+          recortado.width,
+          recortado.height,
+        );
+        saida = recortado;
       }
     }
   }
-  return new Promise((resolve, reject) => output.toBlob(result => result ? resolve(result) : reject(new Error('Falha ao converter miniatura')), 'image/webp', 0.85));
+  return new Promise((resolver, rejeitar) =>
+    saida.toBlob(
+      (resultado) =>
+        resultado ? resolver(resultado) : rejeitar(new Error('Falha ao converter miniatura')),
+      'image/webp',
+      0.85,
+    ),
+  );
 }
 
-export function useMiniaturaMotocicleta(orderId: number, model: string | undefined, color: string | null | undefined, revision = 0) {
-  const [image, setImage] = useState<{ url: string | null; origin: Origin; loading: boolean; error: string | null }>({ url: null, origin: 'missing', loading: true, error: null });
+export function useMiniaturaMotocicleta(
+  idOrdem: number,
+  modelo: string | undefined,
+  cor: string | null | undefined,
+  revisao = 0,
+) {
+  const atualizacao = useRevisaoMiniaturas();
+  const [imagem, setImagem] = useState<{
+    url: string | null;
+    origin: Origem;
+    loading: boolean;
+    error: string | null;
+  }>({ url: null, origin: 'missing', loading: true, error: null });
   useEffect(() => {
-    let active = true;
-    let objectUrl: string | null = null;
-    const controller = new AbortController();
-    if (!model || !Number.isSafeInteger(orderId)) {
-      setImage({ url: null, origin: 'missing', loading: false, error: null });
-      return () => { active = false; controller.abort(); };
+    let ativo = true;
+    let urlObjeto: string | null = null;
+    const controlador = new AbortController();
+    if (!modelo || !Number.isSafeInteger(idOrdem)) {
+      setImagem({ url: null, origin: 'missing', loading: false, error: null });
+      return () => {
+        ativo = false;
+        controlador.abort();
+      };
     }
-    setImage({ url: null, origin: 'missing', loading: true, error: null });
-    const catalog = ilustracaoModelo(model);
+    setImagem({ url: null, origin: 'missing', loading: true, error: null });
+    const catalogo = ilustracaoModelo(modelo);
     (async () => {
-      let origin: Origin = 'generated';
-      // A miniatura aprovada pelo administrador prevalece inclusive sobre o catálogo local.
+      let origem: Origem = 'generated';
+      // A miniatura aprovada pelo administrador prevalece inclusive sobre o catalogo local.
       let response: Response;
       while (true) {
-        response = await fetch(`${API_URL}/api/orders/${orderId}/model-preview`, {
-          credentials: 'include', cache: 'no-store', signal: controller.signal,
+        response = await fetch(`${API_URL}/api/orders/${idOrdem}/model-preview`, {
+          credentials: 'include',
+          cache: 'no-store',
+          signal: controlador.signal,
         });
         if (response.status !== 202) break;
-        const job = await response.json().catch(() => ({})) as { status?: StatusMiniatura; nextRetryAt?: string };
-        if (job.status === 'aguardando_revisao') {
-          if (active) setImage({url:null,origin:'missing',loading:false,error:'Prévia criada. Aguardando revisão do administrador.'});
+        const tarefa = (await response.json().catch(() => ({}))) as {
+          status?: SituacaoMiniatura;
+          nextRetryAt?: string;
+        };
+        if (tarefa.status === 'aguardando_revisao') {
+          if (ativo)
+            setImagem({
+              url: null,
+              origin: 'missing',
+              loading: false,
+              error: 'Prévia criada. Aguardando revisão do administrador.',
+            });
           return;
         }
-        if (active) setImage({ url:null,origin:'missing',loading:true,error:job.status === 'aguardando_cota' ? 'Aguardando renovação da cota para criar a miniatura…' : 'Miniatura na fila de geração…' });
-        await new Promise(resolve => setTimeout(resolve, job.status === 'aguardando_cota' ? 300_000 : 5_000));
-        if (!active) return;
+        if (ativo)
+          setImagem({
+            url: null,
+            origin: 'missing',
+            loading: true,
+            error:
+              tarefa.status === 'aguardando_cota'
+                ? 'Aguardando renovação da cota para criar a miniatura…'
+                : 'Miniatura na fila de geração…',
+          });
+        await new Promise((resolver) =>
+          setTimeout(resolver, tarefa.status === 'aguardando_cota' ? 300_000 : 5_000),
+        );
+        if (!ativo) return;
       }
-      if (!response.ok && catalog) {
-        response = await fetch(catalog.src, { signal: controller.signal });
-        origin = 'catalog';
+      if (!response.ok && catalogo) {
+        response = await fetch(catalogo.src, { signal: controlador.signal });
+        origem = 'catalog';
       }
       if (!response.ok) {
-        const details = await response.json().catch(() => null) as { message?: string } | null;
-        throw new Error(details?.message || `Miniatura indisponível (HTTP ${response.status}).`);
+        const detalhes = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(detalhes?.message || `Miniatura indisponível (HTTP ${response.status}).`);
       }
-      if (!(response.headers.get('content-type') || '').startsWith('image/')) throw new Error('Miniatura indisponível');
-      const thumb = await coloredThumbnail(await response.blob(), origin === 'catalog' && !catalog?.src.includes('urbana-160') ? 217 : 0, color || 'prata');
-      if (!active) return;
-      objectUrl = URL.createObjectURL(thumb);
-      setImage({ url: objectUrl, origin, loading: false, error: null });
-    })().catch(error => { if (active) setImage({ url: null, origin: 'missing', loading: false,
-      error: error instanceof Error ? error.message : 'Não foi possível preparar a miniatura.' }); });
-    return () => { active = false; controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [orderId, model, color, revision]);
-  return image;
+      if (!(response.headers.get('content-type') || '').startsWith('image/'))
+        throw new Error('Miniatura indisponível');
+      const arquivo = await response.blob();
+      const miniatura =
+        response.headers.get('x-preview-origin') === 'published'
+          ? arquivo
+          : await miniaturaColorida(
+              arquivo,
+              origem === 'catalog' && !catalogo?.src.includes('urbana-160') ? 217 : 0,
+              cor || 'prata',
+            );
+      if (!ativo) return;
+      urlObjeto = URL.createObjectURL(miniatura);
+      setImagem({ url: urlObjeto, origin: origem, loading: false, error: null });
+    })().catch((erro) => {
+      if (ativo)
+        setImagem({
+          url: null,
+          origin: 'missing',
+          loading: false,
+          error: erro instanceof Error ? erro.message : 'Não foi possível preparar a miniatura.',
+        });
+    });
+    return () => {
+      ativo = false;
+      controlador.abort();
+      if (urlObjeto) URL.revokeObjectURL(urlObjeto);
+    };
+  }, [idOrdem, modelo, cor, revisao, atualizacao]);
+  return imagem;
 }
 
-export function useMiniaturaModeloMotocicleta(model:string,color:string|null,revision=0){
-  const [image,setImage]=useState<string|null>(null);
-  useEffect(()=>{
-    setImage(null);
-    if(!model)return;
-    let active=true;let url:string|null=null;
-    const controller=new AbortController();
-    const catalog=ilustracaoModelo(model);
-    (async()=>{
-      let response=await fetch(`${API_URL}/api/motorcycle-thumbnails/image?model=${encodeURIComponent(model)}`,{
-        credentials:'include',cache:'no-store',signal:controller.signal,
-      });
-      let origin:'generated'|'catalog'='generated';
-      if((!response.ok||response.status===202)&&catalog){response=await fetch(catalog.src,{signal:controller.signal});origin='catalog';}
-      if(!response.ok||response.status===202||!(response.headers.get('content-type')||'').startsWith('image/'))return;
-      const blob=await coloredThumbnail(await response.blob(),origin==='catalog'&&!catalog?.src.includes('urbana-160')?217:0,color);
-      if(!active)return;url=URL.createObjectURL(blob);setImage(url);
-    })().catch(()=>{});
-    return()=>{active=false;controller.abort();if(url)URL.revokeObjectURL(url);};
-  },[model,color,revision]);
-  return image;
+export function useMiniaturaModeloMotocicleta(
+  modelo: string,
+  cor: string | null,
+  revisao = 0,
+  motoId?: number,
+) {
+  const atualizacao = useRevisaoMiniaturas();
+  const [imagem, setImagem] = useState<string | null>(null);
+  useEffect(() => {
+    setImagem(null);
+    if (!modelo) return;
+    let ativo = true;
+    let url: string | null = null;
+    const controlador = new AbortController();
+    const catalogo = ilustracaoModelo(modelo);
+    (async () => {
+      const respostaPublicada = await fetch(
+        `${API_URL}/api/miniaturas/publicada?modelo=${encodeURIComponent(modelo)}${motoId ? `&motoId=${motoId}` : ''}`,
+        { credentials: 'include', cache: 'no-store', signal: controlador.signal },
+      );
+      if (respostaPublicada.ok) {
+        const publicada = (await respostaPublicada.json()) as { imagem: string | null };
+        if (publicada.imagem) {
+          const arquivo = await fetch(publicada.imagem, { signal: controlador.signal });
+          if (arquivo.ok) {
+            const blob = await arquivo.blob();
+            if (ativo) {
+              url = URL.createObjectURL(blob);
+              setImagem(url);
+            }
+            return;
+          }
+        }
+      }
+      let response = await fetch(
+        `${API_URL}/api/motorcycle-thumbnails/image?model=${encodeURIComponent(modelo)}`,
+        {
+          credentials: 'include',
+          cache: 'no-store',
+          signal: controlador.signal,
+        },
+      );
+      let origem: 'generated' | 'catalog' = 'generated';
+      if ((!response.ok || response.status === 202) && catalogo) {
+        response = await fetch(catalogo.src, { signal: controlador.signal });
+        origem = 'catalog';
+      }
+      if (
+        !response.ok ||
+        response.status === 202 ||
+        !(response.headers.get('content-type') || '').startsWith('image/')
+      )
+        return;
+      const blob = await miniaturaColorida(
+        await response.blob(),
+        origem === 'catalog' && !catalogo?.src.includes('urbana-160') ? 217 : 0,
+        cor,
+      );
+      if (!ativo) return;
+      url = URL.createObjectURL(blob);
+      setImagem(url);
+    })().catch(() => {});
+    return () => {
+      ativo = false;
+      controlador.abort();
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [modelo, cor, revisao, atualizacao, motoId]);
+  return imagem;
 }
 
-// Prévia do cadastro: consulta miniaturas prontas sem enfileirar os fragmentos
-// digitados pelo usuário como se fossem novos modelos.
-export function useMiniaturaExistente(model:string,color:string|null){
-  const [image,setImage]=useState<string|null>(null);
-  useEffect(()=>{
-    setImage(null);
-    if(model.trim().length<4)return;
-    const controller=new AbortController();let objectUrl:string|null=null;let active=true;
-    const timer=window.setTimeout(async()=>{
-      try{
-        const response=await fetch(`${API_URL}/api/motorcycle-thumbnails/preview-existing?model=${encodeURIComponent(model.trim())}`,{credentials:'include',cache:'no-store',signal:controller.signal});
-        if(!response.ok||!(response.headers.get('content-type')||'').startsWith('image/'))return;
-        const catalog=ilustracaoModelo(model);
-        const sourceHue=response.headers.get('x-preview-origin')==='catalog'&&!catalog?.src.includes('urbana-160')?217:0;
-        const blob=await coloredThumbnail(await response.blob(),sourceHue,color,true);
-        if(!active)return;
-        objectUrl=URL.createObjectURL(blob);setImage(objectUrl);
-      }catch{}
-    },500);
-    return()=>{active=false;window.clearTimeout(timer);controller.abort();if(objectUrl)URL.revokeObjectURL(objectUrl);};
-  },[model,color]);
-  return image;
+// Previa do cadastro: consulta miniaturas prontas sem enfileirar os fragmentos
+// digitados pelo usuario como se fossem novos modelos.
+export function useMiniaturaExistente(modelo: string, cor: string | null) {
+  const [imagem, setImagem] = useState<string | null>(null);
+  useEffect(() => {
+    setImagem(null);
+    if (modelo.trim().length < 4) return;
+    const controlador = new AbortController();
+    let urlObjeto: string | null = null;
+    let ativo = true;
+    const temporizador = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/motorcycle-thumbnails/preview-existing?model=${encodeURIComponent(modelo.trim())}`,
+          { credentials: 'include', cache: 'no-store', signal: controlador.signal },
+        );
+        if (!response.ok || !(response.headers.get('content-type') || '').startsWith('image/'))
+          return;
+        const catalogo = ilustracaoModelo(modelo);
+        const matizOrigem =
+          response.headers.get('x-preview-origin') === 'catalog' &&
+          !catalogo?.src.includes('urbana-160')
+            ? 217
+            : 0;
+        const arquivo = await response.blob();
+        const blob =
+          response.headers.get('x-preview-origin') === 'published'
+            ? arquivo
+            : await miniaturaColorida(arquivo, matizOrigem, cor, true);
+        if (!ativo) return;
+        urlObjeto = URL.createObjectURL(blob);
+        setImagem(urlObjeto);
+      } catch {}
+    }, 500);
+    return () => {
+      ativo = false;
+      window.clearTimeout(temporizador);
+      controlador.abort();
+      if (urlObjeto) URL.revokeObjectURL(urlObjeto);
+    };
+  }, [modelo, cor]);
+  return imagem;
 }

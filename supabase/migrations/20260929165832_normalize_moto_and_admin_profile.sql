@@ -1,4 +1,4 @@
--- Normalização de modelos para todos os percursos que escrevem em public.moto.
+-- Normalizacao de modelos para todos os percursos que escrevem em public.moto.
 create or replace function public.normalize_moto_model(p_model text)
 returns text language sql immutable set search_path = '' as $$
   with prepared as (
@@ -29,11 +29,11 @@ create trigger normalize_moto_model_before_write
 before insert or update of modelo on public.moto
 for each row execute function public.normalize_moto_model_on_write();
 
--- Corrige nomes antigos; o valor da placa e a identidade da moto não mudam.
+-- Corrige nomes antigos; o valor da placa e a identidade da moto nao mudam.
 update public.moto set modelo = public.normalize_moto_model(modelo)
 where modelo is distinct from public.normalize_moto_model(modelo);
 
--- A foto do administrador é privada e acessada apenas através da API autenticada.
+-- A foto do administrador e privada e acessada apenas atraves da API autenticada.
 insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
 values ('admin-avatars','admin-avatars',false,550000,array['image/jpeg'])
 on conflict (id) do nothing;

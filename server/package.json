@@ -1,7 +1,6 @@
 {
   "name": "perc3-auth-server",
   "private": true,
-  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "test:motorcycle-status": "node --import tsx --test scripts/status-motocicleta.test.mjs",
@@ -19,14 +18,27 @@
     "test:dashboard": "npm run build && node --test scripts/painel-admin.test.mjs",
     "test:settings": "npm run build && node --test scripts/configuracoes.test.mjs scripts/preferencias-conta.test.mjs && node --import tsx --test scripts/notificacoes.test.mjs scripts/preferencias-globais.test.mjs scripts/central-notificacoes.test.mjs scripts/sincronizacao-conta.test.mjs scripts/navegacao-configuracoes.test.mjs",
     "test:roles": "npm run build && node --test scripts/cargos.test.mjs && node --import tsx --test scripts/cargos-locais.test.mjs",
-    "test:shared": "node --import tsx --test scripts/cep-compartilhados.test.mjs"
+    "test:shared": "node --import tsx --test scripts/cep-compartilhados.test.mjs",
+    "desenvolver": "node --watch --import tsx src/index.ts",
+    "compilar": "tsc",
+    "iniciar": "node dist/index.js",
+    "verificar:ambiente": "node scripts/verificar-ambiente.mjs",
+    "diagnosticar": "node scripts/diagnostico.mjs",
+    "testar": "node --import tsx --test scripts/*.test.mjs",
+    "verificar:codigo": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test scripts/*.test.mjs",
+    "worker:miniaturas": "node dist/miniaturas/worker.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",
+    "cheerio": "1.0.0",
     "cookie-parser": "1.4.7",
     "cors": "2.8.6",
     "dotenv": "18.0.4",
     "express": "5.2.1",
+    "sharp": "0.34.5",
+    "swagger-ui-express": "5.0.1",
     "zod": "4.6.5"
   },
   "devDependencies": {
@@ -34,6 +46,7 @@
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/node": "26.6.3",
+    "@types/swagger-ui-express": "4.1.8",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
   }

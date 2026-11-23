@@ -1,103 +1,1853 @@
+import CartaoIndicador from '../components/CartaoIndicador';
+import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
+import { useCartaoVisivel } from '../hooks/useCartoesPagina';
+import { useAtalhoPagina } from '../hooks/useAtalhoPagina';
+import { useDadosVivos } from '../hooks/useDadosVivos';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import ConteudoCarregando from '../components/ConteudoCarregando';
-import {useDadosVivos} from '../hooks/useDadosVivos';
-import {atualizarCatalogoCompartilhado} from '../services/catalogoServicos';
-import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
-import {lerRascunho,gravarRascunho,limparRascunho} from '../services/rascunhos';
-import {pode} from '../services/acessoConta';
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Icone } from '../components/MenuAdmin';
 import SeletorFiltro from '../components/SeletorFiltro';
-import { Icon } from '../components/MenuAdmin';
-import { useUsuarioAdmin } from '../components/RotaProtegida';
-import { logout } from '../services/apiAutenticacao';
-import { observarCatalogoServicos, lerCatalogoServicos, salvarCatalogoServicos, type CategoriaServico, type ItemCatalogoServico } from '../services/catalogoServicos';
+import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
+import { pode } from '../services/acessoConta';
+import {
+  atualizarCatalogoCompartilhado,
+  lerCatalogoServicos,
+  observarCatalogoServicos,
+  salvarCatalogoServicos,
+  type CategoriaServico,
+  type ItemCatalogoServico,
+} from '../services/catalogoServicos';
+import { limparRascunho } from '../services/rascunhos';
+import { correspondeBusca } from '../utils/buscaAproximada';
 import './ordens-servico.css';
 import './servicos.css';
 
-type StatusFiltro='todos'|'ativos'|'inativos';
-const iconOptions:[string,string,string][]=[
-  ['wrench','Ferramenta','Ferramentas'],['bike','Motocicleta','Veículos'],['gauge','Freio e medição','Veículos'],['settings','Engrenagem','Ferramentas'],['activity','Diagnóstico','Elétrica'],['refresh','Transmissão','Ferramentas'],['check','Conferência','Todos'],['clipboard-check','Revisão','Todos'],['clock','Tempo','Todos'],['package','Peças','Todos'],['card','Bateria','Elétrica'],['filter','Injeção','Elétrica'],['trending','Ajuste','Ferramentas'],['camera','Inspeção','Todos'],['briefcase','Serviço','Todos'],['star','Destaque','Todos'],['pin','Localização','Todos'],['phone','Contato','Todos'],
+type SituacaoFiltro = 'todos' | 'ativos' | 'inativos';
+const iconeOpcoes: [string, string, string][] = [
+  ['wrench', 'Ferramenta', 'Ferramentas'],
+  ['bike', 'Motocicleta', 'Veículos'],
+  ['gauge', 'Freio e medição', 'Veículos'],
+  ['settings', 'Engrenagem', 'Ferramentas'],
+  ['activity', 'Diagnóstico', 'Elétrica'],
+  ['refresh', 'Transmissão', 'Ferramentas'],
+  ['check', 'Conferência', 'Todos'],
+  ['clipboard-check', 'Revisão', 'Todos'],
+  ['clock', 'Tempo', 'Todos'],
+  ['package', 'Peças', 'Todos'],
+  ['card', 'Bateria', 'Elétrica'],
+  ['filter', 'Injeção', 'Elétrica'],
+  ['trending', 'Ajuste', 'Ferramentas'],
+  ['camera', 'Inspeção', 'Todos'],
+  ['briefcase', 'Serviço', 'Todos'],
+  ['star', 'Destaque', 'Todos'],
+  ['pin', 'Localização', 'Todos'],
+  ['phone', 'Contato', 'Todos'],
 ];
-const palette=['#EF4444','#F97316','#F59E0B','#EAB308','#22C55E','#10B981','#06B6D4','#3B82F6','#6366F1','#8B5CF6','#EC4899','#172033'];
-const hsvHex=(h:number,s:number,v:number)=>{s/=100;v/=100;const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c,[r,g,b]=h<60?[c,x,0]:h<120?[x,c,0]:h<180?[0,c,x]:h<240?[0,x,c]:h<300?[x,0,c]:[c,0,x],hex=(n:number)=>Math.round((n+m)*255).toString(16).padStart(2,'0');return `#${hex(r)}${hex(g)}${hex(b)}`.toUpperCase();};
-const hexHsv=(hex:string):[number,number,number]=>{const raw=hex.replace('#',''),r=parseInt(raw.slice(0,2),16)/255,g=parseInt(raw.slice(2,4),16)/255,b=parseInt(raw.slice(4,6),16)/255,max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;let h=0;if(delta)h=max===r?60*(((g-b)/delta)%6):max===g?60*((b-r)/delta+2):60*((r-g)/delta+4);return[(h+360)%360,max?delta/max*100:0,max*100];};
-const money=(value:number)=>value.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-const statusClass=(value:boolean)=>value?'active':'inactive';
-type DropdownOption={value:string;label:string;icon?:string;color?:string};
-function StyledDropdown({value,onChange,options,placeholder,leadingIcon='chevron',className=''}:{value:string;onChange:(value:string)=>void;options:DropdownOption[];placeholder:string;leadingIcon?:string;className?:string}){
-  const [open,setOpen]=useState(false),root=useRef<HTMLDivElement>(null),selected=options.find(option=>option.value===value);
-  useEffect(()=>{if(!open)return;const close=(event:MouseEvent)=>{if(root.current&&!root.current.contains(event.target as Node))setOpen(false);};const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpen(false);};document.addEventListener('mousedown',close);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('mousedown',close);document.removeEventListener('keydown',escape);};},[open]);
-  return <div className={`styled-dropdown ${className}`} ref={root}><button type="button" className="styled-dropdown-trigger" aria-haspopup="listbox" aria-expanded={open} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();setOpen(true);requestAnimationFrame(()=>root.current?.querySelector<HTMLButtonElement>('[role=option]')?.focus());}}} onClick={()=>setOpen(value=>!value)}>{selected?.icon?<span className="styled-dropdown-option-icon" style={{color:selected.color??'#65758a',backgroundColor:`${selected.color??'#65758a'}18`}}><CategoryIcon name={selected.icon} size={16}/></span>:<Icon name={leadingIcon} size={16}/>}<span className={`styled-dropdown-label${selected?'':' placeholder'}`}>{selected?.label??placeholder}</span><span className="styled-dropdown-chevron"><Icon name="chevron" size={15}/></span></button>{open&&<div className="styled-dropdown-menu" role="listbox" onKeyDown={event=>{const items=Array.from(root.current?.querySelectorAll<HTMLButtonElement>('[role=option]')??[]);const index=items.indexOf(document.activeElement as HTMLButtonElement);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();items[(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length]?.focus();}if(event.key==='Escape'){setOpen(false);root.current?.querySelector<HTMLButtonElement>('button')?.focus();}}}>{options.map(option=><button type="button" role="option" aria-selected={option.value===value} key={option.value} className={`styled-dropdown-option${option.value===value?' selected':''}`} onClick={()=>{onChange(option.value);setOpen(false);root.current?.querySelector<HTMLButtonElement>('button')?.focus();}}>{option.icon?<span className="styled-dropdown-option-icon" style={{color:option.color??'#65758a',backgroundColor:`${option.color??'#65758a'}18`}}><CategoryIcon name={option.icon} size={16}/></span>:<span className="styled-dropdown-option-icon neutral"><Icon name={leadingIcon==='clock'?'clock':'check'} size={15}/></span>}<span>{option.label}</span>{option.value===value&&<span className="styled-dropdown-check"><Icon name="check" size={15}/></span>}</button>)}</div>}</div>;
+const paleta = [
+  '#EF4444',
+  '#F97316',
+  '#F59E0B',
+  '#EAB308',
+  '#22C55E',
+  '#10B981',
+  '#06B6D4',
+  '#3B82F6',
+  '#6366F1',
+  '#8B5CF6',
+  '#EC4899',
+  '#172033',
+];
+const hsvParaHexadecimal = (alturaAtual: number, textoAtual: number, valorAtual: number) => {
+  textoAtual /= 100;
+  valorAtual /= 100;
+  const elementoAtual = valorAtual * textoAtual;
+  const itemAtual = elementoAtual * (1 - Math.abs(((alturaAtual / 60) % 2) - 1));
+  const mesAtual = valorAtual - elementoAtual;
+  const [resultadoAtual, grupoAtual, segundoElemento] =
+    alturaAtual < 60
+      ? [elementoAtual, itemAtual, 0]
+      : alturaAtual < 120
+        ? [itemAtual, elementoAtual, 0]
+        : alturaAtual < 180
+          ? [0, elementoAtual, itemAtual]
+          : alturaAtual < 240
+            ? [0, itemAtual, elementoAtual]
+            : alturaAtual < 300
+              ? [itemAtual, 0, elementoAtual]
+              : [elementoAtual, 0, itemAtual];
+  const hex = (numero: number) =>
+    Math.round((numero + mesAtual) * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${hex(resultadoAtual)}${hex(grupoAtual)}${hex(segundoElemento)}`.toUpperCase();
+};
+const hexadecimalParaHsv = (hex: string): [number, number, number] => {
+  const bruto = hex.replace('#', '');
+  const resultadoAtual = parseInt(bruto.slice(0, 2), 16) / 255;
+  const grupoAtual = parseInt(bruto.slice(2, 4), 16) / 255;
+  const segundoElemento = parseInt(bruto.slice(4, 6), 16) / 255;
+  const maximo = Math.max(resultadoAtual, grupoAtual, segundoElemento);
+  const minimo = Math.min(resultadoAtual, grupoAtual, segundoElemento);
+  const diferenca = maximo - minimo;
+  let alturaAtual = 0;
+  if (diferenca)
+    alturaAtual =
+      maximo === resultadoAtual
+        ? 60 * (((grupoAtual - segundoElemento) / diferenca) % 6)
+        : maximo === grupoAtual
+          ? 60 * ((segundoElemento - resultadoAtual) / diferenca + 2)
+          : 60 * ((resultadoAtual - grupoAtual) / diferenca + 4);
+  return [(alturaAtual + 360) % 360, maximo ? (diferenca / maximo) * 100 : 0, maximo * 100];
+};
+const moeda = (valor: number) =>
+  valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const classeSituacao = (valor: boolean) => (valor ? 'active' : 'inactive');
+type SeletorOpcao = { value: string; label: string; icon?: string; color?: string };
+function SeletorEstilizado({
+  value: valor,
+  onChange: aoAlterar,
+  options: opcoes,
+  placeholder: textoAjuda,
+  leadingIcon: leadingIcone = 'chevron',
+  className: nomeClasse = '',
+  emptyMessage: mensagemVazia,
+}: {
+  value: string;
+  onChange: (valor: string) => void;
+  options: SeletorOpcao[];
+  placeholder: string;
+  leadingIcon?: string;
+  className?: string;
+  emptyMessage?: string;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const raiz = useRef<HTMLDivElement>(null);
+  const selecionado = opcoes.find((opcao) => opcao.value === valor);
+  useEffect(() => {
+    if (!aberto) return;
+    const fechar = (evento: MouseEvent) => {
+      if (raiz.current && !raiz.current.contains(evento.target as Node)) setAberto(false);
+    };
+    const escapar = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setAberto(false);
+    };
+    document.addEventListener('mousedown', fechar);
+    document.addEventListener('keydown', escapar);
+    return () => {
+      document.removeEventListener('mousedown', fechar);
+      document.removeEventListener('keydown', escapar);
+    };
+  }, [aberto]);
+  return (
+    <div className={`styled-dropdown ${nomeClasse}`} ref={raiz}>
+      <button
+        type="button"
+        className="styled-dropdown-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={aberto}
+        onKeyDown={(evento) => {
+          if (evento.key === 'ArrowDown') {
+            evento.preventDefault();
+            setAberto(true);
+            requestAnimationFrame(() =>
+              raiz.current?.querySelector<HTMLButtonElement>('[role=option]')?.focus(),
+            );
+          }
+        }}
+        onClick={() => setAberto((valor) => !valor)}
+      >
+        {selecionado?.icon ? (
+          <span
+            className="styled-dropdown-option-icon"
+            style={{
+              color: selecionado.color ?? '#65758a',
+              backgroundColor: `${selecionado.color ?? '#65758a'}18`,
+            }}
+          >
+            <CategoriaIcone name={selecionado.icon} size={16} />
+          </span>
+        ) : (
+          <Icone name={leadingIcone} size={16} />
+        )}
+        <span className={`styled-dropdown-label${selecionado ? '' : ' placeholder'}`}>
+          {selecionado?.label ?? textoAjuda}
+        </span>
+        <span className="styled-dropdown-chevron">
+          <Icone name="chevron" size={15} />
+        </span>
+      </button>
+      {aberto && (
+        <div
+          className="styled-dropdown-menu"
+          role="listbox"
+          onKeyDown={(evento) => {
+            const itens = Array.from(
+              raiz.current?.querySelectorAll<HTMLButtonElement>('[role=option]') ?? [],
+            );
+            const indice = itens.indexOf(document.activeElement as HTMLButtonElement);
+            if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
+              evento.preventDefault();
+              itens[
+                (indice + (evento.key === 'ArrowDown' ? 1 : -1) + itens.length) % itens.length
+              ]?.focus();
+            }
+            if (evento.key === 'Escape') {
+              setAberto(false);
+              raiz.current?.querySelector<HTMLButtonElement>('button')?.focus();
+            }
+          }}
+        >
+          {!opcoes.length ? (
+            <div className="styled-dropdown-empty" role="status">
+              {mensagemVazia ?? 'Nenhuma opção cadastrada.'}
+            </div>
+          ) : opcoes.map((opcao) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={opcao.value === valor}
+              key={opcao.value}
+              className={`styled-dropdown-option${opcao.value === valor ? ' selected' : ''}`}
+              onClick={() => {
+                aoAlterar(opcao.value);
+                setAberto(false);
+                raiz.current?.querySelector<HTMLButtonElement>('button')?.focus();
+              }}
+            >
+              {opcao.icon ? (
+                <span
+                  className="styled-dropdown-option-icon"
+                  style={{
+                    color: opcao.color ?? '#65758a',
+                    backgroundColor: `${opcao.color ?? '#65758a'}18`,
+                  }}
+                >
+                  <CategoriaIcone name={opcao.icon} size={16} />
+                </span>
+              ) : (
+                <span className="styled-dropdown-option-icon neutral">
+                  <Icone name={leadingIcone === 'clock' ? 'clock' : 'check'} size={15} />
+                </span>
+              )}
+              <span>{opcao.label}</span>
+              {opcao.value === valor && (
+                <span className="styled-dropdown-check">
+                  <Icone name="check" size={15} />
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
-function CategorySelect({value,onChange,categories,placeholder='Selecione uma categoria'}:{value:string;onChange:(value:string)=>void;categories:CategoriaServico[];placeholder?:string}){
-  return <StyledDropdown value={value} onChange={onChange} placeholder={placeholder} leadingIcon="filter" options={categories.map(category=>({value:category.id,label:category.nome,icon:category.icone,color:category.cor}))}/>;
+function CategoriaSelecionar({
+  value: valor,
+  onChange: aoAlterar,
+  categories: categoriasLocal,
+  placeholder: textoAjuda = 'Selecione uma categoria',
+}: {
+  value: string;
+  onChange: (valor: string) => void;
+  categories: CategoriaServico[];
+  placeholder?: string;
+}) {
+  return (
+    <SeletorEstilizado
+      value={valor}
+      onChange={aoAlterar}
+      placeholder={textoAjuda}
+      leadingIcon="filter"
+      emptyMessage="Nenhuma categoria cadastrada no banco. Crie uma categoria para relacionar o serviço."
+      options={categoriasLocal.map((categoria) => ({
+        value: categoria.id,
+        label: categoria.nome,
+        icon: categoria.icone,
+        color: categoria.cor,
+      }))}
+    />
+  );
 }
-function DurationSelect({value,onChange}:{value:string;onChange:(value:string)=>void}){
-  const [customOpen,setCustomOpen]=useState(false),[hours,setHours]=useEstadoRascunho('servico-duracao','hours',''),[minutes,setMinutes]=useEstadoRascunho('servico-duracao','minutes','');
-  const durations:[string,string][]=[['15 min','15 min'],['20 min','20 min'],['30 min','30 min'],['45 min','45 min'],['1h','1 hora'],['1h 30min','1h 30min'],['2h','2 horas'],['3h','3 horas']];
-  const isCustom=value!==''&&!durations.some(([option])=>option===value);
-  const options=[...durations.map(([option,label])=>({value:option,label,icon:'clock',color:'#5B7FA6'})),...(isCustom&&value!=='Personalizado'?[{value,label:value,icon:'clock',color:'#5B7FA6'}]:[]),{value:'Personalizado',label:'Personalizado',icon:'clock',color:'#5B7FA6'}];
-  function selectDuration(next:string){
-    if(next!=='Personalizado'){onChange(next);return;}
-    const match=value.match(/^(?:(\d+)\s*h)?\s*(?:(\d+)\s*min)?$/i);
-    setHours(match?.[1]??'');setMinutes(match?.[2]??'');setCustomOpen(true);
+function DuracaoSelecionar({
+  value: valor,
+  onChange: aoAlterar,
+}: {
+  value: string;
+  onChange: (valor: string) => void;
+}) {
+  const [customAberto, setCustomAberto] = useState(false);
+  const [horas, setHoras] = useEstadoRascunho('servico-duracao', 'hours', '');
+  const [minutos, setMinutos] = useEstadoRascunho('servico-duracao', 'minutes', '');
+  const duracoes: [string, string][] = [
+    ['15 min', '15 min'],
+    ['20 min', '20 min'],
+    ['30 min', '30 min'],
+    ['45 min', '45 min'],
+    ['1h', '1 hora'],
+    ['1h 30min', '1h 30min'],
+    ['2h', '2 horas'],
+    ['3h', '3 horas'],
+  ];
+  const ehCustom = valor !== '' && !duracoes.some(([opcao]) => opcao === valor);
+  const opcoes = [
+    ...duracoes.map(([opcao, rotulo]) => ({
+      value: opcao,
+      label: rotulo,
+      icon: 'clock',
+      color: '#5B7FA6',
+    })),
+    ...(ehCustom && valor !== 'Personalizado'
+      ? [{ value: valor, label: valor, icon: 'clock', color: '#5B7FA6' }]
+      : []),
+    { value: 'Personalizado', label: 'Personalizado', icon: 'clock', color: '#5B7FA6' },
+  ];
+  function selecionarDuracao(continuar: string) {
+    if (continuar !== 'Personalizado') {
+      aoAlterar(continuar);
+      return;
+    }
+    const correspondencia = valor.match(/^(?:(\d+)\s*h)?\s*(?:(\d+)\s*min)?$/i);
+    setHoras(correspondencia?.[1] ?? '');
+    setMinutos(correspondencia?.[2] ?? '');
+    setCustomAberto(true);
   }
-  function saveCustom(){
-    const h=Math.min(24,Math.max(0,Number(hours)||0)),m=Math.min(59,Math.max(0,Number(minutes)||0));
-    if(!h&&!m)return;
-    const formatted=[h?`${h}h`: '',m?`${m}min`: ''].filter(Boolean).join(' ');
-    onChange(formatted);setCustomOpen(false);
+  function salvarCustom() {
+    const alturaAtual = Math.min(24, Math.max(0, Number(horas) || 0));
+    const mesAtual = Math.min(59, Math.max(0, Number(minutos) || 0));
+    if (!alturaAtual && !mesAtual) return;
+    const formatado = [alturaAtual ? `${alturaAtual}h` : '', mesAtual ? `${mesAtual}min` : '']
+      .filter(Boolean)
+      .join(' ');
+    aoAlterar(formatado);
+    setCustomAberto(false);
   }
-  return <><StyledDropdown value={value} onChange={selectDuration} placeholder="Selecione o tempo" leadingIcon="clock" options={options}/>{customOpen&&<div className="services-modal-backdrop custom-time-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setCustomOpen(false);}}><section className="custom-time-modal" role="dialog" aria-modal="true" aria-labelledby="custom-time-title"><header><span><Icon name="clock" size={21}/></span><div><h3 id="custom-time-title">Definir tempo personalizado</h3><p>Informe quanto tempo este serviço costuma levar.</p></div><button type="button" aria-label="Fechar" onClick={()=>setCustomOpen(false)}><Icon name="close" size={17}/></button></header><div className="custom-time-fields"><label><span>Horas</span><div><input autoFocus type="number" min="0" max="24" step="1" inputMode="numeric" placeholder="0" value={hours} onChange={event=>setHours(event.target.value)}/><small>h</small></div></label><b className="custom-time-separator">:</b><label><span>Minutos</span><div><input type="number" min="0" max="59" step="5" inputMode="numeric" placeholder="00" value={minutes} onChange={event=>setMinutes(event.target.value)}/><small>min</small></div></label></div><div className="custom-time-preview"><Icon name="clock" size={17}/><span>Duração estimada</span><strong>{Number(hours)||Number(minutes)?[Number(hours)?`${Number(hours)}h`:'',Number(minutes)?`${Number(minutes)}min`:''].filter(Boolean).join(' '):'Defina horas e minutos'}</strong></div><footer><button type="button" className="services-btn secondary" onClick={()=>setCustomOpen(false)}>Cancelar</button><button type="button" className="services-btn primary" disabled={!Number(hours)&&!Number(minutes)} onClick={saveCustom}><Icon name="check" size={15}/>Aplicar duração</button></footer></section></div>}</>;
+  return (
+    <>
+      <SeletorEstilizado
+        value={valor}
+        onChange={selecionarDuracao}
+        placeholder="Selecione o tempo"
+        leadingIcon="clock"
+        options={opcoes}
+      />
+      {customAberto && (
+        <div
+          className="services-modal-backdrop custom-time-backdrop"
+          onMouseDown={(evento) => {
+            if (evento.target === evento.currentTarget) setCustomAberto(false);
+          }}
+        >
+          <section
+            className="custom-time-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="custom-time-title"
+          >
+            <header>
+              <span>
+                <Icone name="clock" size={21} />
+              </span>
+              <div>
+                <h3 id="custom-time-title">Definir tempo personalizado</h3>
+                <p>Informe quanto tempo este serviço costuma levar.</p>
+              </div>
+              <button type="button" aria-label="Fechar" onClick={() => setCustomAberto(false)}>
+                <Icone name="close" size={17} />
+              </button>
+            </header>
+            <div className="custom-time-fields">
+              <label>
+                <span>Horas</span>
+                <div>
+                  <input
+                    autoFocus
+                    type="number"
+                    min="0"
+                    max="24"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={horas}
+                    onChange={(evento) => setHoras(evento.target.value)}
+                  />
+                  <small>h</small>
+                </div>
+              </label>
+              <b className="custom-time-separator">:</b>
+              <label>
+                <span>Minutos</span>
+                <div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    step="5"
+                    inputMode="numeric"
+                    placeholder="00"
+                    value={minutos}
+                    onChange={(evento) => setMinutos(evento.target.value)}
+                  />
+                  <small>min</small>
+                </div>
+              </label>
+            </div>
+            <div className="custom-time-preview">
+              <Icone name="clock" size={17} />
+              <span>Duração estimada</span>
+              <strong>
+                {Number(horas) || Number(minutos)
+                  ? [
+                      Number(horas) ? `${Number(horas)}h` : '',
+                      Number(minutos) ? `${Number(minutos)}min` : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  : 'Defina horas e minutos'}
+              </strong>
+            </div>
+            <footer>
+              <button
+                type="button"
+                className="services-btn secondary"
+                onClick={() => setCustomAberto(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="services-btn primary"
+                disabled={!Number(horas) && !Number(minutos)}
+                onClick={salvarCustom}
+              >
+                <Icone name="check" size={15} />
+                Aplicar duração
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+    </>
+  );
 }
-function CategoryIcon({name,size=16}:{name:string;size?:number}){return /^https:\/\//i.test(name)?<img className="services-external-icon" src={name} width={size} height={size} alt="" loading="lazy"/>:<Icon name={name} size={size}/>;}
-function IconPicker({value,onClose,onSelect}:{value:string;onClose:()=>void;onSelect:(icon:string)=>void}){
-  const [query,setQuery]=useState(''),[tab,setTab]=useState('Todos'),[selected,setSelected]=useState(value),[svgUrl,setSvgUrl]=useState(/^https:\/\//i.test(value)?value:''),[urlError,setUrlError]=useState('');
-  const filtered=iconOptions.filter(([icon,label,group])=>(tab==='Todos'||group===tab)&&`${label} ${icon}`.toLowerCase().includes(query.toLowerCase()));
-  return <div className="services-modal-backdrop icon-picker-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}><section className="icon-picker-modal" role="dialog" aria-modal="true" aria-labelledby="icon-picker-title"><header><h3 id="icon-picker-title">Escolher ícone</h3><button type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={15}/></button></header><div className="icon-picker-tabs"><span><Icon name="dashboard" size={13}/> Ícones</span></div><label className="icon-picker-search"><Icon name="search" size={15}/><input autoFocus placeholder="Buscar ícones..." value={query} onChange={event=>setQuery(event.target.value)}/></label><nav className="icon-picker-categories">{['Todos','Veículos','Ferramentas','Elétrica'].map(item=><button type="button" key={item} className={tab===item?'selected':''} onClick={()=>setTab(item)}>{item}</button>)}</nav><div className="icon-picker-grid">{filtered.map(([icon,label])=><button type="button" key={icon} title={label} aria-label={label} className={selected===icon?'selected':''} onClick={()=>{setSelected(icon);setSvgUrl('');setUrlError('');}}><Icon name={icon} size={19}/></button>)}</div><label className="icon-picker-link"><span><Icon name="download" size={15}/><b>Adicionar link do SVG</b><small>Cole um endereço HTTPS de arquivo SVG</small></span><input placeholder="https://exemplo.com/icone.svg" type="url" value={svgUrl} onChange={event=>{const next=event.target.value;setSvgUrl(next);setUrlError(next&&!/^https:\/\//i.test(next)?'Use um endereço HTTPS válido.':'');}}/>{urlError&&<small className="icon-picker-error">{urlError}</small>}</label><footer><button type="button" className="services-btn secondary" onClick={onClose}>Cancelar</button><button type="button" className="services-btn primary" disabled={!!urlError} onClick={()=>onSelect(svgUrl.trim()||selected)}>Confirmar</button></footer></section></div>;
+function CategoriaIcone({ name: nomeLocal, size: tamanho = 16 }: { name: string; size?: number }) {
+  return /^https:\/\//i.test(nomeLocal) ? (
+    <img
+      className="services-external-icon"
+      src={nomeLocal}
+      width={tamanho}
+      height={tamanho}
+      alt=""
+      loading="lazy"
+    />
+  ) : (
+    <Icone name={nomeLocal} size={tamanho} />
+  );
 }
-function ColorPicker({value,onChange}:{value:string;onChange:(color:string)=>void}){
-  const [open,setOpen]=useState(false),[hue,setHue]=useState(()=>hexHsv(value)[0]),[saturation,setSaturation]=useState(()=>hexHsv(value)[1]),[brightness,setBrightness]=useState(()=>hexHsv(value)[2]),[hexText,setHexText]=useState(value.toUpperCase()),[recent,setRecent]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('estacao-servicos-recent-colors')||'[]') as string[]}catch{return[];}}),hexInput=useRef<HTMLInputElement>(null);
-  useEffect(()=>setHexText(value.toUpperCase()),[value]);
-  function choose(color:string){const normalized=color.toUpperCase(),[nextHue,nextSaturation,nextBrightness]=hexHsv(normalized);setHue(nextHue);setSaturation(nextSaturation);setBrightness(nextBrightness);setHexText(normalized);onChange(normalized);setRecent(previous=>{const next=[normalized,...previous.filter(item=>item.toUpperCase()!==normalized)].slice(0,5);localStorage.setItem('estacao-servicos-recent-colors',JSON.stringify(next));return next;});}
-  function selectPlane(event:ReactPointerEvent<HTMLButtonElement>){const rect=event.currentTarget.getBoundingClientRect(),sat=Math.max(0,Math.min(100,((event.clientX-rect.left)/rect.width)*100)),bright=100-Math.max(0,Math.min(100,((event.clientY-rect.top)/rect.height)*100));setSaturation(sat);setBrightness(bright);choose(hsvHex(hue,sat,bright));}
-  function clearRecent(){setRecent([]);localStorage.removeItem('estacao-servicos-recent-colors');}
-  function updateHex(text:string){setHexText(text);const candidate=text.startsWith('#')?text:`#${text}`;if(/^#[0-9a-f]{6}$/i.test(candidate)){choose(candidate);}else if(/^#[0-9a-f]{3}$/i.test(candidate)){choose(`#${candidate[1]}${candidate[1]}${candidate[2]}${candidate[2]}${candidate[3]}${candidate[3]}`);}}
-  const recentColors=recent.length?recent:palette.slice(0,5);
-  return <div className="services-color-wrap"><button type="button" className="services-color-trigger" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><i style={{backgroundColor:value}}/><span>{value.toUpperCase()}</span><Icon name="chevron" size={13}/></button>{open&&<div className="services-color-popover"><header><strong>Escolha uma cor</strong><button type="button" aria-label="Fechar seletor de cor" onClick={()=>setOpen(false)}><Icon name="close" size={13}/></button></header><button type="button" className="color-plane" style={{backgroundColor:`hsl(${hue} 100% 50%)`}} aria-label="Escolher saturação e luminosidade" onPointerDown={event=>{event.currentTarget.setPointerCapture(event.pointerId);selectPlane(event);}} onPointerMove={event=>{if(event.buttons===1)selectPlane(event);}}><i style={{left:`${Math.max(2,Math.min(98,saturation))}%`,top:`${Math.max(2,Math.min(98,100-brightness))}%`}}/></button><input className="color-hue" aria-label="Matiz" type="range" min="0" max="360" value={hue} onChange={event=>{const next=Number(event.target.value);setHue(next);choose(hsvHex(next,saturation,brightness));}}/><label className="color-current"><i style={{backgroundColor:value}}/><input ref={hexInput} aria-label="Código hexadecimal da cor" value={hexText} maxLength={7} spellCheck={false} onChange={event=>updateHex(event.target.value)}/><Icon name="chevron" size={13}/></label><div className="color-swatches">{['#EF4444','#172033','#F43F46','#1684FF'].map(color=><button type="button" key={color} aria-label={`Usar cor ${color}`} title={color} className={value.toUpperCase()===color?'selected':''} style={{backgroundColor:color}} onClick={()=>choose(color)}/>)}</div><div className="color-recent"><span>Cores recentes</span><div>{recentColors.map((color,index)=><button type="button" key={`${color}-${index}`} aria-label={`Cor recente ${color}`} title={color} className={value.toUpperCase()===color.toUpperCase()?'selected':''} style={{backgroundColor:color}} onClick={()=>choose(color)}/>)}</div><button type="button" className="color-clear-recent" aria-label="Limpar cores recentes" title="Limpar cores recentes" onClick={clearRecent}><Icon name="trash" size={14}/></button></div><button type="button" className="color-native-label" onClick={()=>hexInput.current?.focus()}><span><Icon name="activity" size={15}/>Mais cores</span><i aria-hidden="true" style={{backgroundColor:value}}/></button></div>}</div>;
+function IconeSeletor({
+  value: valor,
+  onClose: aoFechar,
+  onSelect: aoSelecionar,
+}: {
+  value: string;
+  onClose: () => void;
+  onSelect: (iconeLocal: string) => void;
+}) {
+  const [consulta, setConsulta] = useState('');
+  const [aba, setAba] = useState('Todos');
+  const [selecionado, setSelecionado] = useState(valor);
+  const [svgUrl, setSvgUrl] = useState(/^https:\/\//i.test(valor) ? valor : '');
+  const [urlErro, setUrlErro] = useState('');
+  const filtrado = iconeOpcoes.filter(
+    ([iconeLocal, rotulo, grupo]) =>
+      (aba === 'Todos' || grupo === aba) &&
+      correspondeBusca(consulta, `${rotulo} ${iconeLocal}`),
+  );
+  return (
+    <div
+      className="services-modal-backdrop icon-picker-backdrop"
+      onMouseDown={(evento) => {
+        if (evento.target === evento.currentTarget) aoFechar();
+      }}
+    >
+      <section
+        className="icon-picker-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="icon-picker-title"
+      >
+        <header>
+          <h3 id="icon-picker-title">Escolher ícone</h3>
+          <button type="button" aria-label="Fechar" onClick={aoFechar}>
+            <Icone name="close" size={15} />
+          </button>
+        </header>
+        <div className="icon-picker-tabs">
+          <span>
+            <Icone name="dashboard" size={13} /> Ícones
+          </span>
+        </div>
+        <label className="icon-picker-search">
+          <Icone name="search" size={15} />
+          <input
+            autoFocus
+            placeholder="Buscar ícones..."
+            value={consulta}
+            onChange={(evento) => setConsulta(evento.target.value)}
+          />
+        </label>
+        <nav className="icon-picker-categories">
+          {['Todos', 'Veículos', 'Ferramentas', 'Elétrica'].map((item) => (
+            <button
+              type="button"
+              key={item}
+              className={aba === item ? 'selected' : ''}
+              onClick={() => setAba(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </nav>
+        <div className="icon-picker-grid">
+          {filtrado.map(([iconeLocal, rotulo]) => (
+            <button
+              type="button"
+              key={iconeLocal}
+              title={rotulo}
+              aria-label={rotulo}
+              className={selecionado === iconeLocal ? 'selected' : ''}
+              onClick={() => {
+                setSelecionado(iconeLocal);
+                setSvgUrl('');
+                setUrlErro('');
+              }}
+            >
+              <Icone name={iconeLocal} size={19} />
+            </button>
+          ))}
+        </div>
+        <label className="icon-picker-link">
+          <span>
+            <Icone name="download" size={15} />
+            <b>Adicionar link do SVG</b>
+            <small>Cole um endereço HTTPS de arquivo SVG</small>
+          </span>
+          <input
+            placeholder="https://exemplo.com/icone.svg"
+            type="url"
+            value={svgUrl}
+            onChange={(evento) => {
+              const continuar = evento.target.value;
+              setSvgUrl(continuar);
+              setUrlErro(
+                continuar && !/^https:\/\//i.test(continuar) ? 'Use um endereço HTTPS válido.' : '',
+              );
+            }}
+          />
+          {urlErro && <small className="icon-picker-error">{urlErro}</small>}
+        </label>
+        <footer>
+          <button type="button" className="services-btn secondary" onClick={aoFechar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="services-btn primary"
+            disabled={!!urlErro}
+            onClick={() => aoSelecionar(svgUrl.trim() || selecionado)}
+          >
+            Confirmar
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
 }
-function CategoryModal({value,onClose,onSave}:{value?:CategoriaServico;onClose:()=>void;onSave:(category:CategoriaServico)=>void}){
-  const [name,setName]=useEstadoRascunho(`categoria-${value?.id??'nova'}`,'name',value?.nome??''),[description,setDescription]=useEstadoRascunho(`categoria-${value?.id??'nova'}`,'description',value?.descricao??''),[color,setColor]=useEstadoRascunho(`categoria-${value?.id??'nova'}`,'color',value?.cor??'#EF4444'),[icon,setIcon]=useEstadoRascunho(`categoria-${value?.id??'nova'}`,'icon',value?.icone??'wrench'),[iconOpen,setIconOpen]=useState(false),[error,setError]=useState('');
-  function submit(event:FormEvent){event.preventDefault();if(!name.trim()){setError('Informe o nome da categoria.');return;}onSave({id:value?.id??`cat-${crypto.randomUUID()}`,nome:name.trim(),descricao:description.trim(),cor:color,icone:icon});}
-  return <div className={`services-modal-backdrop${iconOpen?' category-picker-open':''}`} onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}><form className="category-modal" style={{visibility:iconOpen?'hidden':undefined}} role="dialog" aria-modal="true" aria-labelledby="category-modal-title" onSubmit={submit}><header className="category-modal-head"><span className="category-modal-mark"><Icon name="pin" size={18}/></span><div><h2 id="category-modal-title">{value?'Editar categoria':'Nova categoria de serviço'}</h2><p>Preencha as informações abaixo para criar uma nova categoria.</p></div><button type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={15}/></button></header><div className="category-modal-body"><label className="services-field"><span>Nome da categoria <b>*</b></span><input autoFocus required maxLength={50} placeholder="Ex.: Mecânica, Elétrica, Funilaria..." value={name} onChange={event=>setName(event.target.value)}/></label><label className="services-field"><span>Descrição <small>(opcional)</small></span><textarea maxLength={200} placeholder="Adicione uma breve descrição sobre esta categoria..." value={description} onChange={event=>setDescription(event.target.value)}/><em>{description.length}/200</em></label><div className="category-modal-row"><div className="services-field"><span>Cor da categoria <b>*</b></span><ColorPicker value={color} onChange={setColor}/></div><div className="services-field"><span>Ícone da categoria <b>*</b></span><button type="button" className="category-icon-control" onClick={()=>setIconOpen(true)}><span><CategoryIcon name={icon} size={16}/></span><b>{iconOptions.find(([key])=>key===icon)?.[1]??'Ícone selecionado'}</b><Icon name="chevron" size={13}/></button></div></div><div className="category-preview-label">Visualização</div><div className="category-preview"><span style={{color,backgroundColor:`${color}20`}}><CategoryIcon name={icon} size={17}/></span><div><strong>{name.trim()||'Nome da categoria'}</strong><small>{description.trim()||'Serviços relacionados a esta categoria.'}</small></div></div>{error&&<p className="services-form-error" role="alert">{error}</p>}</div><footer className="category-modal-footer"><button type="button" className="services-btn secondary" onClick={onClose}>Cancelar</button><button type="submit" className="services-btn primary">Salvar categoria</button></footer>{iconOpen&&<IconPicker value={icon} onClose={()=>setIconOpen(false)} onSelect={selected=>{setIcon(selected);setIconOpen(false);}}/>}</form></div>;
+function CorSeletor({
+  value: valor,
+  onChange: aoAlterar,
+}: {
+  value: string;
+  onChange: (corLocal: string) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [matiz, setMatiz] = useState(() => hexadecimalParaHsv(valor)[0]);
+  const [saturacao, setSaturacao] = useState(() => hexadecimalParaHsv(valor)[1]);
+  const [brilho, setBrilho] = useState(() => hexadecimalParaHsv(valor)[2]);
+  const [hexTexto, setHexTexto] = useState(valor.toUpperCase());
+  const containerCor = useRef<HTMLDivElement>(null);
+  const painelCor = useRef<HTMLDivElement>(null);
+  const [posicaoPainel, setPosicaoPainel] = useState<{ top: number; left: number } | null>(null);
+  const [recente, setRecente] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('estacao-servicos-recent-colors') || '[]') as string[];
+    } catch {
+      return [];
+    }
+  });
+  const entradaHexadecimal = useRef<HTMLInputElement>(null);
+  useEffect(() => setHexTexto(valor.toUpperCase()), [valor]);
+  useLayoutEffect(() => {
+    if (!aberto) {
+      setPosicaoPainel(null);
+      return;
+    }
+    const posicionar = () => {
+      const ancora = containerCor.current?.getBoundingClientRect();
+      const painel = painelCor.current;
+      if (!ancora || !painel) return;
+      const largura = painel.offsetWidth || Math.min(370, window.innerWidth - 24);
+      const altura = painel.offsetHeight || 560;
+      const direita = ancora.right + 10;
+      const esquerda = ancora.left - largura - 10;
+      const left =
+        direita + largura <= window.innerWidth - 12
+          ? direita
+          : esquerda >= 12
+            ? esquerda
+            : Math.max(12, Math.min(direita, window.innerWidth - largura - 12));
+      const top = Math.max(12, Math.min(ancora.top, window.innerHeight - altura - 12));
+      setPosicaoPainel((anterior) =>
+        anterior?.top === top && anterior.left === left ? anterior : { top, left },
+      );
+    };
+    posicionar();
+    const observer = new ResizeObserver(posicionar);
+    if (containerCor.current) observer.observe(containerCor.current);
+    if (painelCor.current) observer.observe(painelCor.current);
+    window.addEventListener('resize', posicionar);
+    window.addEventListener('scroll', posicionar, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', posicionar);
+      window.removeEventListener('scroll', posicionar, true);
+    };
+  }, [aberto]);
+  function escolher(corLocal: string) {
+    const normalizado = corLocal.toUpperCase();
+    const [continuarMatiz, continuarSaturacao, continuarBrilho] = hexadecimalParaHsv(normalizado);
+    setMatiz(continuarMatiz);
+    setSaturacao(continuarSaturacao);
+    setBrilho(continuarBrilho);
+    setHexTexto(normalizado);
+    aoAlterar(normalizado);
+    setRecente((anterior) => {
+      const continuar = [
+        normalizado,
+        ...anterior.filter((item) => item.toUpperCase() !== normalizado),
+      ].slice(0, 5);
+      localStorage.setItem('estacao-servicos-recent-colors', JSON.stringify(continuar));
+      return continuar;
+    });
+  }
+  function selecionarPlano(evento: ReactPointerEvent<HTMLButtonElement>) {
+    const retangulo = evento.currentTarget.getBoundingClientRect();
+    const saturacaoAtual = Math.max(
+      0,
+      Math.min(100, ((evento.clientX - retangulo.left) / retangulo.width) * 100),
+    );
+    const brilhoAtual =
+      100 - Math.max(0, Math.min(100, ((evento.clientY - retangulo.top) / retangulo.height) * 100));
+    setSaturacao(saturacaoAtual);
+    setBrilho(brilhoAtual);
+    escolher(hsvParaHexadecimal(matiz, saturacaoAtual, brilhoAtual));
+  }
+  function limparRecente() {
+    setRecente([]);
+    localStorage.removeItem('estacao-servicos-recent-colors');
+  }
+  function atualizarHex(texto: string) {
+    setHexTexto(texto);
+    const candidato = texto.startsWith('#') ? texto : `#${texto}`;
+    if (/^#[0-9a-f]{6}$/i.test(candidato)) {
+      escolher(candidato);
+    } else if (/^#[0-9a-f]{3}$/i.test(candidato)) {
+      escolher(
+        `#${candidato[1]}${candidato[1]}${candidato[2]}${candidato[2]}${candidato[3]}${candidato[3]}`,
+      );
+    }
+  }
+  const recenteCores = recente.length ? recente : paleta.slice(0, 5);
+  return (
+    <div className="services-color-wrap" ref={containerCor}>
+      <button
+        type="button"
+        className="services-color-trigger"
+        aria-expanded={aberto}
+        onClick={() => setAberto((valorAtual) => !valorAtual)}
+      >
+        <i style={{ backgroundColor: valor }} />
+        <span>{valor.toUpperCase()}</span>
+        <Icone name="chevron" size={13} />
+      </button>
+      {aberto && (
+        <div
+          ref={painelCor}
+          className="services-color-popover"
+          style={
+            posicaoPainel
+              ? { position: 'fixed', top: posicaoPainel.top, left: posicaoPainel.left, bottom: 'auto', right: 'auto' }
+              : undefined
+          }
+        >
+          <header>
+            <strong>Escolha uma cor</strong>
+            <button
+              type="button"
+              aria-label="Fechar seletor de cor"
+              onClick={() => setAberto(false)}
+            >
+              <Icone name="close" size={13} />
+            </button>
+          </header>
+          <button
+            type="button"
+            className="color-plane"
+            style={{ backgroundColor: `hsl(${matiz} 100% 50%)` }}
+            aria-label="Escolher saturação e luminosidade"
+            onPointerDown={(evento) => {
+              evento.currentTarget.setPointerCapture(evento.pointerId);
+              selecionarPlano(evento);
+            }}
+            onPointerMove={(evento) => {
+              if (evento.buttons === 1) selecionarPlano(evento);
+            }}
+          >
+            <i
+              style={{
+                left: `${Math.max(2, Math.min(98, saturacao))}%`,
+                top: `${Math.max(2, Math.min(98, 100 - brilho))}%`,
+              }}
+            />
+          </button>
+          <input
+            className="color-hue"
+            aria-label="Matiz"
+            type="range"
+            min="0"
+            max="360"
+            value={matiz}
+            onChange={(evento) => {
+              const continuar = Number(evento.target.value);
+              setMatiz(continuar);
+              escolher(hsvParaHexadecimal(continuar, saturacao, brilho));
+            }}
+          />
+          <label className="color-current">
+            <i style={{ backgroundColor: valor }} />
+            <input
+              ref={entradaHexadecimal}
+              aria-label="Código hexadecimal da cor"
+              value={hexTexto}
+              maxLength={7}
+              spellCheck={false}
+              onChange={(evento) => atualizarHex(evento.target.value)}
+            />
+            <Icone name="chevron" size={13} />
+          </label>
+          <div className="color-swatches">
+            {['#EF4444', '#172033', '#F43F46', '#1684FF'].map((corLocal) => (
+              <button
+                type="button"
+                key={corLocal}
+                aria-label={`Usar cor ${corLocal}`}
+                title={corLocal}
+                className={valor.toUpperCase() === corLocal ? 'selected' : ''}
+                style={{ backgroundColor: corLocal }}
+                onClick={() => escolher(corLocal)}
+              />
+            ))}
+          </div>
+          <div className="color-recent">
+            <span>Cores recentes</span>
+            <div>
+              {recenteCores.map((corLocal, indice) => (
+                <button
+                  type="button"
+                  key={`${corLocal}-${indice}`}
+                  aria-label={`Cor recente ${corLocal}`}
+                  title={corLocal}
+                  className={valor.toUpperCase() === corLocal.toUpperCase() ? 'selected' : ''}
+                  style={{ backgroundColor: corLocal }}
+                  onClick={() => escolher(corLocal)}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              className="color-clear-recent"
+              aria-label="Limpar cores recentes"
+              title="Limpar cores recentes"
+              onClick={limparRecente}
+            >
+              <Icone name="trash" size={14} />
+            </button>
+          </div>
+          <button
+            type="button"
+            className="color-native-label"
+            onClick={() => entradaHexadecimal.current?.focus()}
+          >
+            <span>
+              <Icone name="activity" size={15} />
+              Mais cores
+            </span>
+            <i aria-hidden="true" style={{ backgroundColor: valor }} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
-function ServiceRowIcon({icon,color}:{icon:string;color:string}){return <span className="service-row-icon" style={{color,backgroundColor:`${color}18`}}><CategoryIcon name={icon} size={14}/></span>;}
+function CategoriaModal({
+  value: valor,
+  onClose: aoFechar,
+  onSave: aoSalvar,
+}: {
+  value?: CategoriaServico;
+  onClose: () => void;
+  onSave: (categoria: CategoriaServico) => void;
+}) {
+  const [nomeLocal, setNome] = useEstadoRascunho(
+    `categoria-${valor?.id ?? 'nova'}`,
+    'name',
+    valor?.nome ?? '',
+  );
+  const [descricaoLocal, setDescricao] = useEstadoRascunho(
+    `categoria-${valor?.id ?? 'nova'}`,
+    'description',
+    valor?.descricao ?? '',
+  );
+  const [corLocal, setCor] = useEstadoRascunho(
+    `categoria-${valor?.id ?? 'nova'}`,
+    'color',
+    valor?.cor ?? '#EF4444',
+  );
+  const [iconeLocal, setIcone] = useEstadoRascunho(
+    `categoria-${valor?.id ?? 'nova'}`,
+    'icon',
+    valor?.icone ?? 'wrench',
+  );
+  const [iconeAberto, setIconeAberto] = useState(false);
+  const [erro, setErro] = useState('');
+  function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    if (!nomeLocal.trim()) {
+      setErro('Informe o nome da categoria.');
+      return;
+    }
+    aoSalvar({
+      id: valor?.id ?? `cat-${crypto.randomUUID()}`,
+      nome: nomeLocal.trim(),
+      descricao: descricaoLocal.trim(),
+      cor: corLocal,
+      icone: iconeLocal,
+    });
+  }
+  return (
+    <div
+      className={`services-modal-backdrop${iconeAberto ? ' category-picker-open' : ''}`}
+      onMouseDown={(evento) => {
+        if (evento.target === evento.currentTarget) aoFechar();
+      }}
+    >
+      <form
+        className="category-modal"
+        style={{ visibility: iconeAberto ? 'hidden' : undefined }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="category-modal-title"
+        onSubmit={enviar}
+      >
+        <header className="category-modal-head">
+          <span className="category-modal-mark">
+            <Icone name="pin" size={18} />
+          </span>
+          <div>
+            <h2 id="category-modal-title">
+              {valor ? 'Editar categoria' : 'Nova categoria de serviço'}
+            </h2>
+            <p>Preencha as informações abaixo para criar uma nova categoria.</p>
+          </div>
+          <button type="button" aria-label="Fechar" onClick={aoFechar}>
+            <Icone name="close" size={15} />
+          </button>
+        </header>
+        <div className="category-modal-body">
+          <label className="services-field">
+            <span>
+              Nome da categoria <b>*</b>
+            </span>
+            <input
+              autoFocus
+              required
+              maxLength={50}
+              placeholder="Ex.: Mecânica, Elétrica, Funilaria..."
+              value={nomeLocal}
+              onChange={(evento) => setNome(evento.target.value)}
+            />
+          </label>
+          <label className="services-field">
+            <span>
+              Descrição <small>(opcional)</small>
+            </span>
+            <textarea
+              maxLength={200}
+              placeholder="Adicione uma breve descrição sobre esta categoria..."
+              value={descricaoLocal}
+              onChange={(evento) => setDescricao(evento.target.value)}
+            />
+            <em>{descricaoLocal.length}/200</em>
+          </label>
+          <div className="category-modal-row">
+            <div className="services-field">
+              <span>
+                Cor da categoria <b>*</b>
+              </span>
+              <CorSeletor value={corLocal} onChange={setCor} />
+            </div>
+            <div className="services-field">
+              <span>
+                Ícone da categoria <b>*</b>
+              </span>
+              <button
+                type="button"
+                className="category-icon-control"
+                onClick={() => setIconeAberto(true)}
+              >
+                <span>
+                  <CategoriaIcone name={iconeLocal} size={16} />
+                </span>
+                <b>
+                  {iconeOpcoes.find(([chave]) => chave === iconeLocal)?.[1] ?? 'Ícone selecionado'}
+                </b>
+                <Icone name="chevron" size={13} />
+              </button>
+            </div>
+          </div>
+          <div className="category-preview-label">Visualização</div>
+          <div className="category-preview">
+            <span style={{ color: corLocal, backgroundColor: `${corLocal}20` }}>
+              <CategoriaIcone name={iconeLocal} size={17} />
+            </span>
+            <div>
+              <strong>{nomeLocal.trim() || 'Nome da categoria'}</strong>
+              <small>{descricaoLocal.trim() || 'Serviços relacionados a esta categoria.'}</small>
+            </div>
+          </div>
+          {erro && (
+            <p className="services-form-error" role="alert">
+              {erro}
+            </p>
+          )}
+        </div>
+        <footer className="category-modal-footer">
+          <button type="button" className="services-btn secondary" onClick={aoFechar}>
+            Cancelar
+          </button>
+          <button type="submit" className="services-btn primary">
+            Salvar categoria
+          </button>
+        </footer>
+        {iconeAberto && (
+          <IconeSeletor
+            value={iconeLocal}
+            onClose={() => setIconeAberto(false)}
+            onSelect={(selecionado) => {
+              setIcone(selecionado);
+              setIconeAberto(false);
+            }}
+          />
+        )}
+      </form>
+    </div>
+  );
+}
+function ServicoLinhaIcone({ icon: iconeLocal, color: corLocal }: { icon: string; color: string }) {
+  return (
+    <span
+      className="service-row-icon"
+      style={{ color: corLocal, backgroundColor: `${corLocal}18` }}
+    >
+      <CategoriaIcone name={iconeLocal} size={14} />
+    </span>
+  );
+}
 
-export default function Servicos(){
-  const user=useUsuarioAdmin(),navigate=useNavigate();
-  const [collapsed,setCollapsed]=useState(false),[catalog,setCatalog]=useState(lerCatalogoServicos),[query,setQuery]=useState(''),[categoryFilter,setCategoryFilter]=useState('todos'),[statusFilter,setStatusFilter]=useState<StatusFiltro>('todos'),[page,setPage]=useState(1),[editing,setEditing]=useEstadoRascunho<ItemCatalogoServico|null>('servico-editor','editing',null),[categoryEditing,setCategoryEditing]=useState<CategoriaServico|null|undefined>(undefined),[toast,setToast]=useState(''),[toastError,setToastError]=useState(false),[formError,setFormError]=useState('');
-  const [form,setForm]=useEstadoRascunho<Omit<ItemCatalogoServico,'id'>>('servico-editor','form',{nome:'',categoriaId:'',descricao:'',preco:0,custo:Number.NaN,duracao:'',ativo:true,icone:'wrench',adicional:''});
-  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),3500);return()=>clearTimeout(timer);},[toast]);
-  const [carregando,setCarregando]=useState(true),[salvando,setSalvando]=useState(false),[erroCarga,setErroCarga]=useState('');
-  useEffect(()=>{let active=true;atualizarCatalogoCompartilhado().then(d=>{if(active)setCatalog(d)}).catch(e=>{if(active)setErroCarga(e.message)}).finally(()=>{if(active)setCarregando(false)});return()=>{active=false}},[]);
-  useDadosVivos(async valido=>{const d=await atualizarCatalogoCompartilhado();if(valido()){setCatalog(d);setErroCarga('')}},!carregando&&!salvando);
-  const counts=useMemo(()=>({total:catalog.servicos.length,active:catalog.servicos.filter(item=>item.ativo).length,inactive:catalog.servicos.filter(item=>!item.ativo).length,categories:catalog.categorias.length}),[catalog]);
-  const filtered=useMemo(()=>catalog.servicos.filter(item=>{const category=catalog.categorias.find(c=>c.id===item.categoriaId);return(categoryFilter==='todos'||item.categoriaId===categoryFilter)&&(statusFilter==='todos'||(statusFilter==='ativos'?item.ativo:!item.ativo))&&`${item.nome} ${item.descricao} ${category?.nome??''}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR'));}).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),[catalog,categoryFilter,statusFilter,query]);
-  const pages=Math.max(1,Math.ceil(filtered.length/8)),current=Math.min(page,pages),rows=filtered.slice((current-1)*8,current*8);
-  useEffect(()=>observarCatalogoServicos(()=>setCatalog(lerCatalogoServicos())),[]);
-  async function persist(next:typeof catalog){if(salvando)return false;setSalvando(true);try{await salvarCatalogoServicos(next);setCatalog(next);setToastError(false);return true;}catch(error){setToastError(true);setToast(error instanceof Error?error.message:'Não foi possível salvar.');await atualizarCatalogoCompartilhado().then(setCatalog).catch(()=>{});return false;}finally{setSalvando(false)}}
-  function focusEditor(){requestAnimationFrame(()=>{const field=document.querySelector<HTMLInputElement>('.service-editor-card input');field?.scrollIntoView({behavior:'smooth',block:'center'});field?.focus({preventScroll:true});});}
-  function resetForm(){setEditing(null);setForm({nome:'',categoriaId:'',descricao:'',preco:0,custo:Number.NaN,duracao:'',ativo:true,icone:'wrench',adicional:''});setFormError('');}
-  function editService(service:ItemCatalogoServico){if(!pode("servicos","editar")){setToastError(true);setToast("Seu cargo permite somente consultar este serviço.");return;}setEditing(service);setForm({...service});setFormError('');focusEditor();}
-  async function saveService(event:FormEvent){event.preventDefault();if(!form.nome.trim()||!form.categoriaId||!form.descricao.trim()||!Number.isFinite(form.preco)||form.preco<=0||!Number.isFinite(form.custo)||form.custo<0||!form.duracao){setFormError('Preencha os campos obrigatórios, informe preço e custo válidos.');return;}const category=catalog.categorias.find(item=>item.id===form.categoriaId);if(!category){setFormError('Selecione uma categoria válida.');return;}if(editing&&!catalog.servicos.some(item=>item.id===editing.id)){setFormError('Este serviço não está mais no catálogo. Limpe o formulário para criar um novo.');return;}const saved:ItemCatalogoServico={...form,id:editing?.id??`svc-${crypto.randomUUID()}`,nome:form.nome.trim(),descricao:form.descricao.trim(),icone:category?.icone??form.icone};const services=editing?catalog.servicos.map(item=>item.id===editing.id?saved:item):[saved,...catalog.servicos];if(!await persist({...catalog,servicos:services}))return;setToast(editing?'Serviço atualizado.':'Serviço adicionado.');resetForm();limparRascunho('servico-editor');}
-  async function saveCategory(category:CategoriaServico){const categories=categoryEditing?catalog.categorias.map(item=>item.id===category.id?category:item):[...catalog.categorias,category];if(!await persist({...catalog,categorias:categories}))return;limparRascunho(`categoria-${categoryEditing?.id??'nova'}`);setCategoryEditing(undefined);setToast(categoryEditing?'Categoria atualizada.':'Categoria criada.');}
-  function setCardFilter(filter:StatusFiltro){setQuery('');setCategoryFilter('todos');setStatusFilter(filter);setPage(1);}
-  async function signOut(){try{await logout();navigate('/login',{replace:true});}catch{setToastError(true);setToast('Não foi possível encerrar a sessão agora.');}}
-  return <div className="orders-viewport services-app" data-catalog-readonly={!pode("servicos","editar")&&!pode("servicos","criar")}><div className="orders-main"><main className="services-content"><ConteudoCarregando carregando={carregando}>{erroCarga&&<p role="alert">{erroCarga}<button onClick={()=>atualizarCatalogoCompartilhado().then(d=>{setCatalog(d);setErroCarga('')}).catch(e=>setErroCarga(e.message))}>Tentar novamente</button></p>}<div className="services-page-heading"><div><h1>Serviços</h1><p>Cadastre e gerencie os serviços oferecidos pela oficina.</p></div><div className="services-page-actions"><button type="button" className="services-btn secondary" disabled={!pode("servicos","editar")} onClick={()=>setCategoryEditing(null)}><Icon name="plus" size={15}/>Nova categoria</button><button type="button" className="services-btn primary" disabled={!pode("servicos","criar")} onClick={()=>{resetForm();focusEditor();}}><Icon name="plus" size={16}/>Novo serviço</button></div></div>
-      <section className="services-metrics" aria-label="Resumo dos serviços"><button type="button" className={`services-metric red${statusFilter==='todos'?' selected':''}`} onClick={()=>setCardFilter('todos')}><span><Icon name="wrench" size={17}/></span><div><small>Total de serviços</small><strong>{counts.total}</strong><em>serviços cadastrados</em></div></button><button type="button" className={`services-metric purple${categoryFilter!=='todos'?' selected':''}`} onClick={()=>{setQuery('');setCategoryFilter('todos');setStatusFilter('todos');setPage(1);document.getElementById('services-categories')?.scrollIntoView({behavior:'smooth',block:'nearest'});}}><span><Icon name="filter" size={17}/></span><div><small>Categorias cadastradas</small><strong>{counts.categories}</strong><em>para organizar o catálogo</em></div></button><button type="button" className={`services-metric green${statusFilter==='ativos'?' selected':''}`} onClick={()=>setCardFilter('ativos')}><span><Icon name="check" size={17}/></span><div><small>Serviços ativos</small><strong>{counts.active}</strong><em>disponíveis para agendamento</em></div></button><button type="button" className={`services-metric amber${statusFilter==='inativos'?' selected':''}`} onClick={()=>setCardFilter('inativos')}><span><Icon name="pause" size={17}/></span><div><small>Serviços inativos</small><strong>{counts.inactive}</strong><em>fora da agenda</em></div></button></section>
-      <div className="services-workspace"><section className="services-list-card"><header className="services-card-heading"><div><h2>Catálogo de serviços</h2><p>{filtered.length} serviços encontrados</p></div><button type="button" className="services-icon-action" aria-label="Limpar filtros" title="Limpar filtros" onClick={()=>{setQuery('');setCategoryFilter('todos');setStatusFilter('todos');setPage(1);}}><img src="/assets/services/reload-double.svg" alt="" aria-hidden="true"/></button></header><div className="services-toolbar"><label className="services-search"><Icon name="search" size={17}/><input aria-label="Buscar no catálogo" placeholder="Buscar por nome ou descrição..." value={query} onChange={event=>{setQuery(event.target.value);setPage(1);}}/></label><SeletorFiltro variant="staff" label="Categoria dos serviços" value={categoryFilter} options={[{value:'todos',label:'Todas as categorias',icon:'dashboard'},...catalog.categorias.map(c=>({value:c.id,label:c.nome,icon:/^https:/.test(c.icone)?'wrench':c.icone}))]} onChange={value=>{setCategoryFilter(value);setPage(1);}}/><SeletorFiltro variant="staff" label="Status dos serviços" value={statusFilter} options={[{value:'todos',label:'Todos os status',icon:'sliders'},{value:'ativos',label:'Ativos',tone:'green'},{value:'inativos',label:'Inativos',tone:'neutral'}]} onChange={value=>{setStatusFilter(value);setPage(1);}}/></div>{(query||categoryFilter!=='todos'||statusFilter!=='todos')&&<div className="services-filter-summary"><span>{filtered.length} resultado{filtered.length===1?'':'s'} com os filtros selecionados</span><button type="button" onClick={()=>{setQuery('');setCategoryFilter('todos');setStatusFilter('todos');setPage(1);}}>Limpar filtros <Icon name="close" size={12}/></button></div>}<div className="services-table-scroll"><table className="services-table"><thead><tr><th>Serviço</th><th>Categoria</th><th>Preço (R$)</th><th>Tempo médio</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(service=>{const category=catalog.categorias.find(item=>item.id===service.categoriaId)??{id:'missing',nome:'Sem categoria',descricao:'',cor:'#64748B',icone:'wrench'};return <tr key={service.id} className={editing?.id===service.id?'service-row-editing':undefined}><td><div className="services-name-cell"><ServiceRowIcon icon={category.icone||service.icone} color={category.cor}/><span><strong>{service.nome}</strong><small>{service.descricao}</small></span></div></td><td><span className="service-category-pill" style={{color:category.cor,backgroundColor:`${category.cor}19`}}>{category.nome}</span></td><td className="service-price">{money(service.preco)}</td><td><span className="service-duration"><Icon name="clock" size={13}/>{service.duracao}</span></td><td><span className={`service-status ${statusClass(service.ativo)}`}>{service.ativo?'Ativo':'Inativo'}</span></td><td><button type="button" className="service-edit-button" aria-label={`Editar ${service.nome}`} title={`Editar ${service.nome}`} onClick={()=>editService(service)}><Icon name="pencil" size={14}/></button></td></tr>;})}{!rows.length&&<tr><td colSpan={6}><div className="services-empty"><Icon name="wrench" size={26}/><strong>{catalog.servicos.length?'Nenhum serviço corresponde aos filtros.':'Ainda não há serviços cadastrados.'}</strong><button type="button" onClick={()=>{setQuery('');setCategoryFilter('todos');setStatusFilter('todos');}}>Limpar filtros</button></div></td></tr>}</tbody></table></div><footer className="services-pagination"><span>Mostrando {filtered.length?(current-1)*8+1:0} a {Math.min(current*8,filtered.length)} de {filtered.length} serviços</span><nav aria-label="Paginação dos serviços"><button type="button" aria-label="Primeira página" disabled={current===1} onClick={()=>setPage(1)}><Icon name="left" size={12}/><Icon name="left" size={12}/></button><button type="button" aria-label="Página anterior" disabled={current===1} onClick={()=>setPage(value=>Math.max(1,value-1))}><Icon name="left" size={12}/></button>{Array.from({length:pages},(_,index)=>index+1).filter(number=>number===1||number===pages||Math.abs(number-current)<=1).map(number=><button type="button" key={number} className={number===current?'current':''} onClick={()=>setPage(number)}>{number}</button>)}<button type="button" aria-label="Próxima página" disabled={current===pages} onClick={()=>setPage(value=>Math.min(pages,value+1))}><Icon name="right" size={12}/></button><button type="button" aria-label="Última página" disabled={current===pages} onClick={()=>setPage(pages)}><Icon name="right" size={12}/><Icon name="right" size={12}/></button></nav></footer></section>
-        <form className="service-editor-card" onSubmit={saveService}><header><span><Icon name={editing?'pencil':'wrench'} size={16}/></span><div><h2>{editing?'Editar serviço':'Adicionar novo serviço'}</h2><small>{editing?editing.nome:'Preencha os dados para disponibilizar um serviço.'}</small></div></header>{editing&&<div className="service-edit-context"><span>Editando serviço existente</span><button type="button" onClick={resetForm}>Sair da edição <Icon name="close" size={12}/></button></div>}<div className="service-editor-fields"><label className="services-field"><span>Nome do serviço <b>*</b></span><input maxLength={80} placeholder="Ex.: Troca de Óleo do Motor" value={form.nome} onChange={event=>setForm({...form,nome:event.target.value})}/></label><label className="services-field"><span>Categoria <b>*</b></span><CategorySelect value={form.categoriaId} categories={catalog.categorias} onChange={value=>{const category=catalog.categorias.find(item=>item.id===value);setForm({...form,categoriaId:value,icone:category?.icone??form.icone});}}/></label><label className="services-field"><span>Descrição <b>*</b></span><textarea maxLength={300} placeholder="Descreva o serviço em detalhes..." value={form.descricao} onChange={event=>setForm({...form,descricao:event.target.value})}/></label><div className="service-price-row"><label className="services-field"><span>Preço (R$) <b>*</b></span><input type="number" min="0.01" step="0.01" placeholder="0,00" value={form.preco||''} onChange={event=>setForm({...form,preco:Number(event.target.value)})}/></label><label className="services-field"><span>Custo do serviço (R$) <b>*</b></span><input type="number" min="0" step="0.01" placeholder="0,00" value={Number.isFinite(form.custo)?form.custo:''} onChange={event=>setForm({...form,custo:event.target.value===''?Number.NaN:Number(event.target.value)})}/></label></div><div className="service-duration-row"><label className="services-field"><span>Tempo médio <b>*</b></span><DurationSelect value={form.duracao} onChange={value=>setForm({...form,duracao:value})}/></label><div className="services-field"><span>Status</span><button type="button" className={`service-switch${form.ativo?' enabled':''}`} aria-pressed={form.ativo} onClick={()=>setForm({...form,ativo:!form.ativo})}><i/><span>{form.ativo?'Ativo':'Inativo'}</span></button></div></div><label className="services-field"><span>Informações adicionais <small>(opcional)</small></span><textarea className="service-extra-textarea" maxLength={300} placeholder="Observações, recomendações ou detalhes importantes..." value={form.adicional} onChange={event=>setForm({...form,adicional:event.target.value})}/></label>{formError&&<p className="services-form-error" role="alert">{formError}</p>}</div><footer><button type="button" className="services-btn secondary" onClick={resetForm}><img className="service-reset-icon" src="/assets/services/reload-single.svg" alt="" aria-hidden="true"/>Limpar</button><button type="submit" className="services-btn primary">{editing?'Salvar alterações':'Salvar serviço'}</button></footer></form>
+export default function Servicos() {
+  const exibirCartao = useCartaoVisivel('servicos');
+  const [catalogo, setCatalogo] = useState({
+    categorias: [] as CategoriaServico[],
+    servicos: [] as ItemCatalogoServico[],
+  });
+  const [consulta, setConsulta] = useState('');
+  usePesquisaPagina(setConsulta);
+  const [categoriaFiltro, setCategoriaFiltro] = useState('todos');
+  const [filtroSituacao, setSituacaoFiltro] = useState<SituacaoFiltro>('todos');
+  const [pagina, setPagina] = useState(1);
+  const [editando, setEditando] = useEstadoRascunho<ItemCatalogoServico | null>(
+    'servico-editor',
+    'editing',
+    null,
+  );
+  const [categoriaEditando, setCategoriaEditando] = useState<CategoriaServico | null | undefined>(
+    undefined,
+  );
+  const [avisoTemporario, setAvisoTemporario] = useState('');
+  const [avisoTemporarioErro, setAvisoTemporarioErro] = useState(false);
+  const [formularioErro, setFormularioErro] = useState('');
+  const [formulario, setFormulario] = useEstadoRascunho<Omit<ItemCatalogoServico, 'id'>>(
+    'servico-editor',
+    'form',
+    {
+      nome: '',
+      categoriaId: '',
+      descricao: '',
+      preco: 0,
+      custo: Number.NaN,
+      duracao: '',
+      ativo: true,
+      icone: 'wrench',
+      adicional: '',
+    },
+  );
+  useEffect(() => {
+    if (!avisoTemporario) return;
+    const temporizador = setTimeout(() => setAvisoTemporario(''), 3500);
+    return () => clearTimeout(temporizador);
+  }, [avisoTemporario]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [atualizandoLista, setAtualizandoLista] = useState(false);
+  const atualizacaoCatalogoRef = useRef(false);
+  const [erroCarga, setErroCarga] = useState('');
+  async function atualizarListaCatalogo(mostrarEstado = true, valido: () => boolean = () => true) {
+    if (atualizacaoCatalogoRef.current) return;
+    atualizacaoCatalogoRef.current = true;
+    if (mostrarEstado) setAtualizandoLista(true);
+    try {
+      const dadosAtual = await atualizarCatalogoCompartilhado();
+      if (valido()) {
+        setCatalogo(dadosAtual);
+        setErroCarga('');
+      }
+    } catch (erro) {
+      if (valido()) {
+        setErroCarga(erro instanceof Error ? erro.message : 'Não foi possível atualizar o catálogo.');
+        if (mostrarEstado) {
+          setAvisoTemporarioErro(true);
+          setAvisoTemporario('Não foi possível atualizar os serviços. Tente novamente.');
+        }
+      }
+    } finally {
+      atualizacaoCatalogoRef.current = false;
+      if (valido()) setAtualizandoLista(false);
+    }
+  }
+  useEffect(() => {
+    let ativoLocal = true;
+    atualizarCatalogoCompartilhado()
+      .then((dadosAtual) => {
+        if (ativoLocal) setCatalogo(dadosAtual);
+      })
+      .catch((eventoRecebido) => {
+        if (ativoLocal) setErroCarga(eventoRecebido.message);
+      })
+      .finally(() => {
+        if (ativoLocal) setCarregando(false);
+      });
+    return () => {
+      ativoLocal = false;
+    };
+  }, []);
+  useDadosVivos(
+    (valido) => atualizarListaCatalogo(false, valido),
+    !carregando && !salvando,
+    'catalogo-servicos',
+  );
+  const contagens = useMemo(
+    () => ({
+      total: catalogo.servicos.length,
+      active: catalogo.servicos.filter((item) => item.ativo).length,
+      inactive: catalogo.servicos.filter((item) => !item.ativo).length,
+      categories: catalogo.categorias.length,
+    }),
+    [catalogo],
+  );
+  const filtrado = useMemo(
+    () =>
+      catalogo.servicos
+        .filter((item) => {
+          const categoria = catalogo.categorias.find(
+            (elementoAtual) => elementoAtual.id === item.categoriaId,
+          );
+          return (
+            (categoriaFiltro === 'todos' || item.categoriaId === categoriaFiltro) &&
+            (filtroSituacao === 'todos' ||
+              (filtroSituacao === 'ativos' ? item.ativo : !item.ativo)) &&
+            correspondeBusca(consulta, `${item.nome} ${item.descricao} ${categoria?.nome ?? ''}`)
+          );
+        })
+        .sort((primeiroElemento, segundoElemento) =>
+          primeiroElemento.nome.localeCompare(segundoElemento.nome, 'pt-BR'),
+        ),
+    [catalogo, categoriaFiltro, filtroSituacao, consulta],
+  );
+  const paginas = Math.max(1, Math.ceil(filtrado.length / 8));
+  const atual = Math.min(pagina, paginas);
+  const linhas = filtrado.slice((atual - 1) * 8, atual * 8);
+  useEffect(() => observarCatalogoServicos(() => setCatalogo(lerCatalogoServicos())), []);
+  async function persistir(continuar: typeof catalogo) {
+    if (salvando) return false;
+    setSalvando(true);
+    try {
+      await salvarCatalogoServicos(continuar);
+      setCatalogo(continuar);
+      setAvisoTemporarioErro(false);
+      return true;
+    } catch (erro) {
+      setAvisoTemporarioErro(true);
+      setAvisoTemporario(erro instanceof Error ? erro.message : 'Não foi possível salvar.');
+      await atualizarCatalogoCompartilhado()
+        .then(setCatalogo)
+        .catch(() => {});
+      return false;
+    } finally {
+      setSalvando(false);
+    }
+  }
+  useAtalhoPagina({
+    novo: () => {
+      if (pode('servicos', 'criar')) {
+        restaurarFormulario();
+        focusEditor();
+      }
+    },
+    categoria: () => {
+      if (pode('servicos', 'editar')) setCategoriaEditando(null);
+    },
+  });
+  function focusEditor() {
+    requestAnimationFrame(() => {
+      const campo = document.querySelector<HTMLInputElement>('.service-editor-card input');
+      campo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      campo?.focus({ preventScroll: true });
+    });
+  }
+  function restaurarFormulario() {
+    setEditando(null);
+    setFormulario({
+      nome: '',
+      categoriaId: '',
+      descricao: '',
+      preco: 0,
+      custo: Number.NaN,
+      duracao: '',
+      ativo: true,
+      icone: 'wrench',
+      adicional: '',
+    });
+    setFormularioErro('');
+  }
+  function editarServico(servico: ItemCatalogoServico) {
+    if (!pode('servicos', 'editar')) {
+      setAvisoTemporarioErro(true);
+      setAvisoTemporario('Seu cargo permite somente consultar este serviço.');
+      return;
+    }
+    setEditando(servico);
+    setFormulario({ ...servico });
+    setFormularioErro('');
+    focusEditor();
+  }
+  async function salvarServico(evento: FormEvent) {
+    evento.preventDefault();
+    if (
+      !formulario.nome.trim() ||
+      !formulario.categoriaId ||
+      !formulario.descricao.trim() ||
+      !Number.isFinite(formulario.preco) ||
+      formulario.preco <= 0 ||
+      !Number.isFinite(formulario.custo) ||
+      formulario.custo < 0 ||
+      !formulario.duracao
+    ) {
+      setFormularioErro('Preencha os campos obrigatórios, informe preço e custo válidos.');
+      return;
+    }
+    const categoria = catalogo.categorias.find((item) => item.id === formulario.categoriaId);
+    if (!categoria) {
+      setFormularioErro('Selecione uma categoria válida.');
+      return;
+    }
+    if (editando && !catalogo.servicos.some((item) => item.id === editando.id)) {
+      setFormularioErro(
+        'Este serviço não está mais no catálogo. Limpe o formulário para criar um novo.',
+      );
+      return;
+    }
+    const salvo: ItemCatalogoServico = {
+      ...formulario,
+      id: editando?.id ?? `svc-${crypto.randomUUID()}`,
+      nome: formulario.nome.trim(),
+      descricao: formulario.descricao.trim(),
+      icone: categoria?.icone ?? formulario.icone,
+    };
+    const servicosLocal = editando
+      ? catalogo.servicos.map((item) => (item.id === editando.id ? salvo : item))
+      : [salvo, ...catalogo.servicos];
+    if (!(await persistir({ ...catalogo, servicos: servicosLocal }))) return;
+    setAvisoTemporario(editando ? 'Serviço atualizado.' : 'Serviço adicionado.');
+    restaurarFormulario();
+    limparRascunho('servico-editor');
+  }
+  async function salvarCategoria(categoria: CategoriaServico) {
+    const categoriasLocal = categoriaEditando
+      ? catalogo.categorias.map((item) => (item.id === categoria.id ? categoria : item))
+      : [...catalogo.categorias, categoria];
+    if (!(await persistir({ ...catalogo, categorias: categoriasLocal }))) return;
+    limparRascunho(`categoria-${categoriaEditando?.id ?? 'nova'}`);
+    setCategoriaEditando(undefined);
+    setAvisoTemporario(categoriaEditando ? 'Categoria atualizada.' : 'Categoria criada.');
+  }
+  function setCartaoFiltro(filtro: SituacaoFiltro) {
+    setConsulta('');
+    setCategoriaFiltro('todos');
+    setSituacaoFiltro(filtro);
+    setPagina(1);
+  }
+  return (
+    <div
+      className="orders-viewport services-app"
+      data-catalog-readonly={!pode('servicos', 'editar') && !pode('servicos', 'criar')}
+    >
+      <div className="orders-main">
+        <main className="services-content">
+          <ConteudoCarregando carregando={carregando}>
+            {erroCarga && (
+              <p role="alert">
+                {erroCarga}
+                <button
+                  onClick={() =>
+                    atualizarCatalogoCompartilhado()
+                      .then((dadosAtual) => {
+                        setCatalogo(dadosAtual);
+                        setErroCarga('');
+                      })
+                      .catch((eventoRecebido) => setErroCarga(eventoRecebido.message))
+                  }
+                >
+                  Tentar novamente
+                </button>
+              </p>
+            )}
+            <div className="services-page-heading">
+              <div>
+                <h1>Serviços</h1>
+                <p>Cadastre e gerencie os serviços oferecidos pela oficina.</p>
+              </div>
+              <div className="services-page-actions">
+                <button
+                  type="button"
+                  className="services-btn secondary"
+                  disabled={!pode('servicos', 'editar')}
+                  onClick={() => setCategoriaEditando(null)}
+                >
+                  <Icone name="plus" size={15} />
+                  Nova categoria
+                </button>
+                <button
+                  type="button"
+                  className="services-btn primary"
+                  disabled={!pode('servicos', 'criar')}
+                  onClick={() => {
+                    restaurarFormulario();
+                    focusEditor();
+                  }}
+                >
+                  <Icone name="plus" size={16} />
+                  Novo serviço
+                </button>
+              </div>
+            </div>
+            <section
+              className="services-metrics indicadores-grid"
+              data-indicadores
+              aria-label="Resumo dos serviços"
+            >
+              <CartaoIndicador
+                titulo="Total de serviços"
+                valor={contagens.total}
+                descricao="Serviços cadastrados"
+                icone="wrench"
+                tom="blue"
+                editorId="servicos:todos"
+                oculto={!exibirCartao('todos')}
+                ativo={filtroSituacao === 'todos'}
+                aoClicar={() => setCartaoFiltro('todos')}
+              />
+              <CartaoIndicador
+                titulo="Categorias"
+                valor={contagens.categories}
+                descricao="Organização do catálogo"
+                icone="filter"
+                tom="violet"
+                editorId="servicos:categorias"
+                oculto={!exibirCartao('categorias')}
+                ativo={categoriaFiltro !== 'todos'}
+                aoClicar={() => {
+                  setConsulta('');
+                  setCategoriaFiltro('todos');
+                  setSituacaoFiltro('todos');
+                  setPagina(1);
+                  document
+                    .getElementById('services-categories')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }}
+              />
+              <CartaoIndicador
+                titulo="Serviços ativos"
+                valor={contagens.active}
+                descricao="Disponíveis para agendar"
+                icone="check"
+                tom="green"
+                total={contagens.total}
+                editorId="servicos:ativos"
+                oculto={!exibirCartao('ativos')}
+                ativo={filtroSituacao === 'ativos'}
+                aoClicar={() => setCartaoFiltro('ativos')}
+              />
+              <CartaoIndicador
+                titulo="Serviços inativos"
+                valor={contagens.inactive}
+                descricao="Fora da agenda"
+                icone="pause"
+                tom="amber"
+                total={contagens.total}
+                editorId="servicos:inativos"
+                oculto={!exibirCartao('inativos')}
+                ativo={filtroSituacao === 'inativos'}
+                aoClicar={() => setCartaoFiltro('inativos')}
+              />
+            </section>
+            <div className="services-workspace">
+              <section className="services-list-card">
+                <header className="services-card-heading">
+                  <div>
+                    <h2>Catálogo de serviços</h2>
+                    <p>{filtrado.length} serviços encontrados</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`services-icon-action${atualizandoLista ? ' is-refreshing' : ''}`}
+                    aria-label={atualizandoLista ? 'Atualizando catálogo' : 'Atualizar catálogo'}
+                    title={atualizandoLista ? 'Atualizando dados do banco...' : 'Atualizar serviços e categorias'}
+                    disabled={atualizandoLista || carregando}
+                    onClick={() => void atualizarListaCatalogo(true)}
+                  >
+                    <Icone name="refresh" size={17} />
+                  </button>
+                </header>
+                <div className="services-toolbar">
+                  <label className="services-search">
+                    <Icone name="search" size={17} />
+                    <input
+                      aria-label="Buscar no catálogo"
+                      placeholder="Buscar por nome ou descrição..."
+                      value={consulta}
+                      onChange={(evento) => {
+                        setConsulta(evento.target.value);
+                        setPagina(1);
+                      }}
+                    />
+                  </label>
+                  <SeletorFiltro
+                    variant="staff"
+                    label="Categoria dos serviços"
+                    value={categoriaFiltro}
+                    options={[
+                      { value: 'todos', label: 'Todas as categorias', icon: 'dashboard' },
+                      ...catalogo.categorias.map((elementoAtual) => ({
+                        value: elementoAtual.id,
+                        label: elementoAtual.nome,
+                        icon: /^https:/.test(elementoAtual.icone) ? 'wrench' : elementoAtual.icone,
+                      })),
+                    ]}
+                    onChange={(valor) => {
+                      setCategoriaFiltro(valor);
+                      setPagina(1);
+                    }}
+                  />
+                  <SeletorFiltro
+                    variant="staff"
+                    label="Status dos serviços"
+                    value={filtroSituacao}
+                    options={[
+                      { value: 'todos', label: 'Todos os status', icon: 'sliders' },
+                      { value: 'ativos', label: 'Ativos', tone: 'green' },
+                      { value: 'inativos', label: 'Inativos', tone: 'neutral' },
+                    ]}
+                    onChange={(valor) => {
+                      setSituacaoFiltro(valor);
+                      setPagina(1);
+                    }}
+                  />
+                </div>
+                {(consulta || categoriaFiltro !== 'todos' || filtroSituacao !== 'todos') && (
+                  <div className="services-filter-summary">
+                    <span>
+                      {filtrado.length} resultado{filtrado.length === 1 ? '' : 's'} com os filtros
+                      selecionados
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConsulta('');
+                        setCategoriaFiltro('todos');
+                        setSituacaoFiltro('todos');
+                        setPagina(1);
+                      }}
+                    >
+                      Limpar filtros <Icone name="close" size={12} />
+                    </button>
+                  </div>
+                )}
+                <div className="services-table-scroll">
+                  <table className="services-table">
+                    <thead>
+                      <tr>
+                        <th>Serviço</th>
+                        <th>Categoria</th>
+                        <th>Preço (R$)</th>
+                        <th>Tempo médio</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linhas.map((servico) => {
+                        const categoria = catalogo.categorias.find(
+                          (item) => item.id === servico.categoriaId,
+                        ) ?? {
+                          id: 'missing',
+                          nome: 'Sem categoria',
+                          descricao: '',
+                          cor: '#64748B',
+                          icone: 'wrench',
+                        };
+                        return (
+                          <tr
+                            key={servico.id}
+                            className={
+                              editando?.id === servico.id ? 'service-row-editing' : undefined
+                            }
+                          >
+                            <td>
+                              <div className="services-name-cell">
+                                <ServicoLinhaIcone
+                                  icon={categoria.icone || servico.icone}
+                                  color={categoria.cor}
+                                />
+                                <span>
+                                  <strong>{servico.nome}</strong>
+                                  <small>{servico.descricao}</small>
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span
+                                className="service-category-pill"
+                                style={{
+                                  color: categoria.cor,
+                                  backgroundColor: `${categoria.cor}19`,
+                                }}
+                              >
+                                {categoria.nome}
+                              </span>
+                            </td>
+                            <td className="service-price">{moeda(servico.preco)}</td>
+                            <td>
+                              <span className="service-duration">
+                                <Icone name="clock" size={13} />
+                                {servico.duracao}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`service-status ${classeSituacao(servico.ativo)}`}>
+                                {servico.ativo ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="service-edit-button"
+                                aria-label={`Editar ${servico.nome}`}
+                                title={`Editar ${servico.nome}`}
+                                onClick={() => editarServico(servico)}
+                              >
+                                <Icone name="pencil" size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!linhas.length && (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="services-empty">
+                              <Icone name="wrench" size={26} />
+                              <strong>
+                                {catalogo.servicos.length
+                                  ? 'Nenhum serviço corresponde aos filtros.'
+                                  : 'Ainda não há serviços cadastrados.'}
+                              </strong>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConsulta('');
+                                  setCategoriaFiltro('todos');
+                                  setSituacaoFiltro('todos');
+                                }}
+                              >
+                                Limpar filtros
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <footer className="services-pagination">
+                  <span>
+                    Mostrando {filtrado.length ? (atual - 1) * 8 + 1 : 0} a{' '}
+                    {Math.min(atual * 8, filtrado.length)} de {filtrado.length} serviços
+                  </span>
+                  <nav aria-label="Paginação dos serviços">
+                    <button
+                      type="button"
+                      aria-label="Primeira página"
+                      disabled={atual === 1}
+                      onClick={() => setPagina(1)}
+                    >
+                      <Icone name="left" size={12} />
+                      <Icone name="left" size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Página anterior"
+                      disabled={atual === 1}
+                      onClick={() => setPagina((valor) => Math.max(1, valor - 1))}
+                    >
+                      <Icone name="left" size={12} />
+                    </button>
+                    {Array.from({ length: paginas }, (_, indice) => indice + 1)
+                      .filter(
+                        (numeroLocal) =>
+                          numeroLocal === 1 ||
+                          numeroLocal === paginas ||
+                          Math.abs(numeroLocal - atual) <= 1,
+                      )
+                      .map((numeroLocal) => (
+                        <button
+                          type="button"
+                          key={numeroLocal}
+                          className={numeroLocal === atual ? 'current' : ''}
+                          onClick={() => setPagina(numeroLocal)}
+                        >
+                          {numeroLocal}
+                        </button>
+                      ))}
+                    <button
+                      type="button"
+                      aria-label="Próxima página"
+                      disabled={atual === paginas}
+                      onClick={() => setPagina((valor) => Math.min(paginas, valor + 1))}
+                    >
+                      <Icone name="right" size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Última página"
+                      disabled={atual === paginas}
+                      onClick={() => setPagina(paginas)}
+                    >
+                      <Icone name="right" size={12} />
+                      <Icone name="right" size={12} />
+                    </button>
+                  </nav>
+                </footer>
+              </section>
+              <form className="service-editor-card" onSubmit={salvarServico}>
+                <header>
+                  <span>
+                    <Icone name={editando ? 'pencil' : 'wrench'} size={16} />
+                  </span>
+                  <div>
+                    <h2>{editando ? 'Editar serviço' : 'Adicionar novo serviço'}</h2>
+                    <small>
+                      {editando
+                        ? editando.nome
+                        : 'Preencha os dados para disponibilizar um serviço.'}
+                    </small>
+                  </div>
+                </header>
+                {editando && (
+                  <div className="service-edit-context">
+                    <span>Editando serviço existente</span>
+                    <button type="button" onClick={restaurarFormulario}>
+                      Sair da edição <Icone name="close" size={12} />
+                    </button>
+                  </div>
+                )}
+                <div className="service-editor-fields">
+                  <label className="services-field">
+                    <span>
+                      Nome do serviço <b>*</b>
+                    </span>
+                    <input
+                      maxLength={80}
+                      placeholder="Ex.: Troca de Óleo do Motor"
+                      value={formulario.nome}
+                      onChange={(evento) =>
+                        setFormulario({ ...formulario, nome: evento.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="services-field">
+                    <span>
+                      Categoria <b>*</b>
+                    </span>
+                    <CategoriaSelecionar
+                      value={formulario.categoriaId}
+                      categories={catalogo.categorias}
+                      onChange={(valor) => {
+                        const categoria = catalogo.categorias.find((item) => item.id === valor);
+                        setFormulario({
+                          ...formulario,
+                          categoriaId: valor,
+                          icone: categoria?.icone ?? formulario.icone,
+                        });
+                      }}
+                    />
+                  </label>
+                  <label className="services-field">
+                    <span>
+                      Descrição <b>*</b>
+                    </span>
+                    <textarea
+                      maxLength={300}
+                      placeholder="Descreva o serviço em detalhes..."
+                      value={formulario.descricao}
+                      onChange={(evento) =>
+                        setFormulario({ ...formulario, descricao: evento.target.value })
+                      }
+                    />
+                  </label>
+                  <div className="service-price-row">
+                    <label className="services-field">
+                      <span>
+                        Preço (R$) <b>*</b>
+                      </span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={formulario.preco || ''}
+                        onChange={(evento) =>
+                          setFormulario({ ...formulario, preco: Number(evento.target.value) })
+                        }
+                      />
+                    </label>
+                    <label className="services-field">
+                      <span>
+                        Custo do serviço (R$) <b>*</b>
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={Number.isFinite(formulario.custo) ? formulario.custo : ''}
+                        onChange={(evento) =>
+                          setFormulario({
+                            ...formulario,
+                            custo:
+                              evento.target.value === '' ? Number.NaN : Number(evento.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="service-duration-row">
+                    <label className="services-field">
+                      <span>
+                        Tempo médio <b>*</b>
+                      </span>
+                      <DuracaoSelecionar
+                        value={formulario.duracao}
+                        onChange={(valor) => setFormulario({ ...formulario, duracao: valor })}
+                      />
+                    </label>
+                    <div className="services-field">
+                      <span>Status</span>
+                      <button
+                        type="button"
+                        className={`service-switch${formulario.ativo ? ' enabled' : ''}`}
+                        aria-pressed={formulario.ativo}
+                        onClick={() => setFormulario({ ...formulario, ativo: !formulario.ativo })}
+                      >
+                        <i />
+                        <span>{formulario.ativo ? 'Ativo' : 'Inativo'}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <label className="services-field">
+                    <span>
+                      Informações adicionais <small>(opcional)</small>
+                    </span>
+                    <textarea
+                      className="service-extra-textarea"
+                      maxLength={300}
+                      placeholder="Observações, recomendações ou detalhes importantes..."
+                      value={formulario.adicional}
+                      onChange={(evento) =>
+                        setFormulario({ ...formulario, adicional: evento.target.value })
+                      }
+                    />
+                  </label>
+                  {formularioErro && (
+                    <p className="services-form-error" role="alert">
+                      {formularioErro}
+                    </p>
+                  )}
+                </div>
+                <footer>
+                  <button
+                    type="button"
+                    className="services-btn secondary"
+                    onClick={restaurarFormulario}
+                  >
+                    <img
+                      className="service-reset-icon"
+                      src="/assets/services/reload-single.svg"
+                      alt=""
+                      aria-hidden="true"
+                    />
+                    Limpar
+                  </button>
+                  <button type="submit" className="services-btn primary">
+                    {editando ? 'Salvar alterações' : 'Salvar serviço'}
+                  </button>
+                </footer>
+              </form>
+            </div>
+            <section className="services-categories-card" id="services-categories">
+              <header>
+                <div>
+                  <h2>Categorias de serviços</h2>
+                  <p>Organize os serviços por tipo</p>
+                </div>
+                <button
+                  type="button"
+                  className="services-btn secondary compact"
+                  disabled={!pode('servicos', 'editar')}
+                  onClick={() => setCategoriaEditando(null)}
+                >
+                  <Icone name="plus" size={13} />
+                  Nova categoria
+                </button>
+              </header>
+              <div className="service-category-grid">
+                {catalogo.categorias.map((categoria) => {
+                  const servicoQuantidade = catalogo.servicos.filter(
+                    (item) => item.categoriaId === categoria.id,
+                  ).length;
+                  return (
+                    <article
+                      className={`service-category-card${categoriaFiltro === categoria.id ? ' selected' : ''}`}
+                      key={categoria.id}
+                    >
+                      <button
+                        type="button"
+                        className="category-filter-button"
+                        aria-pressed={categoriaFiltro === categoria.id}
+                        onClick={() => {
+                          setCategoriaFiltro(categoria.id);
+                          setSituacaoFiltro('todos');
+                          setConsulta('');
+                          setPagina(1);
+                          setEditando(null);
+                          setFormulario({
+                            nome: '',
+                            categoriaId: categoria.id,
+                            descricao: '',
+                            preco: 0,
+                            custo: Number.NaN,
+                            duracao: '',
+                            ativo: true,
+                            icone: categoria.icone,
+                            adicional: '',
+                          });
+                          setFormularioErro('');
+                        }}
+                      >
+                        <span
+                          className="category-card-icon"
+                          style={{ color: categoria.cor, backgroundColor: `${categoria.cor}1A` }}
+                        >
+                          <CategoriaIcone name={categoria.icone} size={16} />
+                        </span>
+                        <span className="category-card-copy">
+                          <strong>{categoria.nome}</strong>
+                          <small>
+                            {servicoQuantidade} {servicoQuantidade === 1 ? 'serviço' : 'serviços'}
+                          </small>
+                        </span>
+                        <span className="category-card-description">{categoria.descricao}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="category-card-edit"
+                        aria-label={`Editar categoria ${categoria.nome}`}
+                        disabled={!pode('servicos', 'editar')}
+                        onClick={() => setCategoriaEditando(categoria)}
+                      >
+                        <Icone name="pencil" size={12} />
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </ConteudoCarregando>
+        </main>
       </div>
-      <section className="services-categories-card" id="services-categories"><header><div><h2>Categorias de serviços</h2><p>Organize os serviços por tipo</p></div><button type="button" className="services-btn secondary compact" disabled={!pode("servicos","editar")} onClick={()=>setCategoryEditing(null)}><Icon name="plus" size={13}/>Nova categoria</button></header><div className="service-category-grid">{catalog.categorias.map(category=>{const serviceCount=catalog.servicos.filter(item=>item.categoriaId===category.id).length;return <article className={`service-category-card${categoryFilter===category.id?' selected':''}`} key={category.id}><button type="button" className="category-filter-button" aria-pressed={categoryFilter===category.id} onClick={()=>{setCategoryFilter(category.id);setStatusFilter('todos');setQuery('');setPage(1);setEditing(null);setForm({nome:'',categoriaId:category.id,descricao:'',preco:0,custo:Number.NaN,duracao:'',ativo:true,icone:category.icone,adicional:''});setFormError('');}}><span className="category-card-icon" style={{color:category.cor,backgroundColor:`${category.cor}1A`}}><CategoryIcon name={category.icone} size={16}/></span><span className="category-card-copy"><strong>{category.nome}</strong><small>{serviceCount} {serviceCount===1?'serviço':'serviços'}</small></span><span className="category-card-description">{category.descricao}</span></button><button type="button" className="category-card-edit" aria-label={`Editar categoria ${category.nome}`} disabled={!pode("servicos","editar")} onClick={()=>setCategoryEditing(category)}><Icon name="pencil" size={12}/></button></article>;})}</div></section>
-      </ConteudoCarregando></main></div>{toast&&<div className={`services-toast${toastError?' error':''}`} role={toastError?'alert':'status'}><Icon name={toastError?'info':'check'} size={15}/>{toast}</div>}{categoryEditing!==undefined&&<CategoryModal value={categoryEditing||undefined} onClose={()=>setCategoryEditing(undefined)} onSave={saveCategory}/>}</div>;
+      {avisoTemporario && (
+        <div
+          className={`services-toast${avisoTemporarioErro ? ' error' : ''}`}
+          role={avisoTemporarioErro ? 'alert' : 'status'}
+        >
+          <Icone name={avisoTemporarioErro ? 'info' : 'check'} size={15} />
+          {avisoTemporario}
+        </div>
+      )}
+      {categoriaEditando !== undefined && (
+        <CategoriaModal
+          value={categoriaEditando || undefined}
+          onClose={() => setCategoriaEditando(undefined)}
+          onSave={salvarCategoria}
+        />
+      )}
+    </div>
+  );
 }

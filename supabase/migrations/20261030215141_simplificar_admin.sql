@@ -1,11 +1,11 @@
 -- Registro remoto: 20261030215141 / simplificar_admin.
--- Transição atômica; os comentários abaixo identificam as etapas preparadas.
+-- Transicao atomica; os comentarios abaixo identificam as etapas preparadas.
 begin;
 set local lock_timeout='10s';
 set local statement_timeout='90s';
 -- 20261030121000_unificar_historico.sql
--- Transição direta das 24 migrations originais. Requer API e workers parados.
--- Nenhuma alteração em entidades preexistentes fora do escopo das migrations.
+-- Transicao direta das 24 migrations originais. Requer API e workers parados.
+-- Nenhuma alteracao em entidades preexistentes fora do escopo das migrations.
 
 lock table public.order_admin_audit, public.order_status_history, public.order_observation_history,
   public.order_observation_migration_backup, public.admin_notifications,
@@ -59,7 +59,7 @@ update public.miniaturas_motos set status=case status
 alter table public.miniaturas_motos alter column status set default 'pendente';
 alter table public.miniaturas_motos add constraint miniaturas_motos_status_check
   check(status in ('pendente','processando','aguardando_cota','tentar_novamente','aguardando_revisao','concluido'));
--- O predicado antigo contém valores literais em inglês: deve ser recriado.
+-- O predicado antigo contem valores literais em ingles: deve ser recriado.
 drop index public.motorcycle_thumbnail_jobs_ready;
 create index miniaturas_motos_fila_idx on public.miniaturas_motos(tentar_em,criado_em)
   where status in ('pendente','tentar_novamente','aguardando_cota');
@@ -88,7 +88,7 @@ revoke all on public.os_historico from public,anon,authenticated;
 grant select,insert on public.os_historico to service_role;
 grant usage,select on sequence public.os_historico_id_seq to service_role;
 
--- audit_id explícito é a única prova de duplicidade. A cópia vinculada completa
+-- audit_id explicito e a unica prova de duplicidade. A copia vinculada completa
 -- permanece em dados.auditoria, inclusive autor/data diferentes se houver.
 do $$
 begin
@@ -119,7 +119,7 @@ select * from (
   from public.order_observation_history o
 ) eventos order by 4,9,10;
 
--- Conferência antes de liberar qualquer consumidor. Reutilizada na retirada.
+-- Conferencia antes de liberar qualquer consumidor. Reutilizada na retirada.
 create or replace function app_private.conferir_historico() returns void
 language plpgsql security invoker set search_path='' as $$
 begin
@@ -158,8 +158,8 @@ end $$;
 revoke all on function app_private.conferir_historico() from public,anon,authenticated,service_role;
 select app_private.conferir_historico();
 
--- Funções e triggers atualizados abaixo; nenhum consumidor operacional usa as
--- tabelas de origem após esta transação. A retirada fica na migration seguinte.
+-- Funcoes e triggers atualizados abaixo; nenhum consumidor operacional usa as
+-- tabelas de origem apos esta transacao. A retirada fica na migration seguinte.
 
 create or replace function public.alterar_status_os(p_id_os integer,p_status text,p_texto text,p_usuario uuid)
 returns void language plpgsql security invoker set search_path = public as $$
@@ -358,7 +358,7 @@ begin
   return new;
 end $$;
 
--- Os nomes são novos: revogar o EXECUTE público padrão de cada função.
+-- Os nomes sao novos: revogar o EXECUTE publico padrao de cada funcao.
 revoke all on function public.alterar_status_os(integer,text,text,uuid),
   public.editar_os(integer,text,text,text,text,text,text,integer,text,text,text,uuid),
   public.excluir_os(integer,uuid,text),public.arquivar_cliente(integer,uuid,text),
@@ -394,7 +394,7 @@ drop trigger enqueue_motorcycle_on_model on public.moto;
 create trigger enfileirar_moto_modelo after update of modelo on public.moto
   for each row when(old.modelo is distinct from new.modelo) execute function app_private.enfileirar_moto();
 
--- Os originais ficam congelados até a retirada, impedindo escritas pelo servidor antigo.
+-- Os originais ficam congelados ate a retirada, impedindo escritas pelo servidor antigo.
 revoke all on public.os_auditoria,public.order_status_history,public.order_observation_history from service_role;
 alter sequence public.admin_notifications_id_seq rename to admin_notify_id_seq;
 alter sequence public.client_admin_audit_id_seq rename to cliente_historico_id_seq;
@@ -414,8 +414,8 @@ alter table public.miniaturas_motos rename constraint motorcycle_thumbnail_jobs_
 notify pgrst,'reload schema';
 
 -- 20261030121500_adaptar_consulta_temporal.sql
--- Autorizado: adaptar somente a consulta ao histórico unificado.
--- Corpo real preservado; nenhuma tabela do mecânico é alterada.
+-- Autorizado: adaptar somente a consulta ao historico unificado.
+-- Corpo real preservado; nenhuma tabela do mecanico e alterada.
 
 CREATE OR REPLACE FUNCTION public.gerar_notificacoes_temporais(p_limite_atraso interval DEFAULT '30 days'::interval)
  RETURNS jsonb
@@ -430,7 +430,7 @@ declare
   v_pronto date;
   v_ag int := 0; v_prazo int := 0; v_atraso int := 0; v_pronta int := 0; v_sem_hist int := 0;
 begin
-  -- 4) Agendamento confirmado que começa em até 24h
+  -- 4) Agendamento confirmado que comeca em ate 24h
   for r in
     select a.id_agendamento, a.data_hora,
            public.mecanico_do_agendamento(a.id_agendamento) as id_mecanico,
@@ -452,7 +452,7 @@ begin
        ) then v_ag := v_ag + 1; end if;
   end loop;
 
-  -- 5) Prazo de entrega em até 1h (OS em andamento)
+  -- 5) Prazo de entrega em ate 1h (OS em andamento)
   for r in
     select os.id_os, os.id_mecanico, os.previsao_entrega, mo.modelo, c.nome as cliente
     from public.ordem_servico os
@@ -472,7 +472,7 @@ begin
        ) then v_prazo := v_prazo + 1; end if;
   end loop;
 
-  -- 6) OS atrasada (prazo expirado e ainda não pronta/entregue/cancelada)
+  -- 6) OS atrasada (prazo expirado e ainda nao pronta/entregue/cancelada)
   for r in
     select os.id_os, os.id_mecanico, os.previsao_entrega, mo.modelo, c.nome as cliente
     from public.ordem_servico os
@@ -492,7 +492,7 @@ begin
        ) then v_atraso := v_atraso + 1; end if;
   end loop;
 
-  -- 7) Moto pronta há mais de 3 dias úteis e não retirada
+  -- 7) Moto pronta ha mais de 3 dias uteis e nao retirada
   if to_regclass('public.os_historico') is null then
     raise warning 'os_historico ausente: item 7 não pode ser calculado.';
   else
@@ -509,7 +509,7 @@ begin
       where os.status = 'pronto'
     loop
       if r.pronto_em is null then
-        -- Sem histórico não se estima pela previsão: registra e segue.
+        -- Sem historico nao se estima pela previsao: registra e segue.
         insert into public.notificacao_sem_destinatario (evento, id_os, motivo, chave)
         values ('moto_pronta', r.id_os, 'sem_data_pronto', 'moto_pronta:' || r.id_os || ':sem_data_pronto')
         on conflict (chave) do nothing;
@@ -542,13 +542,13 @@ $function$
 notify pgrst,'reload schema';
 
 -- 20261030122000_retirar_estruturas_antigas.sql
--- Executar somente após a transição e sua validação. API e workers ainda parados.
+-- Executar somente apos a transicao e sua validacao. API e workers ainda parados.
 
 lock table public.os_auditoria,public.order_status_history,public.order_observation_history,
   public.order_observation_migration_backup,public.os_historico in access exclusive mode;
 select app_private.conferir_historico();
 
--- Não transportar dependentes externos para um arquivo privado sem revisão.
+-- Nao transportar dependentes externos para um arquivo privado sem revisao.
 do $$
 begin
   if exists (
@@ -563,7 +563,7 @@ begin
   ) then raise exception 'Dependências externas no histórico: revisar antes de retirar'; end if;
 end $$;
 
--- Não se apagam os dados de origem. Saem do schema operacional e ficam privados.
+-- Nao se apagam os dados de origem. Saem do schema operacional e ficam privados.
 create schema recuperacao;
 revoke all on schema recuperacao from public,anon,authenticated,service_role;
 alter table public.os_auditoria set schema recuperacao;
@@ -571,7 +571,7 @@ alter table public.order_status_history set schema recuperacao;
 alter table recuperacao.order_status_history rename to os_status;
 alter table public.order_observation_history set schema recuperacao;
 alter table recuperacao.order_observation_history rename to os_observacao;
--- Conferência integral antes/depois de retirar o backup do schema operacional.
+-- Conferencia integral antes/depois de retirar o backup do schema operacional.
 do $$
 declare antes jsonb; depois jsonb;
 begin
@@ -589,7 +589,7 @@ end $$;
 revoke all on all tables in schema recuperacao from public,anon,authenticated,service_role;
 revoke all on all sequences in schema recuperacao from public,anon,authenticated,service_role;
 
--- O backup não é conteúdo visível. Seus campos seguem o dicionário em português.
+-- O backup nao e conteudo visivel. Seus campos seguem o dicionario em portugues.
 alter table recuperacao.os_observacao drop constraint order_observation_history_kind_check;
 alter table recuperacao.os_observacao rename column order_id to id_os;
 alter table recuperacao.os_observacao rename column kind to tipo;
@@ -601,7 +601,7 @@ update recuperacao.os_observacao set tipo=case tipo
   when 'status_note' then 'nota_status' else tipo end;
 alter table recuperacao.os_observacao add constraint os_observacao_tipo_check
   check(tipo in ('observacao_anterior','nota_status'));
--- RESTRICT é intencional. Dependências externas impedem a retirada; nunca CASCADE.
+-- RESTRICT e intencional. Dependencias externas impedem a retirada; nunca CASCADE.
 drop function app_private.conferir_historico();
 drop function public.admin_order_status(integer,text,text,uuid);
 drop function public.admin_order_edit(integer,text,text,text,text,text,text,integer,text,text,text,uuid);

@@ -1,117 +1,484 @@
-import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
-import {limparRascunho,temRascunho} from '../services/rascunhos';
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon } from './MenuAdmin';
+import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
 import { cadastrarUsuario, type DadosNovoUsuario } from '../services/apiAutenticacao';
-import ModalNovoFuncionario from './ModalNovoFuncionario';
-import {cadastrarFuncionario,salvarFotoFuncionario,type NovoFuncionario} from '../services/funcionarios';
+import { useAcessoConta } from '../services/acessoConta';
+import { limparRascunho } from '../services/rascunhos';
+import LogoEstacao from './LogoEstacao';
+import { Icone } from './MenuAdmin';
 import './modais-administrativos.css';
+import ModalAdicionarFuncionario from './ModalAdicionarFuncionario';
+import ModalSucessoUsuario from './ModalSucessoUsuario';
 
-function cpfMask(value:string){
-  const d=value.replace(/\D/g,'').slice(0,11);
-  return d.replace(/^(\d{3})(\d)/,'$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/,'.$1-$2');
+function mascaraCpf(valor: string) {
+  const dadosAtual = valor.replace(/\D/g, '').slice(0, 11);
+  return dadosAtual
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
 }
-function phoneMask(value:string){
-  const d=value.replace(/\D/g,'').slice(0,11);
-  return d.length>6?`(${d.slice(0,2)}) ${d.slice(2,d.length>10?7:6)}-${d.slice(d.length>10?7:6)}`:d.length>2?`(${d.slice(0,2)}) ${d.slice(2)}`:d;
+function mascaraTelefone(valor: string) {
+  const dadosAtual = valor.replace(/\D/g, '').slice(0, 11);
+  return dadosAtual.length > 6
+    ? `(${dadosAtual.slice(0, 2)}) ${dadosAtual.slice(2, dadosAtual.length > 10 ? 7 : 6)}-${dadosAtual.slice(dadosAtual.length > 10 ? 7 : 6)}`
+    : dadosAtual.length > 2
+      ? `(${dadosAtual.slice(0, 2)}) ${dadosAtual.slice(2)}`
+      : dadosAtual;
 }
-function validCpf(value:string){
-  const d=value.replace(/\D/g,'');
-  if(d.length!==11||/^(\d)\1{10}$/.test(d))return false;
-  for(const length of [9,10]){
-    const sum=d.slice(0,length).split('').reduce((n,digit,index)=>n+Number(digit)*(length+1-index),0);
-    if((sum*10)%11%10!==Number(d[length]))return false;
+function validoCpf(valor: string) {
+  const dadosAtual = valor.replace(/\D/g, '');
+  if (dadosAtual.length !== 11 || /^(\d)\1{10}$/.test(dadosAtual)) return false;
+  for (const comprimento of [9, 10]) {
+    const soma = dadosAtual
+      .slice(0, comprimento)
+      .split('')
+      .reduce((numero, digito, indice) => numero + Number(digito) * (comprimento + 1 - indice), 0);
+    if (((soma * 10) % 11) % 10 !== Number(dadosAtual[comprimento])) return false;
   }
   return true;
 }
-function generatePassword(){
-  const alphabet='abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
-  const bytes=crypto.getRandomValues(new Uint8Array(16));
-  return `Aa1!${Array.from(bytes,n=>alphabet[n%alphabet.length]).join('')}`;
+function gerarSenha() {
+  const alfabeto = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return `Aa1!${Array.from(bytes, (numero) => alfabeto[numero % alfabeto.length]).join('')}`;
 }
-type Role=DadosNovoUsuario['position'];
-const roles:{id:Role;icon:string;description:string}[]=[
-  {id:'Administrador',icon:'staff',description:'Gestão e acesso ao painel'},
-  {id:'Mecânico',icon:'wrench',description:'Equipe técnica e ordens'},
-  {id:'Cliente',icon:'user',description:'Cadastro do cliente'},
+type Cargo = DadosNovoUsuario['position'];
+const cargos: { id: Cargo; icon: string; description: string }[] = [
+  { id: 'Administrador', icon: 'staff', description: 'Gestão e acesso ao painel' },
+  { id: 'Mecânico', icon: 'wrench', description: 'Equipe técnica e ordens' },
+  { id: 'Cliente', icon: 'user', description: 'Cadastro do cliente' },
 ];
-export default function ModalNovoUsuario({onClose,onCreated,employeeOnly=false,initialRole,replaceBackground=false}:{onClose:()=>void;onCreated:(user?:{id:number;name:string;phone:string;email:string;cpf:string;role:Role})=>void;employeeOnly?:boolean;initialRole?:Role;replaceBackground?:boolean}){
-  const [name,setName]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'name','');
-  const [email,setEmail]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'email','');
-  const [phone,setPhone]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'phone','');
-  const [cpf,setCpf]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'cpf','');
-  const [role,setRole]=useEstadoRascunho<Role>(`usuario-${initialRole??'geral'}`,'role',initialRole??'Administrador');
-  const [password,setPassword]=useState('');
-  const [confirm,setConfirm]=useState('');
-  const [visible,setVisible]=useState(false);
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState('');
-  const [created,setCreated]=useState(false);
-  const [copied,setCopied]=useState(false);
-  const [createdPassword,setCreatedPassword]=useState('');
-  const [employeeDetailsOpen,setEmployeeDetailsOpen]=useState(false);
-  const [employeeDetails,setEmployeeDetails]=useEstadoRascunho<NovoFuncionario|null>(`usuario-${initialRole??'geral'}`,'employeeDetails',null);
-  const [employeeDetailsReady,setEmployeeDetailsReady]=useEstadoRascunho(`usuario-${initialRole??'geral'}`,'employeeDetailsReady',false);
-  const [employeePhoto,setEmployeePhoto]=useEstadoRascunho<string|null>(`usuario-${initialRole??'geral'}`,'employeePhoto',null);
-  const whatsappNumber=`55${phone.replace(/\D/g,'')}`;
-  const employeeInitial: NovoFuncionario=employeeDetails??{nome:name,email,telefone:phone,cpf,cargo:'Mecânico',data_nascimento:'',data_admissao:'',departamento:'Oficina',especialidade:'',endereco:'',cep:'',complemento:'',tipo_contrato:'CLT',comissao_servico:null,observacoes_profissionais:'',situacao:'ativo'};
-  function closeEmployeeDetails(draft:NovoFuncionario,photo:string|null){setEmployeeDetails(draft);setEmployeePhoto(photo);setEmployeeDetailsReady(false);setName(draft.nome);setEmail(draft.email);setPhone(draft.telefone);setCpf(draft.cpf);setRole(draft.cargo as Role);setEmployeeDetailsOpen(false);}
-  function completeEmployeeDetails(draft:NovoFuncionario,photo:string|null){setEmployeeDetails(draft);setEmployeePhoto(photo);setEmployeeDetailsReady(true);setName(draft.nome);setEmail(draft.email);setPhone(draft.telefone);setCpf(draft.cpf);setRole(draft.cargo as Role);setEmployeeDetailsOpen(false);setError('');}
-  function openEmployeeDetails(){setError('');setEmployeeDetailsOpen(true);}
-  function sendCredentials(){
-    if(!createdPassword)return setError('A senha não está mais disponível. Redefina-a antes de compartilhar.');
-    const text=`Olá, ${name.trim().split(/\s+/)[0]}! Seu acesso à Estação Motos está pronto.\n\nE-mail: ${email.trim().toLowerCase()}\nSenha: ${createdPassword}\n\nGuarde estes dados e altere sua senha depois do primeiro acesso.`;
-    window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(text)}`,'_blank','noopener,noreferrer');
+export default function ModalNovoUsuario({
+  onClose: aoFechar,
+  onCreated: aoCriar,
+  initialRole: inicialCargo,
+  replaceBackground = false,
+}: {
+  onClose: () => void;
+  onCreated: (usuario?: {
+    id: number;
+    name: string;
+    phone: string;
+    email: string;
+    cpf: string;
+    role: Cargo;
+  }) => void;
+  initialRole?: Cargo;
+  replaceBackground?: boolean;
+}) {
+  const acesso = useAcessoConta();
+  const [nomeLocal, setNome] = useEstadoRascunho(`usuario-${inicialCargo ?? 'geral'}`, 'name', '');
+  const [email, setEmail] = useEstadoRascunho(`usuario-${inicialCargo ?? 'geral'}`, 'email', '');
+  const [telefoneLocal, setTelefone] = useEstadoRascunho(
+    `usuario-${inicialCargo ?? 'geral'}`,
+    'phone',
+    '',
+  );
+  const [cpf, setCpf] = useEstadoRascunho(`usuario-${inicialCargo ?? 'geral'}`, 'cpf', '');
+  const [cargoLocal, setCargo] = useEstadoRascunho<Cargo>(
+    `usuario-${inicialCargo ?? 'geral'}`,
+    'role',
+    inicialCargo ?? 'Administrador',
+  );
+  const [senhaLocal, setSenha] = useState('');
+  const [confirmar, setConfirmar] = useState('');
+  const [visivel, setVisivel] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState('');
+  const [criado, setCriado] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const [criadoSenha, setCriadoSenha] = useState('');
+  const [aprovacaoPendente, setAprovacaoPendente] = useState(false);
+  const [funcionarioDetalhesAberto, setFuncionarioDetalhesAberto] = useState(false);
+  const whatsappNumero = `55${telefoneLocal.replace(/\D/g, '')}`;
+  function abertoFuncionarioDetalhes() {
+    setErro('');
+    setFuncionarioDetalhesAberto(true);
   }
-  const checks=[password.length>=8,/[A-Z]/.test(password)&&/[a-z]/.test(password),/\d/.test(password),/[^\w\s]/.test(password)];
-  useEffect(()=>{
-    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!busy&&!employeeDetailsOpen)onClose();};
-    document.addEventListener('keydown',escape);
-    const previous=document.body.style.overflow;document.body.style.overflow='hidden';
-    return()=>{document.removeEventListener('keydown',escape);document.body.style.overflow=previous;};
-  },[busy,onClose,employeeDetailsOpen]);
-  async function save(event:FormEvent<HTMLFormElement>){
-    event.preventDefault();setError('');
-    if(!validCpf(cpf))return setError('Confira o CPF informado.');
-    if(phone.replace(/\D/g,'').length<10)return setError('Informe um telefone válido.');
-    if(!checks.every(Boolean))return setError('Crie uma senha que atenda aos quatro requisitos.');
-    if(password!==confirm)return setError('As senhas não coincidem.');
-    setBusy(true);
-    try{
-      if(employeeDetailsReady&&employeeDetails){
-        const createdUser=await cadastrarFuncionario({...employeeDetails,nome:name.trim(),email:email.trim().toLowerCase(),telefone:phone.trim(),cpf:cpf.replace(/\D/g,''),senha:password});
-        if(employeePhoto){try{await salvarFotoFuncionario(createdUser.id,employeePhoto);}catch{setError('Funcionário criado; não foi possível salvar a foto. Você pode adicioná-la no perfil.');}}
-        setCreatedPassword(password);setPassword('');setConfirm('');limparRascunho(`usuario-${initialRole??'geral'}`);limparRascunho('funcionario-novo-detalhes');setCreated(true);onCreated({id:createdUser.id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),role});
-      }else if(role==='Mecânico'){
-        setEmployeeDetailsOpen(true);setBusy(false);return;
-      }else{
-        const createdUser=await cadastrarUsuario({name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),position:role,profile:role,password});
-        setCreatedPassword(password);setPassword('');setConfirm('');limparRascunho(`usuario-${initialRole??'geral'}`);limparRascunho('funcionario-novo-detalhes');setCreated(true);onCreated({id:createdUser.id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone.trim(),cpf:cpf.replace(/\D/g,''),role});
+  function enviarCredenciais() {
+    if (!criadoSenha)
+      return setErro('A senha não está mais disponível. Redefina-a antes de compartilhar.');
+    const texto = `Olá, ${nomeLocal.trim().split(/\s+/)[0]}! Seu acesso à Estação Motos está pronto.\n\nE-mail: ${email.trim().toLowerCase()}\nSenha: ${criadoSenha}\n\nGuarde estes dados e altere sua senha depois do primeiro acesso.`;
+    window.open(
+      `https://wa.me/${whatsappNumero}?text=${encodeURIComponent(texto)}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  }
+  const verificacoes = [
+    senhaLocal.length >= 8,
+    /[A-Z]/.test(senhaLocal) && /[a-z]/.test(senhaLocal),
+    /\d/.test(senhaLocal),
+    /[^\w\s]/.test(senhaLocal),
+  ];
+  useEffect(() => {
+    const escapar = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape' && !ocupado && !funcionarioDetalhesAberto) aoFechar();
+    };
+    document.addEventListener('keydown', escapar);
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', escapar);
+      document.body.style.overflow = anterior;
+    };
+  }, [ocupado, aoFechar, funcionarioDetalhesAberto]);
+  async function salvar(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+    setErro('');
+    if (!validoCpf(cpf)) return setErro('Confira o CPF informado.');
+    if (telefoneLocal.replace(/\D/g, '').length < 10) return setErro('Informe um telefone válido.');
+    if (!verificacoes.every(Boolean))
+      return setErro('Crie uma senha que atenda aos quatro requisitos.');
+    if (senhaLocal !== confirmar) return setErro('As senhas não coincidem.');
+    setOcupado(true);
+    try {
+      if (cargoLocal === 'Mecânico') {
+        setFuncionarioDetalhesAberto(true);
+        setOcupado(false);
+        return;
+      } else {
+        const usuarioCriado = await cadastrarUsuario({
+          name: nomeLocal.trim(),
+          email: email.trim().toLowerCase(),
+          phone: telefoneLocal.trim(),
+          cpf: cpf.replace(/\D/g, ''),
+          position: cargoLocal,
+          profile: cargoLocal,
+          password: senhaLocal,
+        });
+        setAprovacaoPendente(usuarioCriado.approvalPending === true);
+        setCriadoSenha(senhaLocal);
+        setSenha('');
+        setConfirmar('');
+        limparRascunho(`usuario-${inicialCargo ?? 'geral'}`);
+        limparRascunho('funcionario-novo-detalhes');
+        setCriado(true);
+        aoCriar({
+          id: usuarioCriado.id,
+          name: nomeLocal.trim(),
+          email: email.trim().toLowerCase(),
+          phone: telefoneLocal.trim(),
+          cpf: cpf.replace(/\D/g, ''),
+          role: cargoLocal,
+        });
       }
-    }catch(err){setError(err instanceof Error?err.message:'Não foi possível cadastrar o usuário.');}
-    finally{setBusy(false);}
+    } catch (erroCapturado) {
+      setErro(
+        erroCapturado instanceof Error
+          ? erroCapturado.message
+          : 'Não foi possível cadastrar o usuário.',
+      );
+    } finally {
+      setOcupado(false);
+    }
   }
-  async function copyPassword(){
-    try{await navigator.clipboard.writeText(password);setCopied(true);}
-    catch{setError('Não foi possível copiar a senha. Use o botão Mostrar antes de concluir.');}
+  async function copySenha() {
+    try {
+      await navigator.clipboard.writeText(senhaLocal);
+      setCopiado(true);
+    } catch {
+      setErro('Não foi possível copiar a senha. Use o botão Mostrar antes de concluir.');
+    }
   }
-  if(employeeDetailsOpen)return createPortal(<div className={`nam-backdrop${replaceBackground?' nam-backdrop-replacement':''}`}><ModalNovoFuncionario initialValues={employeeInitial} initialPhoto={employeePhoto} onClose={closeEmployeeDetails} onComplete={completeEmployeeDetails}/></div>,document.body);
-  return createPortal(<div className={`nam-backdrop${replaceBackground?' nam-backdrop-replacement':''}`} onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)onClose();}}>
-    <form className={`nam-dialog nam-user nam-reworked${employeeOnly?' nam-employee':''}`} role="dialog" aria-modal="true" aria-labelledby="nam-user-title" onSubmit={event=>void save(event)}>
-      <header className="nam-hero"><div className="nam-hero-mark"><img src="/assets/estacao-motos-logo-sidebar.png" alt="Estação Motos"/></div><div className="nam-hero-copy"><span className="nam-kicker">EQUIPE E ACESSO</span><h2 id="nam-user-title">{created?'Acesso criado com sucesso':employeeOnly?'Novo funcionário':'Novo usuário'}</h2><p>{created?'Cadastro pronto para continuar.':'Um acesso organizado começa com as pessoas certas.'}</p></div><button type="button" className="nam-close" onClick={onClose} disabled={busy} aria-label="Fechar"><Icon name="close" size={18}/></button></header>
-      {created?<div className="nam-finish nam-finish-simple"><div className="nam-finish-check"><Icon name="check" size={34}/></div><span className="nam-kicker">CADASTRO CONCLUÍDO</span><h3>{name} já está cadastrado.</h3><p>{role==='Administrador'?'O acesso ao painel administrativo foi criado.':role==='Mecânico'?'O mecânico já pode ser atribuído às ordens de serviço.':'A conta foi vinculada ao cadastro do cliente.'}</p><div className="nam-finish-person"><span className="nam-finish-person-avatar">{name.trim().charAt(0).toUpperCase()}</span><span><strong>{name}</strong><small>{role} · {phone}</small></span><span className="nam-finish-ready"><Icon name="check" size={13}/> Pronto para acessar</span></div><div className="nam-finish-share"><span>ENTREGAR ACESSO</span><h4>Envie os dados diretamente para a pessoa</h4><p>Confira o número cadastrado antes de abrir a conversa. A mensagem incluirá o e-mail e a senha definidos no cadastro.</p><button className="nam-whatsapp" type="button" onClick={sendCredentials}><Icon name="whatsapp" size={17}/> Enviar credenciais pelo WhatsApp <Icon name="right" size={13}/></button><small>A senha não é exibida nesta tela. Ao enviar, ela será incluída no link do WhatsApp; faça isso em um dispositivo confiável.</small></div>{error&&<p className="nam-error" role="alert">{error}</p>}</div>:
-      <div className="nam-user-layout">
-        <section className="nam-panel nam-personal"><div className="nam-panel-heading"><span className="nam-step-number">01</span><div><h3>Quem vai usar?</h3><p>Dados para identificar a pessoa no sistema.</p></div></div>
-          <label className="nam-field"><span>Nome completo <b>*</b></span><input autoFocus required maxLength={100} autoComplete="name" value={name} onChange={e=>setName(e.target.value)} placeholder="Nome e sobrenome"/></label>
-          <label className="nam-field"><span>E-mail de acesso <b>*</b></span><input required type="email" maxLength={150} autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="nome@exemplo.com"/></label>
-          <div className="nam-grid-two"><label className="nam-field"><span>Telefone <b>*</b></span><input required inputMode="tel" autoComplete="tel" value={phone} onChange={e=>setPhone(phoneMask(e.target.value))} placeholder="(11) 99999-9999"/></label><label className="nam-field"><span>CPF <b>*</b></span><input required inputMode="numeric" value={cpf} onChange={e=>setCpf(cpfMask(e.target.value))} placeholder="000.000.000-00"/></label></div>
-          {!employeeOnly&&<div className="nam-soft-note"><Icon name="info" size={16}/><span>Ao escolher Cliente, o cadastro existente com mesmo CPF ou e-mail será vinculado à conta.</span></div>}
-        </section>
-        <div className="nam-user-right"><section className="nam-panel"><div className="nam-panel-heading"><span className="nam-step-number">02</span><div><h3>Tipo de acesso</h3><p>Escolha um dos perfis disponíveis.</p></div></div><div className="nam-role-list" role="radiogroup" aria-label="Tipo de usuário">{roles.filter(item=>!employeeOnly||item.id!=='Cliente').map(item=><button type="button" role="radio" aria-checked={role===item.id} className={`nam-role${role===item.id?' active':''}`} key={item.id} onClick={()=>{setRole(item.id);if(item.id==='Mecânico')openEmployeeDetails();else setEmployeeDetailsReady(false);}}><span className="nam-role-icon"><Icon name={item.icon} size={18}/></span><span><b>{item.id}</b><small>{item.description}</small></span><i aria-hidden="true"/></button>)}</div></section>
-        <section className="nam-panel"><div className="nam-panel-heading"><span className="nam-step-number">03</span><div><h3>Defina a senha</h3><p>Proteja o acesso desde o primeiro dia.</p></div></div><div className="nam-grid-two"><label className="nam-field"><span>Senha <b>*</b></span><span className="nam-password"><input required minLength={8} maxLength={128} type={visible?'text':'password'} autoComplete="new-password" value={password} onChange={e=>{setPassword(e.target.value);setCopied(false);}} placeholder="Crie uma senha"/><button type="button" aria-label={visible?'Ocultar senha':'Mostrar senha'} onClick={()=>setVisible(v=>!v)}>{visible?'Ocultar':'Mostrar'}</button></span></label><label className="nam-field"><span>Confirmar senha <b>*</b></span><input required type={visible?'text':'password'} autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="Repita a senha"/></label></div><div className="nam-checklist">{['8 ou mais caracteres','Maiúscula e minúscula','Um número','Um símbolo'].map((label,index)=><span className={checks[index]?'valid':''} key={label}><Icon name="check" size={13}/>{label}</span>)}</div><div className="nam-password-actions"><button type="button" className="nam-generate" onClick={()=>{const value=generatePassword();setPassword(value);setConfirm(value);setVisible(false);setCopied(false);}}>Gerar senha segura</button><button type="button" className="nam-copy-before" disabled={!password} onClick={()=>void copyPassword()}>{copied?'Senha copiada':'Copiar antes de cadastrar'}</button></div><small className="nam-password-warning">A senha não será mostrada após o cadastro. Compartilhe-a separadamente por um canal seguro.</small></section></div>
-      </div>}
-      <footer className="nam-footer"><span className="nam-footer-caption">{created?'A conta está pronta para uso.':'Campos marcados com * são obrigatórios.'}</span>{error&&!created&&<p className="nam-error" role="alert">{error}</p>}{created?<button className="nam-submit" type="button" onClick={onClose}>Concluir</button>:<><button className="nam-cancel" type="button" disabled={busy} onClick={onClose}>Cancelar</button><button className="nam-submit" type={role==='Mecânico'&&!employeeDetailsReady?'button':'submit'} onClick={()=>{if(role==='Mecânico'&&!employeeDetailsReady)openEmployeeDetails();}} disabled={busy}><Icon name="plus" size={15}/>{busy?'Criando acesso…':employeeDetailsReady?'Criar funcionário':role==='Mecânico'?'Preencher dados do mecânico':employeeOnly?'Criar funcionário':'Criar usuário'}</button></>}</footer>
-    </form>
-  </div>, document.body);
+  if (criado)
+    return (
+      <ModalSucessoUsuario
+        nome={nomeLocal}
+        cargo={cargoLocal}
+        telefone={telefoneLocal}
+        aprovacaoPendente={aprovacaoPendente}
+        erro={erro}
+        replaceBackground={replaceBackground}
+        aoCompartilhar={enviarCredenciais}
+        aoFechar={aoFechar}
+      />
+    );
+  if (funcionarioDetalhesAberto)
+    return (
+      <ModalAdicionarFuncionario
+        initialRole="Mecânico"
+        initialValues={{
+          nome: nomeLocal,
+          email,
+          telefone: telefoneLocal,
+          cpf,
+          senha: senhaLocal,
+          confirmarSenha: confirmar,
+          departamento: 'Mecânico',
+        }}
+        onClose={aoFechar}
+        onSubmitted={(resultado) => {
+          if (!resultado) return;
+          const { id, approvalPending, funcionario } = resultado;
+          const idFuncionario = Number(id);
+          if (approvalPending || !Number.isSafeInteger(idFuncionario)) return;
+          aoCriar({
+            id: idFuncionario,
+            name: funcionario.nome,
+            phone: funcionario.telefone,
+            email: funcionario.email,
+            cpf: funcionario.cpf,
+            role: 'Mecânico',
+          });
+        }}
+      />
+    );
+  return createPortal(
+    <div
+      className={`nam-backdrop${replaceBackground ? ' nam-backdrop-replacement' : ''}`}
+      onMouseDown={(evento) => {
+        if (evento.target === evento.currentTarget && !ocupado) aoFechar();
+      }}
+    >
+      <form
+        className="nam-dialog nam-user nam-reworked"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nam-user-title"
+        onSubmit={(evento) => void salvar(evento)}
+      >
+        <header className="nam-hero">
+          <div className="nam-hero-mark">
+            <LogoEstacao />
+          </div>
+          <div className="nam-hero-copy">
+            <span className="nam-kicker">EQUIPE E ACESSO</span>
+            <h2 id="nam-user-title">Novo usuário</h2>
+            <p>Um acesso organizado começa com as pessoas certas.</p>
+          </div>
+          <button
+            type="button"
+            className="nam-close"
+            onClick={aoFechar}
+            disabled={ocupado}
+            aria-label="Fechar"
+          >
+            <Icone name="close" size={18} />
+          </button>
+        </header>
+        <div className="nam-user-layout">
+          <section className="nam-panel nam-personal">
+            <div className="nam-panel-heading">
+              <span className="nam-step-number">01</span>
+              <div>
+                <h3>Quem vai usar?</h3>
+                <p>Dados para identificar a pessoa no sistema.</p>
+              </div>
+            </div>
+            <label className="nam-field">
+              <span>
+                Nome completo <b>*</b>
+              </span>
+              <input
+                autoFocus
+                required
+                maxLength={100}
+                autoComplete="name"
+                value={nomeLocal}
+                onChange={(eventoRecebido) => setNome(eventoRecebido.target.value)}
+                placeholder="Nome e sobrenome"
+              />
+            </label>
+            <label className="nam-field">
+              <span>
+                E-mail de acesso <b>*</b>
+              </span>
+              <input
+                required
+                type="email"
+                maxLength={150}
+                autoComplete="email"
+                value={email}
+                onChange={(eventoRecebido) => setEmail(eventoRecebido.target.value)}
+                placeholder="nome@exemplo.com"
+              />
+            </label>
+            <div className="nam-grid-two">
+              <label className="nam-field">
+                <span>
+                  Telefone <b>*</b>
+                </span>
+                <input
+                  required
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={telefoneLocal}
+                  onChange={(eventoRecebido) =>
+                    setTelefone(mascaraTelefone(eventoRecebido.target.value))
+                  }
+                  placeholder="(11) 99999-9999"
+                />
+              </label>
+              <label className="nam-field">
+                <span>
+                  CPF <b>*</b>
+                </span>
+                <input
+                  required
+                  inputMode="numeric"
+                  value={cpf}
+                  onChange={(eventoRecebido) => setCpf(mascaraCpf(eventoRecebido.target.value))}
+                  placeholder="000.000.000-00"
+                />
+              </label>
+            </div>
+            <div className="nam-soft-note">
+              <Icone name="info" size={16} />
+              <span>
+                Ao escolher Cliente, o cadastro existente com mesmo CPF ou e-mail será vinculado à
+                conta.
+              </span>
+            </div>
+          </section>
+          <div className="nam-user-right">
+            <section className="nam-panel">
+              <div className="nam-panel-heading">
+                <span className="nam-step-number">02</span>
+                <div>
+                  <h3>Tipo de acesso</h3>
+                  <p>Escolha um dos perfis disponíveis.</p>
+                </div>
+              </div>
+              <div className="nam-role-list" role="radiogroup" aria-label="Tipo de usuário">
+                {cargos.map((item) => (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={cargoLocal === item.id}
+                    className={`nam-role${cargoLocal === item.id ? ' active' : ''}`}
+                    key={item.id}
+                    onClick={() => {
+                      setCargo(item.id);
+                      if (item.id === 'Mecânico') abertoFuncionarioDetalhes();
+                    }}
+                  >
+                    <span className="nam-role-icon">
+                      <Icone name={item.icon} size={18} />
+                    </span>
+                    <span>
+                      <b>{item.id}</b>
+                      <small>
+                        {item.id === 'Administrador' && acesso.nivel !== 'dono'
+                          ? 'Acesso liberado após aprovação do dono'
+                          : item.description}
+                      </small>
+                    </span>
+                    <i aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </section>
+            <section className="nam-panel">
+              <div className="nam-panel-heading">
+                <span className="nam-step-number">03</span>
+                <div>
+                  <h3>Defina a senha</h3>
+                  <p>Proteja o acesso desde o primeiro dia.</p>
+                </div>
+              </div>
+              <div className="nam-grid-two">
+                <label className="nam-field">
+                  <span>
+                    Senha <b>*</b>
+                  </span>
+                  <span className="nam-password">
+                    <input
+                      required
+                      minLength={8}
+                      maxLength={128}
+                      type={visivel ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      value={senhaLocal}
+                      onChange={(eventoRecebido) => {
+                        setSenha(eventoRecebido.target.value);
+                        setCopiado(false);
+                      }}
+                      placeholder="Crie uma senha"
+                    />
+                    <button
+                      type="button"
+                      aria-label={visivel ? 'Ocultar senha' : 'Mostrar senha'}
+                      onClick={() => setVisivel((valorAtual) => !valorAtual)}
+                    >
+                      {visivel ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </span>
+                </label>
+                <label className="nam-field">
+                  <span>
+                    Confirmar senha <b>*</b>
+                  </span>
+                  <input
+                    required
+                    type={visivel ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={confirmar}
+                    onChange={(eventoRecebido) => setConfirmar(eventoRecebido.target.value)}
+                    placeholder="Repita a senha"
+                  />
+                </label>
+              </div>
+              <div className="nam-checklist">
+                {['8 ou mais caracteres', 'Maiúscula e minúscula', 'Um número', 'Um símbolo'].map(
+                  (rotulo, indice) => (
+                    <span className={verificacoes[indice] ? 'valid' : ''} key={rotulo}>
+                      <Icone name="check" size={13} />
+                      {rotulo}
+                    </span>
+                  ),
+                )}
+              </div>
+              <div className="nam-password-actions">
+                <button
+                  type="button"
+                  className="nam-generate"
+                  onClick={() => {
+                    const valor = gerarSenha();
+                    setSenha(valor);
+                    setConfirmar(valor);
+                    setVisivel(false);
+                    setCopiado(false);
+                  }}
+                >
+                  Gerar senha segura
+                </button>
+                <button
+                  type="button"
+                  className="nam-copy-before"
+                  disabled={!senhaLocal}
+                  onClick={() => void copySenha()}
+                >
+                  {copiado ? 'Senha copiada' : 'Copiar antes de cadastrar'}
+                </button>
+              </div>
+              <small className="nam-password-warning">
+                A senha não será mostrada após o cadastro. Compartilhe-a separadamente por um canal
+                seguro.
+              </small>
+            </section>
+          </div>
+        </div>
+        <footer className="nam-footer">
+          {erro && (
+            <p className="nam-error" role="alert">
+              {erro}
+            </p>
+          )}
+          <button className="nam-cancel" type="button" disabled={ocupado} onClick={aoFechar}>
+            Cancelar
+          </button>
+          <button className="nam-submit" type="submit" disabled={ocupado}>
+            <Icone name="plus" size={15} />
+            {ocupado
+              ? 'Criando acesso…'
+              : cargoLocal === 'Mecânico'
+                ? 'Preencher dados do mecânico'
+                : 'Criar usuário'}
+          </button>
+        </footer>
+      </form>
+    </div>,
+    document.body,
+  );
 }

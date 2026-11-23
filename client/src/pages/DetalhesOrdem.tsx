@@ -1,140 +1,646 @@
-import ConteudoCarregando from '../components/ConteudoCarregando';
-import Skeleton from '../components/Skeleton';
-import {useDadosVivos} from '../hooks/useDadosVivos';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { rotulosStatusOrdem } from '../services/statusOrdem';
-import { Icon } from '../components/MenuAdmin';
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import SkeletonPagina from '../components/SkeletonPagina';
+import Skeleton from '../components/Skeleton';
+import { Icone } from '../components/MenuAdmin';
 import ModalAcoesOrdem from '../components/ModalAcoesOrdem';
 import ModalPreviaModelo from '../components/ModalPreviaModelo';
-import { ErroRequisicaoApi, buscarFotoCliente, buscarDetalhesOrdem, buscarHistoricoObservacoes, logout, type RegistroHistoricoObservacao, type DetalhesOrdem as Details } from '../services/apiAutenticacao';
+import { useDadosVivos } from '../hooks/useDadosVivos';
+import {
+  ErroRequisicaoApi,
+  buscarDetalhesOrdem,
+  buscarFotoCliente,
+  buscarHistoricoObservacoes,
+  type DetalhesOrdem as Details,
+  type RegistroHistoricoObservacao,
+} from '../services/apiAutenticacao';
 import { useMiniaturaMotocicleta } from '../services/miniaturasMotocicletas';
-import './ordens-servico.css';
+import { rotulosSituacaoOrdem } from '../services/statusOrdem';
 import './detalhes-ordem.css';
+import './ordens-servico.css';
 
-const money = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
-const date = (value: string | null) => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(value)) : '—';
-const stages = [
-  { title: 'Em aberto', icon: 'clipboard' }, { title: 'Aguardando peça', icon: 'package' },
-  { title: 'Em andamento', icon: 'wrench' }, { title: 'Pronta', icon: 'check' },
+const moeda = (numero: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numero);
+const dadosLocal = (valor: string | null) =>
+  valor
+    ? new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+        timeZone: 'America/Sao_Paulo',
+      }).format(new Date(valor))
+    : '—';
+const etapas = [
+  { title: 'Em aberto', icon: 'clipboard' },
+  { title: 'Aguardando peça', icon: 'package' },
+  { title: 'Em andamento', icon: 'wrench' },
+  { title: 'Pronta', icon: 'check' },
   { title: 'Finalizada', icon: 'check' },
   { title: 'Cancelada', icon: 'close' },
 ];
 
-
 export default function DetalhesOrdem() {
-  const navigate = useNavigate();
+  const navegar = useNavigate();
   const { id } = useParams();
-  const orderId = Number(id);
-  const [collapsed, setCollapsed] = useState(false);
-  const [name, setName] = useState('Administrador');
-  const [data, setData] = useState<Details | null>(null);
-  const [error, setError] = useState('');
-  const [toast, setToast] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState('');
-  const [observationHistory, setObservationHistory] = useState<RegistroHistoricoObservacao[]>([]);
-  const [correctingImage, setCorrectingImage] = useState(false);
-  const [imageRevision, setImageRevision] = useState(0);
-  const [failedBikeImage, setFailedBikeImage] = useState('');
-  const [clientPhotoUrl,setClientPhotoUrl]=useState('');
-  const bikeThumbnail = useMiniaturaMotocicleta(orderId, data?.motorcycle.model, data?.motorcycle.color, imageRevision);
-  const bikeImage = bikeThumbnail.url !== failedBikeImage ? bikeThumbnail.url : null;
-  const clientInitials = (data?.client.name ?? 'Cliente').trim().split(/\s+/).slice(0,2).map(word=>word.charAt(0)).join('').toUpperCase();
-
-  useEffect(()=>{
-    if(!data?.client.photo){setClientPhotoUrl('');return;}
-    if(/^https:\/\//i.test(data.client.photo)){setClientPhotoUrl(data.client.photo);return;}
-    let active=true;let url='';
-    void buscarFotoCliente(orderId).then(blob=>{
-      url=URL.createObjectURL(blob);
-      if(active)setClientPhotoUrl(url);else URL.revokeObjectURL(url);
-    }).catch(()=>{if(active)setClientPhotoUrl('');});
-    return ()=>{active=false;if(url)URL.revokeObjectURL(url);};
-  },[data?.client.photo,orderId]);
+  const idOrdem = Number(id);
+  const [dados, setDados] = useState<Details | null>(null);
+  const [erro, setErro] = useState('');
+  const [avisoTemporario, setAvisoTemporario] = useState('');
+  const [editando, setEditando] = useState(false);
+  const [historicoAberto, setHistoricoAberto] = useState(false);
+  const [historicoCarregando, setHistoricoCarregando] = useState(false);
+  const [historicoErro, setHistoricoErro] = useState('');
+  const [observacaoHistorico, setObservacaoHistorico] = useState<RegistroHistoricoObservacao[]>([]);
+  const [correctingImagem, setCorrectingImagem] = useState(false);
+  const [revisaoImagem, setImagemRevisao] = useState(0);
+  const [falhouMotoImagem, setFalhouMotoImagem] = useState('');
+  const [clienteFotoUrl, setClienteFotoUrl] = useState('');
+  const motocicletaMiniatura = useMiniaturaMotocicleta(
+    idOrdem,
+    dados?.motorcycle.model,
+    dados?.motorcycle.color,
+    revisaoImagem,
+  );
+  const imagemMoto =
+    motocicletaMiniatura.url !== falhouMotoImagem ? motocicletaMiniatura.url : null;
+  const iniciaisCliente = (dados?.client.name ?? 'Cliente')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((palavra) => palavra.charAt(0))
+    .join('')
+    .toUpperCase();
 
   useEffect(() => {
-    if (!Number.isSafeInteger(orderId) || orderId < 1) { setError('Número da OS inválido.'); return; }
-    let active = true;
-    buscarDetalhesOrdem(orderId).then((details) => {
-      if (active) { setData(details); setError(''); }
-    }).catch(err => {
-      if (!active) return;
-      if (err instanceof ErroRequisicaoApi && (err.status === 401 || err.status === 403)) navigate('/login', { replace: true });
-      else setError(err instanceof Error ? err.message : 'Não foi possível carregar a OS.');
-    });
-    return () => { active = false; };
-  }, [orderId, navigate]);
-  useDadosVivos(async valido=>{try{const result=await buscarDetalhesOrdem(orderId);if(valido()){setData(result);setError('')}}catch(e){if(valido())setError(e instanceof Error?e.message:'Não foi possível atualizar a OS.')}},!!data,String(orderId));
-  async function handleLogout() {
-    try { await logout(); navigate('/login', { replace: true }); }
-    catch { setToast('Não foi possível sair agora.'); }
-  }
-  async function openObservationHistory() {
-    setHistoryOpen(true); setHistoryLoading(true); setHistoryError('');
-    try { setObservationHistory((await buscarHistoricoObservacoes(orderId)).entries); }
-    catch(err) { setHistoryError(err instanceof Error ? err.message : 'Falha ao carregar histórico.'); }
-    finally { setHistoryLoading(false); }
-  }
-  function refreshDetails() {
-    void buscarDetalhesOrdem(orderId).then(details => { setData(details); setError(''); }).catch(err => setToast(err instanceof Error ? err.message : 'Não foi possível atualizar a OS.'));
-  }
-  const stageIndex = data?.status === 'aguardando' ? 0 : data?.status === 'aguardando peça' ? 1 : data?.status === 'em andamento' ? 2 : data?.status === 'pronto' ? 3 : data?.status === 'entregue' ? 4 : 5;
-  const amount = data ? data.total ?? data.serviceTotal + data.partsTotal : 0;
-  const events = data ? [
-    ...data.movements.map(item => ({
-      title:item.action === 'edicao' ? 'Informações corrigidas' : item.after === 'cancelada' ? 'OS cancelada' : `Status alterado para ${rotulosStatusOrdem[item.after!] ?? item.after}`,
-      body:item.action === 'edicao' ? `Dados corrigidos por ${item.actor}` : `${rotulosStatusOrdem[item.before!] ?? item.before} → ${rotulosStatusOrdem[item.after!] ?? item.after} · ${item.actor}`,
-      at:item.at, color:item.after === 'cancelada' ? 'red' : item.action === 'edicao' ? 'orange' : 'green',
-    })),
-    { title:'OS criada', body:'Ordem de serviço registrada', at:data.entry, color:'blue' },
-  ].filter(item => item.at) : [];
+    if (!dados?.client.photo) {
+      setClienteFotoUrl('');
+      return;
+    }
+    if (/^https:\/\//i.test(dados.client.photo)) {
+      setClienteFotoUrl(dados.client.photo);
+      return;
+    }
+    let ativo = true;
+    let url = '';
+    void buscarFotoCliente(idOrdem)
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        if (ativo) setClienteFotoUrl(url);
+        else URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        if (ativo) setClienteFotoUrl('');
+      });
+    return () => {
+      ativo = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [dados?.client.photo, idOrdem]);
 
-  return <div className="orders-viewport details-viewport">
-    
-    <div className="orders-main">
-      
-      <main className="details-scroll"><ConteudoCarregando carregando={!data&&!error}>
-        {error ? <div className="details-error"><p>{error}</p><button onClick={() => navigate('/ordens-de-servico')}>Voltar à lista</button></div> : !data ? <div className="details-loading">Carregando detalhes da OS...</div> : <div className="details-body">
-          <button type="button" className="detail-return" onClick={() => navigate('/ordens-de-servico')}><Icon name="left" size={14}/> Voltar às ordens</button><div className="details-title-row"><div><h1>Detalhes da Ordem de Serviço</h1><span className="details-number">OS #{data.id}</span></div><div className="details-title-actions"><button className="white-btn" onClick={() => navigate(`/ordens-de-servico/${data.id}/historico`)}><Icon name="clock" size={14}/> Histórico</button><button className="red-btn" onClick={() => setEditing(true)}><Icon name="pencil" size={14}/> Editar</button></div></div>
-          <section className="details-summary" aria-label="Resumo da ordem">
-            <div><span className={`summary-dot status-${data.status.replaceAll(' ', '-')}`}/><span><small>STATUS ATUAL</small><b>{rotulosStatusOrdem[data.status]}</b></span></div>
-            <div><Icon name="calendar" size={18}/><span><small>DATA DE ABERTURA</small><b>{date(data.entry)}</b></span></div>
-            <div><Icon name="calendar" size={18}/><span><small>PREVISÃO DE ENTREGA</small><b>{date(data.forecast)}</b></span></div>
-            <div><Icon name="clock" size={18}/><span><small>ÚLTIMA ATUALIZAÇÃO</small><b>{date(data.lastUpdated)}</b></span></div>
-            <div><span className="mechanic-avatar">{data.mechanic.charAt(0)}</span><span><small>RESPONSÁVEL TÉCNICO</small><b>{data.mechanic}</b></span></div>
+  useEffect(() => {
+    if (!Number.isSafeInteger(idOrdem) || idOrdem < 1) {
+      setErro('Número da OS inválido.');
+      return;
+    }
+    let ativo = true;
+    buscarDetalhesOrdem(idOrdem)
+      .then((detalhes) => {
+        if (ativo) {
+          setDados(detalhes);
+          setErro('');
+        }
+      })
+      .catch((erroCapturado) => {
+        if (!ativo) return;
+        if (
+          erroCapturado instanceof ErroRequisicaoApi &&
+          (erroCapturado.situacao === 401 || erroCapturado.situacao === 403)
+        )
+          navegar('/login', { replace: true });
+        else
+          setErro(
+            erroCapturado instanceof Error
+              ? erroCapturado.message
+              : 'Não foi possível carregar a OS.',
+          );
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [idOrdem, navegar]);
+  useDadosVivos(
+    async (valido) => {
+      try {
+        const resultado = await buscarDetalhesOrdem(idOrdem);
+        if (valido()) {
+          setDados(resultado);
+          setErro('');
+        }
+      } catch (erroCapturado) {
+        if (valido())
+          setErro(
+            erroCapturado instanceof Error
+              ? erroCapturado.message
+              : 'Não foi possível atualizar a OS.',
+          );
+      }
+    },
+    !!dados,
+    String(idOrdem),
+  );
+  async function abertoObservacaoHistorico() {
+    setHistoricoAberto(true);
+    setHistoricoCarregando(true);
+    setHistoricoErro('');
+    try {
+      setObservacaoHistorico((await buscarHistoricoObservacoes(idOrdem)).entries);
+    } catch (erroCapturado) {
+      setHistoricoErro(
+        erroCapturado instanceof Error ? erroCapturado.message : 'Falha ao carregar histórico.',
+      );
+    } finally {
+      setHistoricoCarregando(false);
+    }
+  }
+  function atualizarDetalhes() {
+    void buscarDetalhesOrdem(idOrdem)
+      .then((detalhes) => {
+        setDados(detalhes);
+        setErro('');
+      })
+      .catch((erroCapturado) =>
+        setAvisoTemporario(
+          erroCapturado instanceof Error
+            ? erroCapturado.message
+            : 'Não foi possível atualizar a OS.',
+        ),
+      );
+  }
+  const etapaIndice =
+    dados?.status === 'aguardando'
+      ? 0
+      : dados?.status === 'aguardando peça'
+        ? 1
+        : dados?.status === 'em andamento'
+          ? 2
+          : dados?.status === 'pronto'
+            ? 3
+            : dados?.status === 'entregue'
+              ? 4
+              : 5;
+  const valorLocal = dados ? (dados.total ?? dados.serviceTotal + dados.partsTotal) : 0;
+  const eventos = dados
+    ? [
+        ...dados.movements.map((item) => ({
+          title:
+            item.action === 'edicao'
+              ? 'Informações corrigidas'
+              : item.after === 'cancelada'
+                ? 'OS cancelada'
+                : `Status alterado para ${rotulosSituacaoOrdem[item.after!] ?? item.after}`,
+          body:
+            item.action === 'edicao'
+              ? `Dados corrigidos por ${item.actor}`
+              : `${rotulosSituacaoOrdem[item.before!] ?? item.before} → ${rotulosSituacaoOrdem[item.after!] ?? item.after} · ${item.actor}`,
+          at: item.at,
+          color: item.after === 'cancelada' ? 'red' : item.action === 'edicao' ? 'orange' : 'green',
+        })),
+        { title: 'OS criada', body: 'Ordem de serviço registrada', at: dados.entry, color: 'blue' },
+      ].filter((item) => item.at)
+    : [];
+
+  return (
+    <div className="orders-viewport details-viewport">
+      <div className="orders-main">
+        <main className="details-scroll">
+          <ConteudoCarregando carregando={!dados && !erro}>
+            {erro ? (
+              <div className="details-error">
+                <p>{erro}</p>
+                <button onClick={() => navegar('/ordens-de-servico')}>Voltar à lista</button>
+              </div>
+            ) : !dados ? (
+              <SkeletonPagina caminho={`/ordens-de-servico/${id}`} />
+            ) : (
+              <div className="details-body">
+                <button
+                  type="button"
+                  className="detail-return"
+                  onClick={() => navegar('/ordens-de-servico')}
+                >
+                  <Icone name="left" size={14} /> Voltar às ordens
+                </button>
+                <div className="details-title-row">
+                  <div>
+                    <h1>Detalhes da Ordem de Serviço</h1>
+                    <span className="details-number">OS #{dados.id}</span>
+                  </div>
+                  <div className="details-title-actions">
+                    <button
+                      className="white-btn"
+                      onClick={() => navegar(`/ordens-de-servico/${dados.id}/historico`)}
+                    >
+                      <Icone name="clock" size={14} /> Histórico
+                    </button>
+                    <button className="red-btn" onClick={() => setEditando(true)}>
+                      <Icone name="pencil" size={14} /> Editar
+                    </button>
+                  </div>
+                </div>
+                <section className="details-summary" aria-label="Resumo da ordem">
+                  <div>
+                    <span className={`summary-dot status-${dados.status.replaceAll(' ', '-')}`} />
+                    <span>
+                      <small>STATUS ATUAL</small>
+                      <b>{rotulosSituacaoOrdem[dados.status]}</b>
+                    </span>
+                  </div>
+                  <div>
+                    <Icone name="calendar" size={18} />
+                    <span>
+                      <small>DATA DE ABERTURA</small>
+                      <b>{dadosLocal(dados.entry)}</b>
+                    </span>
+                  </div>
+                  <div>
+                    <Icone name="calendar" size={18} />
+                    <span>
+                      <small>PREVISÃO DE ENTREGA</small>
+                      <b>{dadosLocal(dados.forecast)}</b>
+                    </span>
+                  </div>
+                  <div>
+                    <Icone name="clock" size={18} />
+                    <span>
+                      <small>ÚLTIMA ATUALIZAÇÃO</small>
+                      <b>{dadosLocal(dados.lastUpdated)}</b>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="mechanic-avatar">{dados.mechanic.charAt(0)}</span>
+                    <span>
+                      <small>RESPONSÁVEL TÉCNICO</small>
+                      <b>{dados.mechanic}</b>
+                    </span>
+                  </div>
+                </section>
+                <section className="details-panel details-progress">
+                  <h2>
+                    <Icone name="activity" size={14} /> Andamento da Ordem
+                  </h2>
+                  <div className={`progress-track progress-${dados.status.replaceAll(' ', '-')}`}>
+                    {etapas.map((etapa, indice) => (
+                      <div
+                        className={`progress-stage${(dados.status === 'cancelada' ? indice === 0 || indice === 5 : indice <= etapaIndice && indice !== 5) ? ' reached' : ''}${indice === etapaIndice ? ' current' : ''}`}
+                        key={etapa.title}
+                      >
+                        <div className="progress-circle">
+                          <Icone name={etapa.icon} size={18} />
+                        </div>
+                        <b>{etapa.title}</b>
+                        <small>
+                          {indice === 0
+                            ? dadosLocal(dados.entry)
+                            : (indice === 4 || indice === 5) && dados.exit
+                              ? dadosLocal(dados.exit)
+                              : '—'}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                  {dados.status === 'cancelada' && (
+                    <div className="progress-cancellation-reason" role="note">
+                      <Icone name="info" size={14} />
+                      <span>
+                        <b>Motivo do cancelamento</b>
+                        {dados.cancellationReason || 'Motivo não registrado nesta OS antiga.'}
+                      </span>
+                    </div>
+                  )}
+                </section>
+                <div className="details-grid-three">
+                  <section className="details-panel">
+                    <h2>
+                      <span className="details-section-icon icon-user" aria-hidden="true" /> Cliente
+                    </h2>
+                    <div className="details-client">
+                      <div className="details-client-avatar">
+                        {clienteFotoUrl ? (
+                          <img
+                            src={clienteFotoUrl}
+                            alt={`Foto de ${dados.client.name}`}
+                            onError={() => setClienteFotoUrl('')}
+                          />
+                        ) : (
+                          <span aria-label="Foto não cadastrada">{iniciaisCliente}</span>
+                        )}
+                      </div>
+                      <div>
+                        <strong className="details-main-text">{dados.client.name}</strong>
+                        <p>
+                          <Icone name="phone" size={14} />
+                          {dados.client.phone || 'Telefone não informado'}
+                        </p>
+                        <p>
+                          <Icone name="mail" size={14} />
+                          {dados.client.email || 'E-mail não informado'}
+                        </p>
+                        <p>
+                          <Icone name="pin" size={14} />
+                          Endereço não informado
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                  <section className="details-panel">
+                    <h2>
+                      <Icone name="bike" size={14} /> Motocicleta
+                    </h2>
+                    <div className="details-bike">
+                      <div className="bike-image">
+                        {imagemMoto ? (
+                          <img
+                            src={imagemMoto}
+                            alt={`Miniatura ilustrativa de ${dados.motorcycle.model} na cor ${dados.motorcycle.color || 'padrão'}`}
+                            onError={() => setFalhouMotoImagem(imagemMoto)}
+                          />
+                        ) : (
+                          <Icone name="bike" size={35} />
+                        )}
+                      </div>
+                      <div>
+                        <strong className="details-main-text">{dados.motorcycle.model}</strong>
+                        <p>Placa: {dados.motorcycle.plate || '—'}</p>
+                        <p>Ano: {dados.motorcycle.year || '—'}</p>
+                        <p>Cor: {dados.motorcycle.color || '—'}</p>
+                        <p>KM de entrada: {dados.motorcycle.kmEntry ?? '—'}</p>
+                      </div>
+                    </div>
+                    {(motocicletaMiniatura.origin === 'catalog' ||
+                      motocicletaMiniatura.origin === 'generated') && (
+                      <small className="model-credit">
+                        Miniatura ilustrativa · cor {dados.motorcycle.color || 'padrão'}
+                      </small>
+                    )}
+                    {motocicletaMiniatura.loading && !motocicletaMiniatura.error && (
+                      <small className="model-credit">Preparando miniatura…</small>
+                    )}
+                    {motocicletaMiniatura.error && (
+                      <small className="model-credit error" role="status">
+                        {motocicletaMiniatura.error}
+                      </small>
+                    )}
+                    <button
+                      className="model-correction-link"
+                      onClick={() => setCorrectingImagem(true)}
+                    >
+                      <Icone name="pencil" size={12} /> Corrigir miniatura
+                    </button>
+                  </section>
+                  <section className="details-panel finance-panel">
+                    <h2>
+                      <span className="details-section-icon icon-dollar" aria-hidden="true" />{' '}
+                      Resumo Financeiro
+                    </h2>
+                    <p>
+                      <span>Total dos Serviços</span>
+                      <b>{moeda(dados.serviceTotal)}</b>
+                    </p>
+                    <p>
+                      <span>Total das Peças</span>
+                      <b>{moeda(dados.partsTotal)}</b>
+                    </p>
+                    <div className="finance-total">
+                      <b>Valor Final</b>
+                      <strong>{moeda(valorLocal)}</strong>
+                    </div>
+                    <small>Pagamento: {dados.paymentStatus === 'pago' ? 'Pago' : 'Pendente'}</small>
+                  </section>
+                </div>
+                <div className="details-grid-two">
+                  <section className="details-panel details-table">
+                    <h2>
+                      <span className="details-section-icon icon-wrench" aria-hidden="true" />{' '}
+                      Serviços Registrados
+                    </h2>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>SERVIÇO</th>
+                          <th>DESCRIÇÃO</th>
+                          <th>VALOR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dados.services.map((servico, indiceLocal) => (
+                          <tr key={indiceLocal}>
+                            <td>{servico.description}</td>
+                            <td>{servico.description}</td>
+                            <td>{moeda(servico.price)}</td>
+                          </tr>
+                        ))}
+                        {!dados.services.length && (
+                          <tr>
+                            <td colSpan={3}>Nenhum serviço registrado.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={2}>Total dos Serviços</td>
+                          <td>{moeda(dados.serviceTotal)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </section>
+                  <section className="details-panel details-table">
+                    <h2>
+                      <Icone name="package" size={14} /> Peças Utilizadas
+                    </h2>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>PEÇA</th>
+                          <th>QUANTIDADE</th>
+                          <th>VALOR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dados.parts.map((parte, indiceLocal) => (
+                          <tr key={indiceLocal}>
+                            <td>{parte.name}</td>
+                            <td>{parte.quantity}</td>
+                            <td>{moeda(parte.quantity * parte.unitPrice)}</td>
+                          </tr>
+                        ))}
+                        {!dados.parts.length && (
+                          <tr>
+                            <td colSpan={3}>Nenhuma peça registrada.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={2}>Total das Peças</td>
+                          <td>{moeda(dados.partsTotal)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </section>
+                </div>
+                <div className="details-grid-two">
+                  <section className="details-panel">
+                    <h2>
+                      <span className="details-section-icon icon-camera" aria-hidden="true" /> Fotos
+                      da Entrada
+                    </h2>
+                    {dados.photos.length ? (
+                      <div className="entry-photos">
+                        {dados.photos.map((foto, indiceLocal) => (
+                          <a
+                            key={foto.id}
+                            href={foto.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Abrir foto ${indiceLocal + 1} da OS #${dados.id}`}
+                          >
+                            <img
+                              src={foto.url}
+                              alt={`Foto de entrada ${indiceLocal + 1} da OS #${dados.id}`}
+                              loading="lazy"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="details-empty">Nenhuma foto de entrada cadastrada nesta OS.</p>
+                    )}
+                  </section>
+                  <section className="details-panel">
+                    <h2>
+                      <span className="details-section-icon icon-clock" aria-hidden="true" />{' '}
+                      Últimas Movimentações
+                    </h2>
+                    <div className="details-activity">
+                      {eventos.map((item, indiceLocal) => (
+                        <div key={indiceLocal}>
+                          <i className={item.color} />
+                          <span>
+                            <b>{item.title}</b>
+                            <small>{item.body}</small>
+                          </span>
+                          <time>{dadosLocal(item.at)}</time>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+                <section className="details-panel observations">
+                  <div className="observations-heading">
+                    <h2>
+                      <span className="details-section-icon icon-file" aria-hidden="true" />{' '}
+                      Observação atual
+                    </h2>
+                    <button type="button" onClick={() => void abertoObservacaoHistorico()}>
+                      <Icone name="clock" size={13} /> Ver histórico de observações
+                    </button>
+                  </div>
+                  <p>{dados.observations || 'Nenhuma observação atual cadastrada.'}</p>
+                </section>
+              </div>
+            )}
+          </ConteudoCarregando>
+        </main>
+      </div>
+      {historicoAberto && (
+        <div
+          className="observation-history-backdrop"
+          onMouseDown={(evento) => {
+            if (evento.target === evento.currentTarget) setHistoricoAberto(false);
+          }}
+        >
+          <section
+            className="observation-history-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="observation-history-title"
+          >
+            <header>
+              <div>
+                <small>REGISTROS ANTERIORES</small>
+                <h2 id="observation-history-title">Histórico de observações</h2>
+              </div>
+              <button aria-label="Fechar histórico" onClick={() => setHistoricoAberto(false)}>
+                ✕
+              </button>
+            </header>
+            <p className="observation-history-warning">
+              Estes registros são históricos e não representam a observação atual da OS.
+            </p>
+            {historicoCarregando ? (
+              <Skeleton tipo="tabela" linhas={4} />
+            ) : historicoErro ? (
+              <div className="observation-history-error" role="alert">
+                <p>{historicoErro}</p>
+                <button
+                  type="button"
+                  className="observation-history-retry"
+                  onClick={() => void abertoObservacaoHistorico()}
+                >
+                  <Icone name="clock" size={14} /> Tentar novamente
+                </button>
+              </div>
+            ) : observacaoHistorico.length ? (
+              <ol>
+                {observacaoHistorico.map((registro) => (
+                  <li key={registro.id}>
+                    <div>
+                      <b>
+                        {registro.kind === 'nota_status'
+                          ? 'Nota da mudança de status'
+                          : 'Observação anterior'}
+                      </b>
+                      <time>{dadosLocal(registro.at)}</time>
+                    </div>
+                    {registro.context && <small>{registro.context}</small>}
+                    <p>{registro.body}</p>
+                    <small>Registrado por {registro.actor} · Histórico, não atual</small>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>Nenhuma observação anterior registrada.</p>
+            )}
           </section>
-          <section className="details-panel details-progress"><h2><Icon name="activity" size={14}/> Andamento da Ordem</h2><div className={`progress-track progress-${data.status.replaceAll(' ', '-')}`}>
-            {stages.map((stage, index) => <div className={`progress-stage${(data.status === 'cancelada' ? index === 0 || index === 5 : index <= stageIndex && index !== 5) ? ' reached' : ''}${index === stageIndex ? ' current' : ''}`} key={stage.title}><div className="progress-circle"><Icon name={stage.icon} size={18}/></div><b>{stage.title}</b><small>{index === 0 ? date(data.entry) : (index === 4 || index === 5) && data.exit ? date(data.exit) : '—'}</small></div>)}
-          </div>{data.status==='cancelada'&&<div className="progress-cancellation-reason" role="note"><Icon name="info" size={14}/><span><b>Motivo do cancelamento</b>{data.cancellationReason||'Motivo não registrado nesta OS antiga.'}</span></div>}</section>
-          <div className="details-grid-three">
-            <section className="details-panel"><h2><span className="details-section-icon icon-user" aria-hidden="true"/> Cliente</h2><div className="details-client"><div className="details-client-avatar">{clientPhotoUrl ? <img src={clientPhotoUrl} alt={`Foto de ${data.client.name}`} onError={() => setClientPhotoUrl('')}/> : <span aria-label="Foto não cadastrada">{clientInitials}</span>}</div><div><strong className="details-main-text">{data.client.name}</strong><p><Icon name="phone" size={14}/>{data.client.phone || 'Telefone não informado'}</p><p><Icon name="mail" size={14}/>{data.client.email || 'E-mail não informado'}</p><p><Icon name="pin" size={14}/>Endereço não informado</p></div></div></section>
-            <section className="details-panel"><h2><Icon name="bike" size={14}/> Motocicleta</h2><div className="details-bike"><div className="bike-image">{bikeImage ? <img src={bikeImage} alt={`Miniatura ilustrativa de ${data.motorcycle.model} na cor ${data.motorcycle.color || 'padrão'}`} onError={() => setFailedBikeImage(bikeImage)}/>: <Icon name="bike" size={35}/>}</div><div><strong className="details-main-text">{data.motorcycle.model}</strong><p>Placa: {data.motorcycle.plate || '—'}</p><p>Ano: {data.motorcycle.year || '—'}</p><p>Cor: {data.motorcycle.color || '—'}</p><p>KM de entrada: {data.motorcycle.kmEntry ?? '—'}</p></div></div>{(bikeThumbnail.origin === 'catalog' || bikeThumbnail.origin === 'generated') && <small className="model-credit">Miniatura ilustrativa · cor {data.motorcycle.color || 'padrão'}</small>}{bikeThumbnail.loading && !bikeThumbnail.error && <small className="model-credit">Preparando miniatura…</small>}{bikeThumbnail.error && <small className="model-credit error" role="status">{bikeThumbnail.error}</small>}<button className="model-correction-link" onClick={() => setCorrectingImage(true)}><Icon name="pencil" size={12}/> Corrigir miniatura</button></section>
-            <section className="details-panel finance-panel"><h2><span className="details-section-icon icon-dollar" aria-hidden="true"/> Resumo Financeiro</h2><p><span>Total dos Serviços</span><b>{money(data.serviceTotal)}</b></p><p><span>Total das Peças</span><b>{money(data.partsTotal)}</b></p><div className="finance-total"><b>Valor Final</b><strong>{money(amount)}</strong></div><small>Pagamento: {data.paymentStatus === 'pago' ? 'Pago' : 'Pendente'}</small></section>
-          </div>
-          <div className="details-grid-two">
-            <section className="details-panel details-table"><h2><span className="details-section-icon icon-wrench" aria-hidden="true"/> Serviços Registrados</h2><table><thead><tr><th>SERVIÇO</th><th>DESCRIÇÃO</th><th>VALOR</th></tr></thead><tbody>{data.services.map((service, i) => <tr key={i}><td>{service.description}</td><td>{service.description}</td><td>{money(service.price)}</td></tr>)}{!data.services.length && <tr><td colSpan={3}>Nenhum serviço registrado.</td></tr>}</tbody><tfoot><tr><td colSpan={2}>Total dos Serviços</td><td>{money(data.serviceTotal)}</td></tr></tfoot></table></section>
-            <section className="details-panel details-table"><h2><Icon name="package" size={14}/> Peças Utilizadas</h2><table><thead><tr><th>PEÇA</th><th>QUANTIDADE</th><th>VALOR</th></tr></thead><tbody>{data.parts.map((part, i) => <tr key={i}><td>{part.name}</td><td>{part.quantity}</td><td>{money(part.quantity * part.unitPrice)}</td></tr>)}{!data.parts.length && <tr><td colSpan={3}>Nenhuma peça registrada.</td></tr>}</tbody><tfoot><tr><td colSpan={2}>Total das Peças</td><td>{money(data.partsTotal)}</td></tr></tfoot></table></section>
-          </div>
-          <div className="details-grid-two">
-            <section className="details-panel"><h2><span className="details-section-icon icon-camera" aria-hidden="true"/> Fotos da Entrada</h2>{data.photos.length ? <div className="entry-photos">{data.photos.map((photo, i) => <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir foto ${i + 1} da OS #${data.id}`}><img src={photo.url} alt={`Foto de entrada ${i + 1} da OS #${data.id}`} loading="lazy"/></a>)}</div> : <p className="details-empty">Nenhuma foto de entrada cadastrada nesta OS.</p>}</section>
-            <section className="details-panel"><h2><span className="details-section-icon icon-clock" aria-hidden="true"/> Últimas Movimentações</h2><div className="details-activity">{events.map((item, i) => <div key={i}><i className={item.color}/><span><b>{item.title}</b><small>{item.body}</small></span><time>{date(item.at)}</time></div>)}</div></section>
-          </div>
-          <section className="details-panel observations"><div className="observations-heading"><h2><span className="details-section-icon icon-file" aria-hidden="true"/> Observação atual</h2><button type="button" onClick={() => void openObservationHistory()}><Icon name="clock" size={13}/> Ver histórico de observações</button></div><p>{data.observations || 'Nenhuma observação atual cadastrada.'}</p></section>
-        </div>}
-      </ConteudoCarregando></main>
+        </div>
+      )}
+      {avisoTemporario && (
+        <div className="orders-toast" role="status" onClick={() => setAvisoTemporario('')}>
+          {avisoTemporario}
+        </div>
+      )}
+      {editando && (
+        <ModalAcoesOrdem
+          orderId={idOrdem}
+          initialTab="edit"
+          onClose={() => setEditando(false)}
+          onChanged={atualizarDetalhes}
+          onDeleted={() => navegar('/ordens-de-servico')}
+        />
+      )}
+      {correctingImagem && dados && (
+        <ModalPreviaModelo
+          orderId={idOrdem}
+          currentModel={dados.motorcycle.model}
+          onClose={() => setCorrectingImagem(false)}
+          onChanged={() => {
+            atualizarDetalhes();
+            setFalhouMotoImagem('');
+            setImagemRevisao((valor) => valor + 1);
+            setAvisoTemporario('Miniatura aprovada e salva para este modelo.');
+          }}
+        />
+      )}
     </div>
-    {historyOpen && <div className="observation-history-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setHistoryOpen(false); }}>
-      <section className="observation-history-dialog" role="dialog" aria-modal="true" aria-labelledby="observation-history-title">
-        <header><div><small>REGISTROS ANTERIORES</small><h2 id="observation-history-title">Histórico de observações</h2></div><button aria-label="Fechar histórico" onClick={() => setHistoryOpen(false)}>✕</button></header>
-        <p className="observation-history-warning">Estes registros são históricos e não representam a observação atual da OS.</p>
-        {historyLoading ? <p>Carregando histórico…</p> : historyError ? <div className="observation-history-error" role="alert"><p>{historyError}</p><button type="button" className="observation-history-retry" onClick={() => void openObservationHistory()}><Icon name="clock" size={14}/> Tentar novamente</button></div> : observationHistory.length ? <ol>{observationHistory.map(entry => <li key={entry.id}><div><b>{entry.kind === 'nota_status' ? 'Nota da mudança de status' : 'Observação anterior'}</b><time>{date(entry.at)}</time></div>{entry.context && <small>{entry.context}</small>}<p>{entry.body}</p><small>Registrado por {entry.actor} · Histórico, não atual</small></li>)}</ol> : <p>Nenhuma observação anterior registrada.</p>}
-      </section>
-    </div>}
-    {toast && <div className="orders-toast" role="status" onClick={() => setToast('')}>{toast}</div>}
-    {editing && <ModalAcoesOrdem orderId={orderId} initialTab="edit" onClose={() => setEditing(false)} onChanged={refreshDetails} onDeleted={() => navigate('/ordens-de-servico')}/>}
-    {correctingImage && data && <ModalPreviaModelo orderId={orderId} currentModel={data.motorcycle.model} onClose={() => setCorrectingImage(false)} onChanged={() => { refreshDetails(); setFailedBikeImage(''); setImageRevision(value => value + 1); setToast('Miniatura aprovada e salva para este modelo.'); }}/>} 
-  </div>;
+  );
 }

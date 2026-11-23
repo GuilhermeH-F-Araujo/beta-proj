@@ -1,3 +1,7 @@
-export function resolveClientUrl(env?: NodeJS.ProcessEnv): string;
-export function trustedClientOrigins(env?: NodeJS.ProcessEnv): Set<string>;
-export function isTrustedPanelMutation(origin: string | undefined, fetchSite: string | undefined, env?: NodeJS.ProcessEnv): boolean;
+export function resolverUrlCliente(ambiente?: NodeJS.ProcessEnv): string;
+export function origensClienteConfiaveis(ambiente?: NodeJS.ProcessEnv): Set<string>;
+export function alteracaoPainelConfiavel(
+  origem: string | undefined,
+  origemNavegacao: string | undefined,
+  ambiente?: NodeJS.ProcessEnv,
+): boolean;

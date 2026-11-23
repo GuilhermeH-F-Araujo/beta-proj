@@ -1,61 +1,74 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import AvisoAutenticacao from '../components/AvisoAutenticacao';
+import LogoEstacao from '../components/LogoEstacao';
 import TelaFigma from '../components/TelaFigma';
-import { buscarUsuarioAtual, login } from '../services/apiAutenticacao';
+import { buscarUsuarioAtual, entrar } from '../services/apiAutenticacao';
 
-const rememberedEmailKey = 'perc3-remembered-email';
-function rememberedEmail() {
-  try { return localStorage.getItem(rememberedEmailKey) ?? ''; }
-  catch { return ''; }
+const CHAVE_EMAIL_LEMBRADO = 'perc3-remembered-email';
+function lerEmailLembrado() {
+  try {
+    return localStorage.getItem(CHAVE_EMAIL_LEMBRADO) ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export default function Entrar() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from;
-  const destination = typeof from === 'string' && /^\/(?:dashboard|ordens-de-servico|clientes|motocicletas|meu-perfil)(?:[/?#]|$)/.test(from)
-    ? from : '/ordens-de-servico';
-  const [identifier, setIdentifier] = useState(rememberedEmail);
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(() => !!rememberedEmail());
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const navegar = useNavigate();
+  const destino = '/dashboard';
+  const [identificador, setIdentificador] = useState(lerEmailLembrado);
+  const [senha, setSenha] = useState('');
+  const [lembrar, setLembrar] = useState(() => !!lerEmailLembrado());
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState('');
 
   useEffect(() => {
-    let active = true;
-    buscarUsuarioAtual().then(() => { if (active) navigate(destination, { replace: true }); }).catch(() => {});
-    return () => { active = false; };
-  }, [navigate, destination]);
+    let ativo = true;
+    buscarUsuarioAtual()
+      .then(() => {
+        if (ativo) navegar(destino, { replace: true });
+      })
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, [navegar, destino]);
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError('');
+  async function tratarEnvio(evento: FormEvent) {
+    evento.preventDefault();
+    setErro('');
 
-    if (!identifier.trim() || !password) {
-      setError('Preencha seu e-mail e sua senha para acessar o painel.');
+    if (!identificador.trim() || !senha) {
+      setErro('Preencha seu e-mail e sua senha para acessar o painel.');
       return;
     }
 
-    const normalizedEmail = identifier.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setError('Digite um endereço de e-mail válido para continuar.');
+    const normalizadoEmail = identificador.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizadoEmail)) {
+      setErro('Digite um endereço de e-mail válido para continuar.');
       return;
     }
 
-    setLoading(true);
+    setCarregando(true);
     try {
-      await login({ identifier: normalizedEmail, password, remember });
+      await entrar({ identifier: normalizadoEmail, password: senha, remember: lembrar });
       try {
-        if (remember) localStorage.setItem(rememberedEmailKey, normalizedEmail);
-        else localStorage.removeItem(rememberedEmailKey);
-      } catch { /* Cookies de sessão continuam funcionando se o navegador bloquear armazenamento local. */ }
-      navigate(destination, { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível concluir o acesso.');
+        if (lembrar) localStorage.setItem(CHAVE_EMAIL_LEMBRADO, normalizadoEmail);
+        else localStorage.removeItem(CHAVE_EMAIL_LEMBRADO);
+      } catch {
+        /* Cookies de sessao continuam funcionando se o navegador bloquear armazenamento local. */
+      }
+      navegar(destino, { replace: true });
+    } catch (erroCapturado) {
+      setErro(
+        erroCapturado instanceof Error
+          ? erroCapturado.message
+          : 'Não foi possível concluir o acesso.',
+      );
     } finally {
-      setLoading(false);
+      setCarregando(false);
     }
   }
 
@@ -64,7 +77,7 @@ export default function Entrar() {
       <div className="auth-panel-glow" aria-hidden="true" />
 
       <section className="login-brand" aria-label="Estação Motos">
-        <img src="/assets/estacao-motos-logo.png" alt="Estação Motos" />
+        <LogoEstacao />
       </section>
 
       <section className="login-heading">
@@ -75,8 +88,8 @@ export default function Entrar() {
         </p>
       </section>
 
-      <form className="login-form" onSubmit={handleSubmit} noValidate>
-        {error && <AvisoAutenticacao type="error" message={error} onClose={() => setError('')} />}
+      <form className="login-form" onSubmit={tratarEnvio} noValidate>
+        {erro && <AvisoAutenticacao type="error" message={erro} onClose={() => setErro('')} />}
 
         <div className="field field-login-email">
           <span className="field-icon mail-icon-image" aria-hidden="true">
@@ -88,8 +101,8 @@ export default function Entrar() {
             autoComplete="username"
             inputMode="email"
             placeholder="E-mail"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
+            value={identificador}
+            onChange={(eventoRecebido) => setIdentificador(eventoRecebido.target.value)}
           />
         </div>
 
@@ -99,32 +112,61 @@ export default function Entrar() {
           </span>
           <input
             aria-label="Senha"
-            type={showPassword ? 'text' : 'password'}
+            type={mostrarSenha ? 'text' : 'password'}
             autoComplete="current-password"
             placeholder="Senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            value={senha}
+            onChange={(eventoRecebido) => setSenha(eventoRecebido.target.value)}
           />
           <button
-            className={`eye-button ${showPassword ? 'is-visible' : ''}`}
+            className={`eye-button ${mostrarSenha ? 'is-visible' : ''}`}
             type="button"
-            aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-            aria-pressed={showPassword}
-            onClick={() => setShowPassword((value) => !value)}
+            aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+            aria-pressed={mostrarSenha}
+            onClick={() => setMostrarSenha((valor) => !valor)}
           >
-            {showPassword ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
-              : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 3 21 21M10.6 6.1A12 12 0 0 1 12 6c6.4 0 10 6 10 6a15 15 0 0 1-3 3.5M6.2 6.2C3.5 8 2 12 2 12s3.6 6 10 6c1.7 0 3.2-.4 4.4-1"/><path d="M10 10a3 3 0 0 0 4 4"/></svg>}
+            {mostrarSenha ? (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 3 21 21M10.6 6.1A12 12 0 0 1 12 6c6.4 0 10 6 10 6a15 15 0 0 1-3 3.5M6.2 6.2C3.5 8 2 12 2 12s3.6 6 10 6c1.7 0 3.2-.4 4.4-1" />
+                <path d="M10 10a3 3 0 0 0 4 4" />
+              </svg>
+            )}
           </button>
         </div>
 
         <label className="remember-control">
           <input
             type="checkbox"
-            checked={remember}
-            onChange={(e) => {
-              setRemember(e.target.checked);
-              if (!e.target.checked) {
-                try { localStorage.removeItem(rememberedEmailKey); } catch { /* O navegador pode bloquear o armazenamento local. */ }
+            checked={lembrar}
+            onChange={(eventoRecebido) => {
+              setLembrar(eventoRecebido.target.checked);
+              if (!eventoRecebido.target.checked) {
+                try {
+                  localStorage.removeItem(CHAVE_EMAIL_LEMBRADO);
+                } catch {
+                  /* O navegador pode bloquear o armazenamento local. */
+                }
               }
             }}
           />
@@ -132,17 +174,15 @@ export default function Entrar() {
           <span>Lembrar de mim</span>
         </label>
 
-        <button
-          className="forgot-link"
-          type="button"
-          onClick={() => navigate('/esqueci-a-senha')}
-        >
+        <button className="forgot-link" type="button" onClick={() => navegar('/esqueci-a-senha')}>
           Esqueci minha senha?
         </button>
 
-        <button className="login-button" type="submit" disabled={loading}>
-          <span>{loading ? 'ENTRANDO' : 'ENTRAR'}</span>
-          <span className="login-arrow-css" aria-hidden="true">→</span>
+        <button className="login-button" type="submit" disabled={carregando}>
+          <span>{carregando ? 'ENTRANDO' : 'ENTRAR'}</span>
+          <span className="login-arrow-css" aria-hidden="true">
+            →
+          </span>
         </button>
       </form>
     </TelaFigma>

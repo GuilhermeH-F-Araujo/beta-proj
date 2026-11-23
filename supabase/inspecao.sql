@@ -1,8 +1,8 @@
--- SOMENTE LEITURA. Executar antes de solicitar a aplicação no banco real.
--- Não consulta linhas de auth.users nem configurações ou chaves do projeto.
+-- SOMENTE LEITURA. Executar antes de solicitar a aplicacao no banco real.
+-- Nao consulta linhas de auth.users nem configuracoes ou chaves do projeto.
 begin read only;
--- Quantidade e impressão do conteúdo sem retornar dados pessoais das linhas.
--- A impressão usa todos os registros; em bases grandes, executar na janela de leitura.
+-- Quantidade e impressao do conteudo sem retornar dados pessoais das linhas.
+-- A impressao usa todos os registros; em bases grandes, executar na janela de leitura.
 with alvos(nome) as (select unnest(array[
   'admin_notifications','admin_notification_receipts','client_admin_audit','motorcycle_thumbnail_jobs',
   'order_admin_audit','order_status_history','order_observation_history','order_observation_migration_backup','pagamento_os',
@@ -67,7 +67,7 @@ where schemaname='public' and tablename in (
 select tgrelid::regclass as tabela,tgname,pg_get_triggerdef(oid) as definicao
 from pg_trigger where not tgisinternal and tgrelid in ('public.ordem_servico'::regclass,'public.moto'::regclass);
 
--- Dependentes externos devem ser avaliados. Não serão apagados por CASCADE.
+-- Dependentes externos devem ser avaliados. Nao serao apagados por CASCADE.
 select distinct refobjid::regclass as tabela,pg_describe_object(classid,objid,objsubid) as dependente
 from pg_depend where refclassid='pg_class'::regclass and refobjid in (
   select oid from pg_class where relnamespace='public'::regnamespace and relname in (
@@ -78,7 +78,7 @@ from pg_depend where refclassid='pg_class'::regclass and refobjid in (
 ) order by 1,2;
 commit;
 
--- Distribuição dos tipos/estados, nas tabelas efetivamente encontradas.
+-- Distribuicao dos tipos/estados, nas tabelas efetivamente encontradas.
 begin read only;
 with alvos(nome,coluna) as (values
  ('admin_notifications','kind'),('admin_aviso','kind'),
@@ -91,4 +91,4 @@ select nome,query_to_xml(format('select %I as tipo,count(*) as quantidade from p
 from alvos where exists(select 1 from information_schema.columns c where c.table_schema='public' and c.table_name=nome and c.column_name=coluna)
 order by nome;
 commit;
--- Não executar SQL das migrations como forma de descobrir o estado do banco.
+-- Nao executar SQL das migrations como forma de descobrir o estado do banco.

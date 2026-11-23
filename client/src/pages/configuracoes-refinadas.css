@@ -1,11 +1,11 @@
-/* One settings composition: shared rhythm, restrained brand, meaningful states. */
+/* Padrao visual compartilhado pelas configuracoes. */
 .settings-app .settings-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   padding: 5px 12px;
-  background: #fff;
-  border: 1px solid #e0e5ec;
+  background: var(--theme-surface, #fff);
+  border: 1px solid var(--theme-border, #e0e5ec);
   border-radius: 9px;
   margin-bottom: 28px;
 }
@@ -16,20 +16,20 @@
   padding: 12px 10px;
   border-radius: 0;
   background: transparent;
-  color: #607086;
+  color: var(--theme-muted, #607086);
   font-size: 13px;
   border-bottom: 2px solid transparent;
   justify-content: center;
 }
 .settings-app .settings-tabs button.active,
 .settings-app .settings-tabs button.active:hover {
-  color: #d92743;
+  color: var(--theme-red-text, #d92743);
   background: transparent;
-  border-bottom-color: #e52b45;
+  border-bottom-color: var(--theme-red-border, #e52b45);
 }
 .settings-app .settings-tabs button:hover {
-  background: #fafbfd;
-  color: #344a64;
+  background: var(--theme-surface, #fafbfd);
+  color: var(--theme-blue-text, #344a64);
 }
 .settings-app .settings-heading {
   gap: 18px;
@@ -47,14 +47,14 @@
 }
 .settings-app .settings-heading p {
   font-size: 14px;
-  color: #6d7d90;
+  color: var(--theme-muted, #6d7d90);
 }
 .settings-app .cfg-account-sync {
   border-radius: 6px;
   padding: 8px 11px;
   font-size: 12px;
 }
-/* Preferences: section context is separate from the interactive settings. */
+/* O titulo identifica a secao antes dos controles. */
 .settings-app .settings-preferences-redesigned {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -66,10 +66,10 @@
   grid-template-columns: 220px minmax(0, 1fr);
   padding: 0;
   height: auto;
-  border: 1px solid #dfe5ed;
+  border: 1px solid var(--theme-border, #dfe5ed);
   border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 2px 8px #23364d03;
+  background: var(--theme-surface, #fff);
+  box-shadow: 0 2px 8px var(--theme-shadow-12, #23364d03);
   overflow: hidden;
 }
 .settings-app .settings-preferences-redesigned .settings-card-heading {
@@ -81,40 +81,40 @@
   padding: 26px 23px;
   margin: 0;
   border: 0;
-  background: #fafbfc;
+  background: var(--theme-surface, #fafbfc);
 }
 .settings-app .settings-preferences-redesigned .settings-card-icon {
   display: grid;
   place-items: center;
   width: 34px;
   height: 34px;
-  border: 1px solid #e2e7ed;
+  border: 1px solid var(--theme-border, #e2e7ed);
   border-radius: 8px;
-  background: #fff;
-  color: #62758e;
+  background: var(--theme-surface, #fff);
+  color: var(--theme-muted, #62758e);
   flex: none;
 }
 .settings-app .settings-reading-card .settings-card-icon {
-  background: #fff6f7;
-  border-color: #f0e0e4;
-  color: #cb3349;
+  background: var(--theme-surface, #fff6f7);
+  border-color: var(--theme-border, #f0e0e4);
+  color: var(--theme-red-text, #cb3349);
 }
 .settings-app .settings-preferences-redesigned .settings-card-heading h2 {
   font-size: 18px;
-  color: #263a52;
+  color: var(--theme-blue-text, #263a52);
   letter-spacing: -0.02em;
   line-height: 1.4;
   margin: 0 0 8px;
 }
 .settings-app .settings-preferences-redesigned .settings-card-heading p {
   font-size: 13px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
   line-height: 1.65;
   margin: 0;
 }
 .settings-app .settings-section-body {
   padding: 8px 27px 24px;
-  border-left: 1px solid #e7ebf1;
+  border-left: 1px solid var(--theme-border, #e7ebf1);
   min-width: 0;
 }
 .settings-app .settings-reading-controls,
@@ -135,7 +135,7 @@
   min-width: 0;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #e9edf3;
+  border-bottom: 1px solid var(--theme-border, #e9edf3);
   border-radius: 0;
   padding: 23px 0;
   margin: 0;
@@ -162,21 +162,21 @@
 }
 .settings-app .settings-range-top b {
   font-size: 15px;
-  color: #2c4059;
+  color: var(--theme-blue-text, #2c4059);
 }
 .settings-app .settings-range-top small {
   font-size: 13px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
   line-height: 1.6;
   max-width: 420px;
 }
 .settings-app .settings-range-adjust output {
   min-width: 68px;
   padding: 6px 8px;
-  border: 1px solid #e2e7ef;
+  border: 1px solid var(--theme-border, #e2e7ef);
   border-radius: 5px;
-  background: #f8fafc;
-  color: #415a77;
+  background: var(--theme-surface, #f8fafc);
+  color: var(--theme-blue-text, #415a77);
   font-size: 13px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -195,23 +195,23 @@
   width: 35px;
   height: 35px;
   min-height: 35px;
-  border: 1px solid #dee5ee;
+  border: 1px solid var(--theme-border, #dee5ee);
   border-radius: 6px;
-  background: #fff;
-  color: #59718e;
+  background: var(--theme-surface, #fff);
+  color: var(--theme-muted, #59718e);
   font-size: 22px;
   cursor: pointer;
 }
 .settings-app .settings-range-adjust button:hover:not(:disabled) {
-  border-color: #9eb2ca;
-  background: #f3f7fc;
-  color: #32587f;
+  border-color: var(--theme-blue-border, #9eb2ca);
+  background: var(--theme-surface, #f3f7fc);
+  color: var(--theme-blue-text, #32587f);
 }
 .settings-app .settings-range-adjust button:disabled {
   opacity: 0.3;
   cursor: default;
 }
-.settings-app .settings-range-control input[type="range"] {
+.settings-app .settings-range-control input[type='range'] {
   appearance: none;
   -webkit-appearance: none;
   flex: 1;
@@ -220,97 +220,58 @@
   min-height: 38px;
   margin: 0;
   background: transparent !important;
-  accent-color: #5b7593;
+  accent-color: var(--theme-muted, #5b7593);
   cursor: pointer;
 }
-.settings-app
-  .settings-range-control
-  input[type="range"]::-webkit-slider-runnable-track {
+.settings-app .settings-range-control input[type='range']::-webkit-slider-runnable-track {
   height: 5px;
   border: 0;
   border-radius: 20px;
   background: linear-gradient(
     90deg,
-    #5c7695 var(--slider-progress),
-    #e5eaf1 var(--slider-progress)
+    var(--theme-raised, #5c7695) var(--slider-progress),
+    var(--theme-canvas, #e5eaf1) var(--slider-progress)
   ) !important;
 }
-.settings-app .settings-range-control input[type="range"]::-moz-range-track {
+.settings-app .settings-range-control input[type='range']::-moz-range-track {
   height: 5px;
   border: 0;
   border-radius: 20px;
   background: linear-gradient(
     90deg,
-    #5c7695 var(--slider-progress),
-    #e5eaf1 var(--slider-progress)
+    var(--theme-raised, #5c7695) var(--slider-progress),
+    var(--theme-canvas, #e5eaf1) var(--slider-progress)
   ) !important;
 }
-.settings-app
-  .settings-range-control
-  input[type="range"]::-webkit-slider-thumb {
+.settings-app .settings-range-control input[type='range']::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
   width: 21px;
   height: 21px;
-  border: 3px solid #fff;
+  border: 3px solid var(--theme-border, #fff);
   border-radius: 50%;
   margin-top: -8px;
-  background: #5b7593 !important;
+  background: var(--theme-raised, #5b7593) !important;
   box-shadow:
-    0 0 0 1px #9aaec4,
-    0 1px 3px #2d466c1a;
+    0 0 0 1px var(--theme-shadow, #9aaec4),
+    0 1px 3px var(--theme-shadow-102, #2d466c1a);
 }
-.settings-app .settings-range-control input[type="range"]::-moz-range-thumb {
+.settings-app .settings-range-control input[type='range']::-moz-range-thumb {
   width: 16px;
   height: 16px;
-  border: 3px solid #fff;
+  border: 3px solid var(--theme-border, #fff);
   border-radius: 50%;
-  background: #5b7593 !important;
-  box-shadow: 0 0 0 1px #9aaec4;
+  background: var(--theme-raised, #5b7593) !important;
+  box-shadow: 0 0 0 1px var(--theme-shadow, #9aaec4);
 }
 .settings-app .settings-reading-bottom {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: start;
   margin-top: 3px;
   padding-top: 22px;
-  border-top: 1px solid #e7ecf2;
-}
-.settings-app .settings-reading-preview {
-  margin: 0;
-  padding: 16px;
-  border: 1px solid #e4eaf1;
-  border-radius: 8px;
-  background: #fafbfd;
-}
-.settings-app .settings-reading-preview > span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #657c97;
-}
-.settings-app .settings-reading-preview > span small {
-  display: none;
-}
-.settings-app .settings-reading-preview p {
-  margin: 12px 0 0;
-  padding: 14px;
-  border: 1px solid #e5ebf2;
-  border-radius: 6px;
-  background: #fff;
-  color: #2d425c;
-}
-.settings-app .settings-preview-status {
-  display: inline-flex;
-  margin: 7px 0 0 7px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: #fff4df;
-  color: #8e6b30;
-  font-size: 0.8em;
+  border-top: 1px solid var(--theme-border, #e7ecf2);
 }
 .settings-app .settings-access-toggles {
   margin: 0;
@@ -323,16 +284,16 @@
 }
 .settings-app .settings-preferences-redesigned .settings-toggle-row b {
   font-size: 14px;
-  color: #334a65;
+  color: var(--theme-blue-text, #334a65);
 }
 .settings-app .settings-preferences-redesigned .settings-toggle-row small {
   font-size: 12px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
   line-height: 1.6;
 }
 .settings-app .settings-preferences-redesigned .settings-switch.checked {
-  background: #388263;
-  border-color: #388263;
+  background: var(--theme-green, #388263);
+  border-color: var(--theme-green-border, #388263);
 }
 .settings-app .settings-routine-options {
   display: grid;
@@ -345,60 +306,43 @@
   padding: 0;
   border: 0;
 }
-.settings-app
-  .settings-routine-options
-  .settings-preference-block
-  + .settings-preference-block {
-  border-left: 1px solid #e8edf3;
+.settings-app .settings-routine-options .settings-preference-block + .settings-preference-block {
+  border-left: 1px solid var(--theme-border, #e8edf3);
   padding-left: 28px;
 }
-.settings-app
-  .settings-routine-options
-  .settings-preference-block
-  > div:first-child {
+.settings-app .settings-routine-options .settings-preference-block > div:first-child {
   margin-bottom: 16px;
 }
-.settings-app
-  .settings-routine-options
-  .settings-preference-block
-  > div:first-child
-  > b {
+.settings-app .settings-routine-options .settings-preference-block > div:first-child > b {
   font-size: 15px;
-  color: #344c68;
+  color: var(--theme-blue-text, #344c68);
 }
-.settings-app
-  .settings-routine-options
-  .settings-preference-block
-  > div:first-child
-  > small {
+.settings-app .settings-routine-options .settings-preference-block > div:first-child > small {
   font-size: 13px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
   line-height: 1.6;
 }
 .settings-app
   .settings-routine-card
-  :is(
-    .settings-segmented button.selected,
-    .settings-period-choices button.selected
-  ) {
-  background: #f1f5fa;
-  border-color: #7d95b0;
-  color: #365878;
-  box-shadow: inset 0 0 0 1px #7d95b0;
+  :is(.settings-segmented button.selected, .settings-period-choices button.selected) {
+  background: var(--theme-canvas, #f1f5fa);
+  border-color: var(--theme-border, #7d95b0);
+  color: var(--theme-blue-text, #365878);
+  box-shadow: inset 0 0 0 1px var(--theme-shadow, #7d95b0);
 }
 .settings-app .settings-period-radio i {
-  background: #627f9f;
+  background: var(--theme-raised, #627f9f);
 }
 .settings-app .settings-preferences-footer {
   padding: 17px 0 0;
   margin: 23px 0 0;
-  border-top: 1px solid #e7edf3;
+  border-top: 1px solid var(--theme-border, #e7edf3);
   gap: 15px;
   font-size: 12px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
 }
 .settings-app .settings-preferences-footer .settings-link-button {
-  color: #af3348;
+  color: var(--theme-red-text, #af3348);
   font-size: 12px;
 }
 /* Notifications: one master control; quiet, readable event rows. */
@@ -411,9 +355,9 @@
   align-items: center;
   gap: 16px;
   padding: 20px 24px;
-  border: 1px solid #dfe6ef;
+  border: 1px solid var(--theme-border, #dfe6ef);
   border-radius: 10px;
-  background: #fff;
+  background: var(--theme-surface, #fff);
 }
 .settings-app .cfg-notification-intro-icon {
   display: grid;
@@ -421,10 +365,10 @@
   width: 43px;
   height: 43px;
   flex: none;
-  background: #fff5f6;
-  border: 1px solid #f1e0e4;
+  background: var(--theme-surface, #fff5f6);
+  border: 1px solid var(--theme-border, #f1e0e4);
   border-radius: 10px;
-  color: #cc344b;
+  color: var(--theme-red-text, #cc344b);
 }
 .settings-app .cfg-notification-intro-copy {
   flex: 1;
@@ -432,13 +376,13 @@
 }
 .settings-app .cfg-notification-intro h2 {
   font-size: 18px;
-  color: #2a3f58;
+  color: var(--theme-blue-text, #2a3f58);
   letter-spacing: -0.015em;
   margin: 0 0 6px;
 }
 .settings-app .cfg-notification-intro p {
   font-size: 14px;
-  color: #6a7e94;
+  color: var(--theme-muted, #6a7e94);
   line-height: 1.6;
   margin: 0;
 }
@@ -446,25 +390,25 @@
   display: block;
   margin-top: 7px;
   font-size: 12px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
 }
 .settings-app .cfg-notification-master {
   display: flex;
   align-items: center;
   gap: 21px;
   padding-left: 25px;
-  border-left: 1px solid #e6ecf2;
+  border-left: 1px solid var(--theme-border, #e6ecf2);
   flex: none;
 }
 .settings-app .cfg-notification-master b {
   display: block;
   font-size: 14px;
-  color: #3c536e;
+  color: var(--theme-blue-text, #3c536e);
 }
 .settings-app .cfg-notification-master > div > span {
   display: block;
   font-size: 12px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
   margin-top: 6px;
 }
 .settings-app .cfg-notifications .cfg-notification-layout {
@@ -476,9 +420,9 @@
 .settings-app .cfg-notifications .cfg-card {
   padding: 23px;
   border-radius: 10px;
-  border: 1px solid #dfe6ef;
-  background: #fff;
-  box-shadow: 0 2px 8px #23364d03;
+  border: 1px solid var(--theme-border, #dfe6ef);
+  background: var(--theme-surface, #fff);
+  box-shadow: 0 2px 8px var(--theme-shadow-12, #23364d03);
   overflow: hidden;
 }
 .settings-app .cfg-notifications .cfg-card-head {
@@ -486,35 +430,31 @@
   align-items: center;
   padding: 0 0 20px;
   margin: 0 0 20px;
-  border-bottom: 1px solid #e8edf3;
+  border-bottom: 1px solid var(--theme-border, #e8edf3);
   background: none;
 }
 .settings-app .cfg-notifications .cfg-card-head > .cfg-icon {
   width: 34px;
   height: 34px;
-  background: #f8fafc;
-  border: 1px solid #e6ebf2;
+  background: var(--theme-surface, #f8fafc);
+  border: 1px solid var(--theme-border, #e6ebf2);
   border-radius: 8px;
-  color: #6b829c;
+  color: var(--theme-muted, #6b829c);
   flex: none;
 }
 .settings-app .cfg-notifications .cfg-card-head h2 {
   font-size: 17px;
-  color: #2e455f;
+  color: var(--theme-blue-text, #2e455f);
   letter-spacing: -0.015em;
 }
 .settings-app .cfg-notifications .cfg-card-head p {
   font-size: 13px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
   line-height: 1.6;
 }
-.settings-app
-  .cfg-notifications
-  .cfg-events-column
-  .cfg-card-head
-  .cfg-text-button {
+.settings-app .cfg-notifications .cfg-events-column .cfg-card-head .cfg-text-button {
   font-size: 12px !important;
-  color: #ac3549;
+  color: var(--theme-red-text, #ac3549);
   min-height: 38px;
   flex: none;
 }
@@ -526,7 +466,7 @@
   margin: 0;
   padding: 0 0 16px 44px;
   font-size: 12px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
 }
 .settings-app .cfg-notifications .cfg-events-labels > span:not(:first-child) {
   display: flex;
@@ -541,10 +481,10 @@
   gap: 8px;
   padding: 12px;
   margin: 0 -1px;
-  border: 1px solid #e9eef4;
+  border: 1px solid var(--theme-border, #e9eef4);
   border-radius: 6px;
-  background: #f8fafc;
-  color: #536b87;
+  background: var(--theme-surface, #f8fafc);
+  color: var(--theme-muted, #536b87);
   font-size: 13px;
   letter-spacing: 0;
   text-transform: none;
@@ -552,7 +492,7 @@
 .settings-app .cfg-notifications .cfg-event-group h3 > span {
   margin-left: auto;
   font-size: 11px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
 }
 .settings-app .cfg-notifications .cfg-event {
   display: grid;
@@ -562,8 +502,8 @@
   padding: 20px 0;
   min-height: 98px;
   border: 0;
-  border-bottom: 1px solid #edf1f6;
-  background: #fff;
+  border-bottom: 1px solid var(--theme-border, #edf1f6);
+  background: var(--theme-surface, #fff);
   border-radius: 0;
 }
 .settings-app .cfg-notifications .cfg-event:last-child {
@@ -577,16 +517,16 @@
   height: 30px;
   border: 0;
   background: transparent;
-  color: #7b91ab;
+  color: var(--theme-muted, #7b91ab);
   border-radius: 0;
 }
 .settings-app .cfg-notifications .cfg-event-copy b {
   font-size: 15px;
-  color: #334c68;
+  color: var(--theme-blue-text, #334c68);
 }
 .settings-app .cfg-notifications .cfg-event-copy p {
   font-size: 13px;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
   line-height: 1.6;
   margin-top: 5px;
 }
@@ -597,22 +537,22 @@
 .settings-app .cfg-notifications .cfg-event-sound .filter-select-trigger {
   min-height: 35px;
   font-size: 12px;
-  background: #fbfcfe;
-  border-color: #e4ebf3;
+  background: var(--theme-surface, #fbfcfe);
+  border-color: var(--theme-border, #e4ebf3);
 }
 .settings-app .cfg-notifications .cfg-switch.on {
-  background: #3b8467;
-  border-color: #3b8467;
+  background: var(--theme-green, #3b8467);
+  border-color: var(--theme-green-border, #3b8467);
 }
 .settings-app .cfg-notifications .cfg-switch {
   box-shadow: none;
-  border-color: #d7e1ed;
-  background: #e2e9f1;
+  border-color: var(--theme-border, #d7e1ed);
+  background: var(--theme-canvas, #e2e9f1);
 }
 .settings-app .cfg-notifications .cfg-setting-row {
   padding: 2px 0 17px;
   margin-bottom: 15px;
-  border-bottom: 1px solid #e9eef4;
+  border-bottom: 1px solid var(--theme-border, #e9eef4);
 }
 .settings-app .cfg-notifications .cfg-sound-picker {
   gap: 10px;
@@ -622,18 +562,18 @@
 .settings-app .cfg-notifications .cfg-sound-picker .cfg-button {
   min-height: 44px;
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #dce5f0;
+  background: var(--theme-surface, #fff);
+  border: 1px solid var(--theme-border, #dce5f0);
   border-radius: 7px;
-  color: #526e8d;
+  color: var(--theme-muted, #526e8d);
   font-size: 12px !important;
 }
 .settings-app .cfg-notifications .cfg-sound-picker .cfg-button svg {
-  color: #c9394e;
+  color: var(--theme-red-text, #c9394e);
 }
 .settings-app .cfg-notifications .cfg-sound-picker .cfg-button:hover {
-  background: #faf7f8;
-  border-color: #e7d7de;
+  background: var(--theme-surface, #faf7f8);
+  border-color: var(--theme-border, #e7d7de);
 }
 .settings-app .cfg-notifications .cfg-volume {
   padding: 0;
@@ -643,42 +583,42 @@
 }
 .settings-app .cfg-notifications .cfg-volume > span {
   font-size: 13px;
-  color: #627a95;
+  color: var(--theme-muted, #627a95);
 }
 .settings-app .cfg-notifications .cfg-volume output {
   font-size: 12px;
-  color: #6e86a1;
+  color: var(--theme-muted, #6e86a1);
   font-variant-numeric: tabular-nums;
 }
 .settings-app .cfg-notifications .cfg-volume input {
-  accent-color: #6783a1;
+  accent-color: var(--theme-muted, #6783a1);
 }
 .settings-app .cfg-notifications .cfg-volume input::-webkit-slider-thumb {
-  background: #6783a1;
+  background: var(--theme-raised, #6783a1);
 }
 .settings-app .cfg-notifications .cfg-volume input::-moz-range-thumb {
-  background: #6783a1;
+  background: var(--theme-raised, #6783a1);
 }
 .settings-app .cfg-notifications .cfg-inline-info {
   padding: 12px;
   border-radius: 7px;
-  background: #f8fafc;
-  border: 1px solid #e8edf4;
-  color: #65778d;
+  background: var(--theme-surface, #f8fafc);
+  border: 1px solid var(--theme-border, #e8edf4);
+  color: var(--theme-muted, #65778d);
   font-size: 12px;
 }
 .settings-app .cfg-notifications .cfg-upload {
-  background: #fbfcfe;
-  border: 1px dashed #c6d3e2;
+  background: var(--theme-surface, #fbfcfe);
+  border: 1px dashed var(--theme-border, #c6d3e2);
   border-radius: 8px;
-  color: #687f9a;
+  color: var(--theme-muted, #687f9a);
   min-height: 79px;
 }
 .settings-app .cfg-notifications .cfg-help,
 .settings-app .cfg-notifications .cfg-private-note {
   font-size: 12px;
   line-height: 1.65;
-  color: #65778d;
+  color: var(--theme-muted, #65778d);
 }
 .settings-app .cfg-notifications .cfg-save-note {
   position: static;
@@ -686,16 +626,16 @@
   z-index: auto;
   border-radius: 7px;
   padding: 12px 15px;
-  border-color: #e0ece4;
-  background: #f7fbf8;
-  color: #63866f;
+  border-color: var(--theme-border, #e0ece4);
+  background: var(--theme-surface, #f7fbf8);
+  color: var(--theme-muted, #63866f);
   font-size: 12px;
   box-shadow: none;
 }
 .settings-app .cfg-notifications .cfg-save-note.error {
-  background: #fff5f6;
-  border-color: #efdde2;
-  color: #af4556;
+  background: var(--theme-surface, #fff5f6);
+  border-color: var(--theme-border, #efdde2);
+  color: var(--theme-red-text, #af4556);
 }
 .settings-app
   :is(
@@ -704,7 +644,7 @@
     .cfg-switch,
     .cfg-button
   ):focus-visible {
-  outline: 3px solid #87a4c7;
+  outline: 3px solid var(--theme-blue-border, #87a4c7);
   outline-offset: 3px;
 }
 /* Layout follows available content width, including enlarged text. */
@@ -720,13 +660,10 @@
   .settings-app .settings-routine-options {
     grid-template-columns: 1fr;
   }
-  .settings-app
-    .settings-routine-options
-    .settings-preference-block
-    + .settings-preference-block {
+  .settings-app .settings-routine-options .settings-preference-block + .settings-preference-block {
     padding: 20px 0 0;
     border-left: 0;
-    border-top: 1px solid #e8edf3;
+    border-top: 1px solid var(--theme-border, #e8edf3);
   }
 }
 @container (max-width:950px) {
@@ -740,7 +677,7 @@
     width: 100%;
     justify-content: space-between;
     border-left: 0;
-    border-top: 1px solid #e7edf4;
+    border-top: 1px solid var(--theme-border, #e7edf4);
     padding: 16px 0 0;
   }
 }
@@ -752,7 +689,7 @@
     padding: 20px;
     flex-direction: row;
     gap: 12px;
-    border-bottom: 1px solid #e7edf3;
+    border-bottom: 1px solid var(--theme-border, #e7edf3);
   }
   .settings-app .settings-section-body {
     padding: 3px 20px 22px;
@@ -776,7 +713,7 @@
     padding: 20px;
     flex-direction: row;
     gap: 12px;
-    border-bottom: 1px solid #e7edf3;
+    border-bottom: 1px solid var(--theme-border, #e7edf3);
   }
   .settings-app .settings-section-body {
     padding: 3px 20px 22px;
@@ -800,18 +737,64 @@
   }
 }
 
+/* Hierarquia e respiro dos ajustes de leitura. */
+.settings-app .settings-independent-scales {
+  gap: 12px;
+  padding: 12px 0 20px;
+}
+.settings-app .settings-independent-scales .settings-range-control {
+  min-height: 94px;
+  padding: 20px 19px;
+  border: 1px solid var(--theme-border, #e5eaf1);
+  border-radius: 12px;
+  background: var(--theme-surface, #fff);
+  column-gap: 32px;
+}
+.settings-app .settings-independent-scales .settings-range-control + .settings-range-control {
+  margin-top: 11px;
+}
+.settings-app .settings-independent-scales .settings-range-top b {
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+.settings-app .settings-independent-scales .settings-range-top small {
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.settings-app .settings-independent-scales .settings-range-adjust output {
+  min-width: 74px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.settings-app .settings-independent-scales .settings-range-adjust input[type='range'] {
+  min-width: 110px;
+}
+@media (max-width: 700px) {
+  .settings-app .settings-independent-scales .settings-range-control {
+    min-height: 0;
+    padding: 16px;
+    row-gap: 12px;
+  }
+  .settings-app .settings-independent-scales .settings-range-control + .settings-range-control {
+    margin-top: 9px;
+  }
+}
+
 .settings-app .cfg-notifications .cfg-event.muted .cfg-event-copy {
   opacity: 1;
 }
 
-/* Final proportions and real feedback, without decorative containers. */
+/* Proporcoes e mensagens de resultado das configuracoes. */
 .settings-app .settings-preferences-redesigned > .settings-card {
   grid-template-columns: 210px minmax(0, 1fr);
-  border-color: #dce4ee;
-  box-shadow: 0 3px 12px #293d5403;
+  border-color: var(--theme-border, #dce4ee);
+  box-shadow: 0 3px 12px var(--theme-shadow-12, #293d5403);
 }
 .settings-app .settings-preferences-redesigned .settings-card-heading {
-  background: linear-gradient(120deg, #fafbfd, #f6f8fb);
+  background: linear-gradient(120deg, var(--theme-surface, #fafbfd), var(--theme-surface, #f6f8fb));
   padding: 26px 22px;
 }
 .settings-app .settings-section-body {
@@ -831,74 +814,9 @@
   min-width: 76px;
   flex: none;
   margin-left: 3px;
-  background: #f5f8fc;
-  border-color: #dfe7f0;
-  color: #415c7d;
-}
-.settings-app .settings-reading-preview {
-  padding: 15px;
-  background: #f9fbfd;
-  border-color: #e1e8f1;
-}
-.settings-app .settings-preview-sample {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 17px 14px;
-  margin-top: 13px;
-  background: #fff;
-  border: 1px solid #e5ebf3;
-  border-radius: 7px;
-}
-.settings-app .settings-preview-avatar {
-  display: grid;
-  place-items: center;
-  width: 39px;
-  height: 39px;
-  flex: none;
-  color: #6b829d;
-  background: #f3f6fa;
-  border-radius: 9px;
-}
-.settings-app .settings-preview-sample > div {
-  flex: 1;
-  min-width: 110px;
-}
-.settings-app .settings-preview-sample strong {
-  display: block;
-  color: #314965;
-  font-size: 14px;
-}
-.settings-app .settings-preview-sample > div > span {
-  display: block;
-  color: #687d96;
-  font-size: 13px;
-  margin-top: 4px;
-}
-.settings-app .settings-preview-sample small {
-  display: block;
-  color: #75889f;
-  font-size: 12px;
-  margin-top: 4px;
-}
-.settings-app .settings-preview-sample .settings-preview-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-  padding: 4px 7px;
-  background: #fff5df;
-  color: #896627;
-  border: 1px solid #f1e6cb;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.settings-app .settings-preview-status i {
-  width: 5px;
-  height: 5px;
-  background: #b58c3b;
-  border-radius: 50%;
+  background: var(--theme-surface, #f5f8fc);
+  border-color: var(--theme-border, #dfe7f0);
+  color: var(--theme-blue-text, #415c7d);
 }
 .settings-app .settings-routine-card .settings-segmented {
   gap: 6px;
@@ -915,29 +833,21 @@
 .settings-app .cfg-notifications .cfg-card-head {
   align-items: flex-start;
 }
-.settings-app
-  .cfg-notifications
-  .cfg-events-column
-  .cfg-card-head
-  .cfg-text-button {
-  border: 1px solid #e2e8f1;
+.settings-app .cfg-notifications .cfg-events-column .cfg-card-head .cfg-text-button {
+  border: 1px solid var(--theme-border, #e2e8f1);
   border-radius: 6px;
   padding: 8px 10px;
-  color: #7f5663;
+  color: var(--theme-muted, #7f5663);
   white-space: nowrap;
 }
-.settings-app
-  .cfg-notifications
-  .cfg-events-column
-  .cfg-card-head
-  .cfg-text-button:hover {
-  background: #fff7f8;
-  border-color: #ead5dc;
-  color: #bd344c;
+.settings-app .cfg-notifications .cfg-events-column .cfg-card-head .cfg-text-button:hover {
+  background: var(--theme-surface, #fff7f8);
+  border-color: var(--theme-border, #ead5dc);
+  color: var(--theme-red-text, #bd344c);
 }
 .settings-app .cfg-notifications .cfg-events-labels {
   padding-bottom: 17px;
-  color: #647a95;
+  color: var(--theme-muted, #647a95);
 }
 .settings-app .cfg-notifications .cfg-events-labels > span:not(:first-child) {
   font-size: 12px;
@@ -945,13 +855,13 @@
 }
 .settings-app .cfg-notifications .cfg-event-group h3 {
   padding: 12px 11px;
-  background: #f6f8fb;
-  border-color: #e6ecf3;
-  border-left: 2px solid #b4c2d3;
+  background: var(--theme-surface, #f6f8fb);
+  border-color: var(--theme-border, #e6ecf3);
+  border-left: 2px solid var(--theme-border, #b4c2d3);
 }
 .settings-app .cfg-notifications .cfg-event-group h3 > span {
   font-size: 12px;
-  color: #6b819c;
+  color: var(--theme-muted, #6b819c);
 }
 .settings-app .cfg-notifications .cfg-event {
   padding-block: 21px;
@@ -962,7 +872,7 @@
 }
 .settings-app .cfg-notifications .cfg-event-copy p {
   max-width: 450px;
-  color: #6c8099;
+  color: var(--theme-muted, #6c8099);
 }
 .settings-app .cfg-notifications .cfg-event-toggle {
   padding-block: 5px;
@@ -971,31 +881,31 @@
   width: 44px;
   height: 26px;
   padding: 3px;
-  border: 1px solid #d4deea;
+  border: 1px solid var(--theme-border, #d4deea);
 }
 .settings-app .cfg-notifications .cfg-switch span {
   width: 18px;
   height: 18px;
-  box-shadow: 0 1px 2px #263f5c1c;
+  box-shadow: 0 1px 2px var(--theme-shadow-110, #263f5c1c);
 }
 .settings-app .cfg-notifications .cfg-switch.on {
-  background: #3b8265;
-  border-color: #3b8265;
+  background: var(--theme-green, #3b8265);
+  border-color: var(--theme-green-border, #3b8265);
 }
 .settings-app .cfg-notifications .cfg-switch.on span {
   transform: translateX(18px);
 }
 .settings-app .cfg-notification-intro {
   padding: 22px 25px;
-  box-shadow: 0 2px 8px #293d5403;
+  box-shadow: 0 2px 8px var(--theme-shadow-12, #293d5403);
 }
 .settings-app .cfg-notification-master b {
   font-size: 14px;
-  color: #405872;
+  color: var(--theme-blue-text, #405872);
 }
 .settings-app .cfg-notification-master > div > span {
   font-size: 12px;
-  color: #6b829b;
+  color: var(--theme-muted, #6b829b);
 }
 .settings-app .cfg-notifications .cfg-sound-picker {
   margin-bottom: 18px;
@@ -1009,40 +919,37 @@
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  color: #48785e;
+  color: var(--theme-muted, #48785e);
   font-size: 12px;
   line-height: 1.6;
   margin: -6px 0 17px;
 }
 .settings-app .cfg-sound-feedback.error {
-  color: #ac3d52;
+  color: var(--theme-red-text, #ac3d52);
 }
 .settings-app .cfg-sound-feedback svg {
   flex: none;
   margin-top: 2px;
 }
-.settings-app
-  .cfg-notifications
-  .cfg-volume
-  input::-webkit-slider-runnable-track {
+.settings-app .cfg-notifications .cfg-volume input::-webkit-slider-runnable-track {
   background: linear-gradient(
     90deg,
-    #6783a1 var(--volume-progress),
-    #e3eaf2 var(--volume-progress)
+    var(--theme-raised, #6783a1) var(--volume-progress),
+    var(--theme-canvas, #e3eaf2) var(--volume-progress)
   );
 }
 .settings-app .cfg-notifications .cfg-volume input::-moz-range-track {
   background: linear-gradient(
     90deg,
-    #6783a1 var(--volume-progress),
-    #e3eaf2 var(--volume-progress)
+    var(--theme-raised, #6783a1) var(--volume-progress),
+    var(--theme-canvas, #e3eaf2) var(--volume-progress)
   );
 }
 .settings-app .cfg-notifications .cfg-private-note {
   padding-top: 12px;
-  border-top: 1px solid #edf1f6;
+  border-top: 1px solid var(--theme-border, #edf1f6);
   margin-top: 15px;
-  color: #72859c;
+  color: var(--theme-muted, #72859c);
 }
 @container (max-width:1100px) {
   .settings-app .settings-preferences-redesigned > .settings-card {
@@ -1072,11 +979,7 @@
     min-width: 65px;
     font-size: 12px;
   }
-  .settings-app
-    .cfg-notifications
-    .cfg-events-column
-    .cfg-card-head
-    .cfg-text-button {
+  .settings-app .cfg-notifications .cfg-events-column .cfg-card-head .cfg-text-button {
     white-space: normal;
   }
 }

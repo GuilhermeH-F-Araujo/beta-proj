@@ -1,0 +1,84 @@
+.global-search-results {
+  position: fixed;
+  z-index: 100020;
+  background: var(--theme-surface, #fff);
+  color: var(--theme-blue-text, #24364e);
+  border: 1px solid var(--theme-border, #d7e1ee);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px var(--theme-shadow-149, #152d5026);
+  overflow: hidden;
+  font: 13px/1.5 system-ui;
+  max-height: min(460px, calc(100dvh - 24px));
+  display: flex;
+  flex-direction: column;
+  zoom: 1 !important;
+}
+.global-search-results header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+}
+.global-search-results header button {
+  border: 0;
+  background: none;
+  color: var(--theme-muted, #6b7e98);
+  min-height: 32px;
+  padding: 5px;
+  cursor: pointer;
+}
+.global-search-status {
+  padding: 0 16px 12px;
+  font-size: 12px;
+  color: var(--theme-muted, #687c97);
+}
+.global-search-results [role='listbox'] {
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+.global-search-results [role='option'] {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  width: 100%;
+  padding: 11px 32px 11px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.global-search-results [role='option'][aria-selected='true'] {
+  background: var(--theme-canvas, #f0f5fd);
+  border-color: var(--theme-border, #dce7f7);
+}
+.global-search-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--theme-muted, #6a82a1);
+}
+.global-search-results [role='option'] strong {
+  font-size: 13px;
+}
+.global-search-results [role='option'] small {
+  font-size: 12px;
+  color: var(--theme-muted, #74869e);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.global-search-results [role='option'] svg {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--theme-muted, #8096b3);
+}
+.global-search-results footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--theme-border, #e6ecf4);
+  font-size: 11px;
+  color: var(--theme-muted, #7387a2);
+}

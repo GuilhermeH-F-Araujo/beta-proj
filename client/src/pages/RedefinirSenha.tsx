@@ -4,67 +4,86 @@ import AvisoAutenticacao from '../components/AvisoAutenticacao';
 import TelaFigma from '../components/TelaFigma';
 import { redefinirSenha } from '../services/apiAutenticacao';
 
-type RecoveryCredentials = { tokenHash?: string; accessToken?: string; refreshToken?: string; error?: string };
-let cachedRecoveryLink: RecoveryCredentials | null = null;
+type RecoveryCredenciais = {
+  tokenHash?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  error?: string;
+};
+let emMemoriaRecoveryLigacao: RecoveryCredenciais | null = null;
 
-function consumeRecoveryLink(): RecoveryCredentials {
-  if (cachedRecoveryLink) return cachedRecoveryLink;
-  const query = new URLSearchParams(window.location.search);
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  const tokenHash = query.get('token_hash') || undefined;
-  const accessToken = hash.get('access_token') || undefined;
-  const refreshToken = hash.get('refresh_token') || undefined;
-  const error = query.get('error_description') || hash.get('error_description');
+function consumeRecoveryLigacao(): RecoveryCredenciais {
+  if (emMemoriaRecoveryLigacao) return emMemoriaRecoveryLigacao;
+  const consulta = new URLSearchParams(window.location.search);
+  const resumo = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const resumoToken = consulta.get('token_hash') || undefined;
+  const tokenAcesso = resumo.get('access_token') || undefined;
+  const tokenRenovacao = resumo.get('refresh_token') || undefined;
+  const erro = consulta.get('error_description') || resumo.get('error_description');
 
-  // O código de recuperação não deve permanecer no histórico nem aparecer em links copiados.
+  // O codigo de recuperacao nao deve permanecer no historico nem aparecer em links copiados.
   if (window.location.search || window.location.hash) {
     window.history.replaceState(window.history.state, '', window.location.pathname);
   }
 
-  if (error || (!tokenHash && !(accessToken && refreshToken))) {
-    return cachedRecoveryLink = { error: 'O link de recuperação expirou ou está incompleto. Solicite um novo e-mail.' };
+  if (erro || (!resumoToken && !(tokenAcesso && tokenRenovacao))) {
+    return (emMemoriaRecoveryLigacao = {
+      error: 'O link de recuperação expirou ou está incompleto. Solicite um novo e-mail.',
+    });
   }
-  if (tokenHash && query.get('type') !== 'recovery') {
-    return cachedRecoveryLink = { error: 'Este link não é de recuperação de senha. Solicite um novo e-mail.' };
+  if (resumoToken && consulta.get('type') !== 'recovery') {
+    return (emMemoriaRecoveryLigacao = {
+      error: 'Este link não é de recuperação de senha. Solicite um novo e-mail.',
+    });
   }
-  if (!tokenHash && hash.get('type') !== 'recovery') {
-    return cachedRecoveryLink = { error: 'Este link não é de recuperação de senha. Solicite um novo e-mail.' };
+  if (!resumoToken && resumo.get('type') !== 'recovery') {
+    return (emMemoriaRecoveryLigacao = {
+      error: 'Este link não é de recuperação de senha. Solicite um novo e-mail.',
+    });
   }
-  return cachedRecoveryLink = { tokenHash, accessToken, refreshToken };
+  return (emMemoriaRecoveryLigacao = {
+    tokenHash: resumoToken,
+    accessToken: tokenAcesso,
+    refreshToken: tokenRenovacao,
+  });
 }
 
 export default function RedefinirSenha() {
-  const navigate = useNavigate();
-  const [credentials] = useState(consumeRecoveryLink);
-  const [password, setPassword] = useState('');
-  const [confirmation, setConfirmation] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [complete, setComplete] = useState(false);
-  const [error, setError] = useState(credentials.error || '');
+  const navegar = useNavigate();
+  const [credenciais] = useState(consumeRecoveryLigacao);
+  const [senha, setSenha] = useState('');
+  const [confirmacao, setConfirmacao] = useState('');
+  const [mostrarSenha, setShowSenha] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const [completar, setCompletar] = useState(false);
+  const [erro, setErro] = useState(credenciais.error || '');
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    if (password.length < 8) return setError('A nova senha deve ter pelo menos 8 caracteres.');
-    if (password !== confirmation) return setError('As senhas digitadas não são iguais.');
+  async function tratarEnvio(evento: FormEvent) {
+    evento.preventDefault();
+    setErro('');
+    if (senha.length < 8) return setErro('A nova senha deve ter pelo menos 8 caracteres.');
+    if (senha !== confirmacao) return setErro('As senhas digitadas não são iguais.');
 
-    setLoading(true);
+    setCarregando(true);
     try {
       await redefinirSenha({
-        password,
-        tokenHash: credentials.tokenHash,
-        accessToken: credentials.accessToken,
-        refreshToken: credentials.refreshToken,
+        password: senha,
+        tokenHash: credenciais.tokenHash,
+        accessToken: credenciais.accessToken,
+        refreshToken: credenciais.refreshToken,
       });
-      setPassword('');
-      setConfirmation('');
-      cachedRecoveryLink = null;
-      setComplete(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível alterar a senha agora.');
+      setSenha('');
+      setConfirmacao('');
+      emMemoriaRecoveryLigacao = null;
+      setCompletar(true);
+    } catch (erroCapturado) {
+      setErro(
+        erroCapturado instanceof Error
+          ? erroCapturado.message
+          : 'Não foi possível alterar a senha agora.',
+      );
     } finally {
-      setLoading(false);
+      setCarregando(false);
     }
   }
 
@@ -72,45 +91,108 @@ export default function RedefinirSenha() {
     <TelaFigma label="Redefinir senha">
       <div className="forgot-screen reset-screen">
         <div className="forgot-panel-glow" aria-hidden="true" />
-        <div className="forgot-lock-icon" aria-hidden="true"><img src="/assets/cadeado-recuperacao.svg" alt="" /></div>
+        <div className="forgot-lock-icon" aria-hidden="true">
+          <img src="/assets/cadeado-recuperacao.svg" alt="" />
+        </div>
 
         <section className="forgot-copy reset-copy">
-          <h1>{complete ? <>Senha <strong>alterada</strong></> : <>Nova <strong>senha</strong></>}</h1>
-          <p>{complete ? 'A senha da conta foi atualizada. Use a nova senha no aplicativo vinculado ao seu acesso.' : 'Crie uma nova senha segura para esta conta.'}</p>
+          <h1>
+            {completar ? (
+              <>
+                Senha <strong>alterada</strong>
+              </>
+            ) : (
+              <>
+                Nova <strong>senha</strong>
+              </>
+            )}
+          </h1>
+          <p>
+            {completar
+              ? 'A senha da conta foi atualizada. Use a nova senha no aplicativo vinculado ao seu acesso.'
+              : 'Crie uma nova senha segura para esta conta.'}
+          </p>
         </section>
 
-        <form className="forgot-form-v2 reset-form" onSubmit={handleSubmit} noValidate>
-          {error && <AvisoAutenticacao type="error" message={error} onClose={() => setError('')} />}
-          {complete ? (
-            <button className="forgot-submit-v2 reset-primary" type="button" onClick={() => navigate('/login', { replace: true })}>
+        <form className="formulario-recuperacao reset-form" onSubmit={tratarEnvio} noValidate>
+          {erro && <AvisoAutenticacao type="error" message={erro} onClose={() => setErro('')} />}
+          {completar ? (
+            <button
+              className="botao-recuperacao reset-primary"
+              type="button"
+              onClick={() => navegar('/login', { replace: true })}
+            >
               Entrar com a nova senha <span className="forgot-submit-chevron" aria-hidden="true" />
             </button>
-          ) : credentials.error ? (
-            <button className="forgot-submit-v2 reset-primary" type="button" onClick={() => navigate('/esqueci-a-senha', { replace: true })}>
+          ) : credenciais.error ? (
+            <button
+              className="botao-recuperacao reset-primary"
+              type="button"
+              onClick={() => navegar('/esqueci-a-senha', { replace: true })}
+            >
               Solicitar outro link <span className="forgot-submit-chevron" aria-hidden="true" />
             </button>
           ) : (
             <>
               <label className="forgot-email-box reset-password-box">
-                <span className="reset-field-icon" aria-hidden="true"><img src="/assets/cadeado.svg" alt="" /></span>
-                <input aria-label="Nova senha" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Nova senha (mínimo 8 caracteres)" value={password} onChange={event => setPassword(event.target.value)} />
+                <span className="reset-field-icon" aria-hidden="true">
+                  <img src="/assets/cadeado.svg" alt="" />
+                </span>
+                <input
+                  aria-label="Nova senha"
+                  type={mostrarSenha ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Nova senha (mínimo 8 caracteres)"
+                  value={senha}
+                  onChange={(evento) => setSenha(evento.target.value)}
+                />
               </label>
               <label className="forgot-email-box reset-confirm-box">
-                <span className="reset-field-icon" aria-hidden="true"><img src="/assets/cadeado.svg" alt="" /></span>
-                <input aria-label="Confirme a nova senha" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Confirme a nova senha" value={confirmation} onChange={event => setConfirmation(event.target.value)} />
+                <span className="reset-field-icon" aria-hidden="true">
+                  <img src="/assets/cadeado.svg" alt="" />
+                </span>
+                <input
+                  aria-label="Confirme a nova senha"
+                  type={mostrarSenha ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Confirme a nova senha"
+                  value={confirmacao}
+                  onChange={(evento) => setConfirmacao(evento.target.value)}
+                />
               </label>
-              <label className="reset-show-password"><input type="checkbox" checked={showPassword} onChange={event => setShowPassword(event.target.checked)} /> Mostrar senhas</label>
-              <button className="forgot-submit-v2 reset-primary" type="submit" disabled={loading}>
-                {loading ? 'Salvando nova senha...' : 'Salvar nova senha'} <span className="forgot-submit-chevron" aria-hidden="true" />
+              <label className="reset-show-password">
+                <input
+                  type="checkbox"
+                  checked={mostrarSenha}
+                  onChange={(evento) => setShowSenha(evento.target.checked)}
+                />{' '}
+                Mostrar senhas
+              </label>
+              <button
+                className="botao-recuperacao reset-primary"
+                type="submit"
+                disabled={carregando}
+              >
+                {carregando ? 'Salvando nova senha...' : 'Salvar nova senha'}{' '}
+                <span className="forgot-submit-chevron" aria-hidden="true" />
               </button>
             </>
           )}
-          <button className="forgot-back-link reset-back" type="button" onClick={() => navigate('/login', { replace: true })}>
-            <svg className="forgot-back-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M10 7L5 12L10 17" /></svg>
+          <button
+            className="forgot-back-link reset-back"
+            type="button"
+            onClick={() => navegar('/login', { replace: true })}
+          >
+            <svg className="forgot-back-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M19 12H5M10 7L5 12L10 17" />
+            </svg>
             Voltar para o login
           </button>
         </form>
-        <div className="forgot-admin-mark" aria-hidden="true"><span className="forgot-admin-mark-icon" /><span>PAINEL ADMINISTRATIVO</span></div>
+        <div className="forgot-admin-mark" aria-hidden="true">
+          <span className="forgot-admin-mark-icon" />
+          <span>PAINEL ADMINISTRATIVO</span>
+        </div>
       </div>
     </TelaFigma>
   );

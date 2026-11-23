@@ -1,44 +1,61 @@
-// One scheduler for mounted views. Mutations refresh immediately; remote changes are
-// collected every 15s while visible. No navigation, filter reset or reload.
-const listeners = new Set<() => void>();
-let timer: ReturnType<typeof setInterval> | undefined;
-let queued: ReturnType<typeof setTimeout> | undefined;
+// Uma única conexão SSE acorda as listas quando o servidor recebe um evento
+// Realtime do Postgres. As leituras ficam sob demanda; não há polling periódico.
+const API_URL = (
+  (import.meta.env?.VITE_URL_API ?? import.meta.env?.VITE_API_URL) || ''
+).replace(/\/$/, '');
+const ESPERA_APOS_ALTERACAO_MS = 180;
+
+const observadores = new Set<() => void>();
+let eventos: EventSource | null = null;
+let naFila: ReturnType<typeof setTimeout> | undefined;
 function emitir() {
-  if (!listeners.size || typeof document === "undefined") return;
-  if (document.visibilityState === "hidden" || !navigator.onLine) return;
-  for (const fn of listeners) fn();
+  if (!observadores.size || typeof document === 'undefined') return;
+  if (document.visibilityState === 'hidden' || !navigator.onLine) return;
+  for (const funcao of observadores) funcao();
 }
 function agendar() {
-  clearTimeout(queued);
-  queued = setTimeout(emitir, 200);
+  clearTimeout(naFila);
+  naFila = setTimeout(emitir, ESPERA_APOS_ALTERACAO_MS);
 }
+function abrirEventos() {
+  if (eventos || typeof EventSource === 'undefined') return;
+  eventos = new EventSource(`${API_URL}/api/shared/catalogo/stream`, { withCredentials: true });
+  eventos.addEventListener('dados-atualizados', agendar);
+  eventos.addEventListener('open', agendar);
+}
+function fecharEventos() {
+  eventos?.removeEventListener('dados-atualizados', agendar);
+  eventos?.removeEventListener('open', agendar);
+  eventos?.close();
+  eventos = null;
+}
+
 const canal =
-  typeof BroadcastChannel !== "undefined"
-    ? new BroadcastChannel("estacao-dados-v78")
-    : null;
+  typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('estacao-dados') : null;
 (canal as (BroadcastChannel & { unref?: () => void }) | null)?.unref?.();
-canal?.addEventListener("message", agendar);
+canal?.addEventListener('message', agendar);
+
 export function avisarAlteracaoDados() {
   agendar();
-  canal?.postMessage("alterado");
+  canal?.postMessage('alterado');
 }
-export function observarDados(fn: () => void) {
-  listeners.add(fn);
-  if (!timer) {
-    timer = setInterval(emitir, 15000);
-    window.addEventListener("focus", agendar);
-    window.addEventListener("online", agendar);
-    document.addEventListener("visibilitychange", agendar);
+
+export function observarDados(funcao: () => void) {
+  observadores.add(funcao);
+  abrirEventos();
+  if (observadores.size === 1) {
+    window.addEventListener('focus', agendar);
+    window.addEventListener('online', agendar);
+    document.addEventListener('visibilitychange', agendar);
   }
   return () => {
-    listeners.delete(fn);
-    if (!listeners.size) {
-      clearInterval(timer);
-      timer = undefined;
-      clearTimeout(queued);
-      window.removeEventListener("focus", agendar);
-      window.removeEventListener("online", agendar);
-      document.removeEventListener("visibilitychange", agendar);
+    observadores.delete(funcao);
+    if (!observadores.size) {
+      fecharEventos();
+      clearTimeout(naFila);
+      window.removeEventListener('focus', agendar);
+      window.removeEventListener('online', agendar);
+      document.removeEventListener('visibilitychange', agendar);
     }
   };
 }

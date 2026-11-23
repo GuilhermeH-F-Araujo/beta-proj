@@ -1,6 +1,6 @@
-import { proximaOpcao } from "../../services/navegacaoConfiguracao";
-import { useRef } from "react";
-import { Icon } from "../MenuAdmin";
+import { useRef } from 'react';
+import { proximaOpcao } from '../../services/navegacaoConfiguracao';
+import { Icone } from '../MenuAdmin';
 export type OpcaoConfiguracao<T extends string> = {
   value: T;
   label: string;
@@ -9,56 +9,56 @@ export type OpcaoConfiguracao<T extends string> = {
 };
 export default function NavegacaoConfiguracao<T extends string>({
   id,
-  label,
-  value,
-  options,
-  onChange,
+  label: rotulo,
+  value: valor,
+  options: opcoes,
+  onChange: aoAlterar,
   vertical = false,
-  className = "",
+  className: nomeClasse = '',
 }: {
   id: string;
   label: string;
   value: T;
   options: OpcaoConfiguracao<T>[];
-  onChange: (v: T) => void;
+  onChange: (valorAtual: T) => void;
   vertical?: boolean;
   className?: string;
 }) {
-  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const botoes = useRef<(HTMLButtonElement | null)[]>([]);
   return (
     <div
       role="tablist"
-      aria-label={label}
-      aria-orientation={vertical ? "vertical" : "horizontal"}
-      className={`cfg-local-tabs ${vertical ? "vertical" : "horizontal"} ${className}`}
+      aria-label={rotulo}
+      aria-orientation={vertical ? 'vertical' : 'horizontal'}
+      className={`cfg-local-tabs ${vertical ? 'vertical' : 'horizontal'} ${nomeClasse}`}
     >
-      {options.map((o, i) => (
+      {opcoes.map((objetoAtual, indice) => (
         <button
           type="button"
-          key={o.value}
-          id={`${id}-tab-${o.value}`}
+          key={objetoAtual.value}
+          id={`${id}-tab-${objetoAtual.value}`}
           role="tab"
-          aria-selected={value === o.value}
-          aria-controls={`${id}-panel-${o.value}`}
-          tabIndex={value === o.value ? 0 : -1}
-          ref={(node) => {
-            buttons.current[i] = node;
+          aria-selected={valor === objetoAtual.value}
+          aria-controls={`${id}-panel-${objetoAtual.value}`}
+          tabIndex={valor === objetoAtual.value ? 0 : -1}
+          ref={(elemento) => {
+            botoes.current[indice] = elemento;
           }}
-          onClick={() => onChange(o.value)}
-          onKeyDown={(e) => {
-            const next = proximaOpcao(e.key, i, options.length, vertical);
-            if (next === null) return;
-            e.preventDefault();
-            onChange(options[next].value);
-            buttons.current[next]?.focus();
+          onClick={() => aoAlterar(objetoAtual.value)}
+          onKeyDown={(eventoRecebido) => {
+            const continuar = proximaOpcao(eventoRecebido.key, indice, opcoes.length, vertical);
+            if (continuar === null) return;
+            eventoRecebido.preventDefault();
+            aoAlterar(opcoes[continuar].value);
+            botoes.current[continuar]?.focus();
           }}
         >
-          {o.icon && <Icon name={o.icon} size={19} />}
+          {objetoAtual.icon && <Icone name={objetoAtual.icon} size={19} />}
           <span>
-            <b>{o.label}</b>
-            {o.description && <small>{o.description}</small>}
+            <b>{objetoAtual.label}</b>
+            {objetoAtual.description && <small>{objetoAtual.description}</small>}
           </span>
-          {vertical && <Icon name="right" size={14} />}
+          {vertical && <Icone name="right" size={14} />}
         </button>
       ))}
     </div>

@@ -1,113 +1,172 @@
-import "./configuracoes-sistema.css";
-import { useEffect, useRef, useState } from "react";
-import { logout } from "../../services/apiAutenticacao";
-import { minutosInatividade,chaveInatividade,invalidarInatividadeConta } from "../../services/configuracoesSistema";
-import { CfgDialog } from "./ConfiguracoesUI";
+import { useEffect, useRef, useState } from 'react';
+import { sair as encerrarSessaoAtual } from '../../services/apiAutenticacao';
+import { Icone } from '../MenuAdmin';
+import {
+  chaveInatividade,
+  invalidarInatividadeConta,
+  minutosInatividade,
+} from '../../services/configuracoesSistema';
+import './configuracoes-sistema.css';
+import { CfgDialog } from './ElementosConfiguracoes';
 export default function SessaoInativa({ usuarioId }: { usuarioId: string }) {
   const [restante, setRestante] = useState<number | null>(null);
-  const [encerrando, setEncerrando] = useState(false);
-  const [erro, setErro] = useState("");
+  const [erro, setErro] = useState('');
   const ultimo = useRef(Date.now());
   const aviso = useRef(false);
+  const previa = useRef(false);
   const saindo = useRef(false);
   const ultimaFalha = useRef(0);
-  const storageKey = `estacao-atividade-${usuarioId}`;
+  const ultimaGravacaoAtividade = useRef(0);
+  const armazenamentoChave = `estacao-atividade-${usuarioId}`;
   function continuar() {
     if (saindo.current) return;
     ultimo.current = Date.now();
     try {
-      localStorage.setItem(storageKey, String(ultimo.current));
+      localStorage.setItem(armazenamentoChave, String(ultimo.current));
     } catch {}
     aviso.current = false;
     setRestante(null);
-    setErro("");
+    setErro('');
   }
   async function sair() {
     if (saindo.current) return;
     saindo.current = true;
-    setEncerrando(true);
     try {
-      await logout();
-      window.location.replace("/login");
+      await encerrarSessaoAtual();
+      window.location.replace('/login');
     } catch {
       ultimaFalha.current = Date.now();
-      setErro(
-        "Não foi possível encerrar a sessão. Verifique sua conexão e tente novamente.",
-      );
+      setErro('Não foi possível encerrar a sessão. Verifique sua conexão e tente novamente.');
       saindo.current = false;
-      setEncerrando(false);
     }
   }
   useEffect(() => {
     continuar();
-    const activity = () => {
-      if (!aviso.current) {
-        ultimo.current = Date.now();
+    const atividade = () => {
+      if (saindo.current) return;
+      const agora = Date.now();
+      ultimo.current = agora;
+      if (agora - ultimaGravacaoAtividade.current > 5000) {
         try {
-          const saved = Number(localStorage.getItem(storageKey) || 0);
-          if (Date.now() - saved > 5000)
-            localStorage.setItem(storageKey, String(ultimo.current));
+          localStorage.setItem(armazenamentoChave, String(agora));
+          ultimaGravacaoAtividade.current = agora;
         } catch {}
       }
+      if (aviso.current) {
+        aviso.current = false;
+        previa.current = false;
+        setRestante(null);
+        setErro('');
+      }
     };
-    const check = () => {
-      const minutes = minutosInatividade(usuarioId);
-      if (!minutes) {
+    const verificar = () => {
+      if (previa.current) {
+        setRestante((atual) => {
+          if (atual === null) return 60;
+          if (atual <= 1) {
+            previa.current = false;
+            aviso.current = false;
+            return null;
+          }
+          return atual - 1;
+        });
+        return;
+      }
+      const minutos = minutosInatividade(usuarioId);
+      if (!minutos) {
         aviso.current = false;
         setRestante(null);
         return;
       }
-      let last = ultimo.current;
+      let ultimoLocal = ultimo.current;
       try {
-        const shared = Number(localStorage.getItem(storageKey) || 0);
-        if (Number.isFinite(shared) && shared <= Date.now()) last = Math.max(last, shared);
+        const compartilhado = Number(localStorage.getItem(armazenamentoChave) || 0);
+        if (Number.isFinite(compartilhado) && compartilhado <= Date.now())
+          ultimoLocal = Math.max(ultimoLocal, compartilhado);
       } catch {}
-      const seconds = Math.ceil((last + minutes * 60000 - Date.now()) / 1000);
-      if (seconds <= 60) {
+      const segundos = Math.ceil((ultimoLocal + minutos * 60000 - Date.now()) / 1000);
+      if (segundos <= 60) {
         aviso.current = true;
-        setRestante(Math.max(0, seconds));
-        if (seconds <= 0 && Date.now() - ultimaFalha.current > 30000)
+        setRestante(Math.max(0, segundos));
+        if (segundos <= 0 && previa.current) {
+          previa.current = false;
+          aviso.current = false;
+          setRestante(null);
+        } else if (segundos <= 0 && Date.now() - ultimaFalha.current > 30000) {
           void sair();
+        }
       } else {
         aviso.current = false;
         setRestante(null);
       }
     };
-    const timer = setInterval(check, 1000);
-    const events = ["pointerdown", "keydown", "scroll"] as const;
-    events.forEach((e) =>
-      window.addEventListener(e, activity, { passive: true, capture: true }),
+    const temporizador = setInterval(verificar, 1000);
+    const eventos = ['pointerdown', 'pointermove', 'keydown', 'scroll'] as const;
+    eventos.forEach((eventoRecebido) =>
+      window.addEventListener(eventoRecebido, atividade, { passive: true, capture: true }),
     );
-    const storage=(event:StorageEvent)=>{if(event.key===chaveInatividade(usuarioId)){invalidarInatividadeConta(usuarioId);check()}};window.addEventListener('storage',storage);
-    document.addEventListener("visibilitychange", check);
-    window.addEventListener("session-preferences-change", check);
+    const armazenamento = (evento: StorageEvent) => {
+      if (evento.key === chaveInatividade(usuarioId)) {
+        invalidarInatividadeConta(usuarioId);
+        verificar();
+      }
+    };
+    window.addEventListener('storage', armazenamento);
+    document.addEventListener('visibilitychange', verificar);
+    window.addEventListener('session-preferences-change', verificar);
+    const mostrarPrevia = () => {
+      previa.current = true;
+      aviso.current = true;
+      setErro('');
+      setRestante(60);
+    };
+    window.addEventListener('session-inactivity-preview', mostrarPrevia);
     return () => {
-      clearInterval(timer);window.removeEventListener('storage',storage);
-      events.forEach((e) => window.removeEventListener(e, activity, true));
-      document.removeEventListener("visibilitychange", check);
-      window.removeEventListener("session-preferences-change", check);
+      clearInterval(temporizador);
+      window.removeEventListener('storage', armazenamento);
+      eventos.forEach((eventoRecebido) =>
+        window.removeEventListener(eventoRecebido, atividade, true),
+      );
+      document.removeEventListener('visibilitychange', verificar);
+      window.removeEventListener('session-preferences-change', verificar);
+      window.removeEventListener('session-inactivity-preview', mostrarPrevia);
     };
   }, [usuarioId]);
   return restante !== null ? (
     <CfgDialog
       title="Você ainda está por aqui?"
-      description="Sua sessão será encerrada por inatividade para proteger os dados da oficina."
-      icon="lock"
+      description="Sua sessão será encerrada se não houver atividade."
+      icon="clock"
       onClose={continuar}
-      footer={
-        <>
-          <button className="cfg-button" disabled={encerrando} onClick={() => void sair()}>
-            Sair da conta
-          </button>
-          <button className="cfg-button primary" disabled={encerrando} onClick={continuar}>
-            Continuar usando
-          </button>
-        </>
-      }
+      className="cfg-inactivity-dialog"
     >
-      <p className="cfg-session-countdown" role="timer">
-        {restante} segundos
-      </p>
+      <div className="cfg-inactivity-countdown" role="timer" aria-label={`${restante} segundos`}>
+        <div className="cfg-inactivity-countdown-main">
+          <span className="cfg-inactivity-countdown-clock" aria-hidden="true">
+            <Icone name="clock" size={22} />
+          </span>
+          <div className="cfg-inactivity-countdown-copy">
+            <small>Encerramento da sessão</small>
+            <p>
+              <strong>{restante}</strong>
+              <span>segundos</span>
+            </p>
+            <span className="cfg-inactivity-countdown-hint">
+              A sessão será encerrada automaticamente por inatividade.
+            </span>
+          </div>
+        </div>
+        <div
+          className="cfg-inactivity-progress"
+          role="progressbar"
+          aria-label="Tempo até o encerramento da sessão"
+          aria-valuemin={0}
+          aria-valuemax={60}
+          aria-valuenow={60 - restante}
+        >
+          <span style={{ width: `${((60 - restante) / 60) * 100}%` }} />
+        </div>
+      </div>
       {erro && (
         <p className="cfg-error" role="alert">
           {erro}

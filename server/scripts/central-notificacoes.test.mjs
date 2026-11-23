@@ -1,22 +1,22 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import test from 'node:test';
+import assert from 'node:assert/strict';
 import {
   configurarCentralNotificacoes,
   atualizarCentralNotificacoes,
   atualizarAvisoLocal,
   estadoNotificacoes,
-} from "../../client/src/services/centralNotificacoes.ts";
+} from '../../client/src/services/centralNotificacoes.ts';
 import {
-  definirUsuarioNotificacoes,
+  setUsuarioNotificacoes,
   padraoNotificacoes,
-  salvarConfigNotificacoes,
-} from "../../client/src/services/preferenciasNotificacoes.ts";
-import { prepararAudioNotificacoes } from "../../client/src/services/sonsNotificacao.ts";
-import { request } from "../../client/src/services/apiAutenticacao.ts";
-const values = new Map();
+  salvarConfiguracaoNotificacoes,
+} from '../../client/src/services/preferenciasNotificacoes.ts';
+import { prepararAudioNotificacoes } from '../../client/src/services/sonsNotificacao.ts';
+import { request } from '../../client/src/services/apiAutenticacao.ts';
+const valores = new Map();
 globalThis.localStorage = {
-  getItem: (k) => values.get(k) || null,
-  setItem: (k, v) => values.set(k, String(v)),
+  getItem: (chaveAtual) => valores.get(chaveAtual) || null,
+  setItem: (chaveAtual, valorAtual) => valores.set(chaveAtual, String(valorAtual)),
 };
 globalThis.window = Object.assign(new EventTarget(), {
   setTimeout,
@@ -24,18 +24,18 @@ globalThis.window = Object.assign(new EventTarget(), {
 });
 let frequencias = [];
 class ContextoAudio {
-  state = "suspended";
+  state = 'suspended';
   currentTime = 0;
   destination = {};
   async resume() {
-    this.state = "running";
+    this.state = 'running';
   }
   createOscillator() {
     return {
-      type: "sine",
+      type: 'sine',
       frequency: {
-        setValueAtTime(f) {
-          frequencias.push(f);
+        setValueAtTime(funcaoAtual) {
+          frequencias.push(funcaoAtual);
         },
       },
       connect() {},
@@ -55,80 +55,74 @@ class ContextoAudio {
   }
 }
 globalThis.AudioContext = ContextoAudio;
-const event = (id, kind = "novo_cliente") => ({
+const evento = (id, tipoElemento = 'novo_cliente') => ({
   id,
-  kind,
-  title: "Evento",
-  body: "Teste",
+  kind: tipoElemento,
+  title: 'Evento',
+  body: 'Teste',
   createdAt: new Date().toISOString(),
   read: false,
   orderId: null,
 });
-const response = (items) =>
-  new Response(JSON.stringify({ items, unreadCount: items.length }), {
-    headers: { "Content-Type": "application/json" },
+const response = (itens) =>
+  new Response(JSON.stringify({ items: itens, unreadCount: itens.length }), {
+    headers: { 'Content-Type': 'application/json' },
   });
-test("chosen beep runs for a new event and is not replayed by navigation or refresh", async () => {
-  definirUsuarioNotificacoes("som-integrado");
-  configurarCentralNotificacoes("som-integrado");
-  const config = padraoNotificacoes();
-  config.ativo = true;
-  config.eventos.novo_cliente.som = true;
-  config.eventos.novo_cliente.toque = "sino";
-  salvarConfigNotificacoes(config);
+test('chosen beep runs for a new event and is not replayed by navigation or refresh', async () => {
+  setUsuarioNotificacoes('som-integrado');
+  configurarCentralNotificacoes('som-integrado');
+  const configuracao = padraoNotificacoes();
+  configuracao.ativo = true;
+  configuracao.eventos.novo_cliente.som = true;
+  configuracao.eventos.novo_cliente.toque = 'sino';
+  salvarConfiguracaoNotificacoes(configuracao);
   await prepararAudioNotificacoes(true);
-  globalThis.fetch = async () => response([event(1)]);
+  globalThis.fetch = async () => response([evento(1)]);
   await atualizarCentralNotificacoes();
   await new Promise(setImmediate);
-  assert.deepEqual(frequencias, [], "old events stay silent");
-  globalThis.fetch = async () => response([event(2), event(1)]);
+  assert.deepEqual(frequencias, [], 'old events stay silent');
+  globalThis.fetch = async () => response([evento(2), evento(1)]);
   await atualizarCentralNotificacoes();
   await new Promise(setImmediate);
-  assert.deepEqual(
-    frequencias,
-    [659, 988, 1318],
-    "plays selected sino frequencies",
-  );
-  configurarCentralNotificacoes("som-integrado");
+  assert.deepEqual(frequencias, [659, 988, 1318], 'plays selected sino frequencies');
+  configurarCentralNotificacoes('som-integrado');
   await atualizarCentralNotificacoes();
   await new Promise(setImmediate);
-  assert.equal(frequencias.length, 3, "navigation must not reset known events");
+  assert.equal(frequencias.length, 3, 'navigation must not reset known events');
 });
-test("completed writes announce a refresh, while reads and failed writes do not", async () => {
-  let updates = 0;
-  const listener = () => updates++;
-  window.addEventListener("admin-notifications-refresh", listener);
+test('completed writes announce a refresh, while reads and failed writes do not', async () => {
+  let atualizacoes = 0;
+  const observador = () => atualizacoes++;
+  window.addEventListener('admin-notifications-refresh', observador);
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ ok: true }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { 'Content-Type': 'application/json' },
     });
-  await request("/api/clients/1", { method: "PATCH", body: "{}" });
-  assert.equal(updates, 1);
-  await request("/api/orders/1", { method: "GET" });
-  assert.equal(updates, 1);
+  await request('/api/clients/1', { method: 'PATCH', body: '{}' });
+  assert.equal(atualizacoes, 1);
+  await request('/api/orders/1', { method: 'GET' });
+  assert.equal(atualizacoes, 1);
   globalThis.fetch = async () =>
-    new Response(JSON.stringify({ message: "Falha esperada" }), {
+    new Response(JSON.stringify({ message: 'Falha esperada' }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { 'Content-Type': 'application/json' },
     });
-  await assert.rejects(
-    request("/api/orders/1", { method: "PATCH", body: "{}" }),
-  );
-  assert.equal(updates, 1);
-  window.removeEventListener("admin-notifications-refresh", listener);
+  await assert.rejects(request('/api/orders/1', { method: 'PATCH', body: '{}' }));
+  assert.equal(atualizacoes, 1);
+  window.removeEventListener('admin-notifications-refresh', observador);
 });
-test("stale refresh cannot undo a successful read action", async () => {
-  configurarCentralNotificacoes("race-test");
-  globalThis.fetch = async () => response([event(10)]);
+test('stale refresh cannot undo a successful read action', async () => {
+  configurarCentralNotificacoes('race-test');
+  globalThis.fetch = async () => response([evento(10)]);
   await atualizarCentralNotificacoes();
-  let release;
+  let liberarRecurso;
   globalThis.fetch = () =>
-    new Promise((resolve) => {
-      release = () => resolve(response([event(10)]));
+    new Promise((resolver) => {
+      liberarRecurso = () => resolver(response([evento(10)]));
     });
-  const pending = atualizarCentralNotificacoes();
-  atualizarAvisoLocal(10, "ler");
-  release();
-  await pending;
+  const pendente = atualizarCentralNotificacoes();
+  atualizarAvisoLocal(10, 'ler');
+  liberarRecurso();
+  await pendente;
   assert.equal(estadoNotificacoes().items[0].read, true);
 });

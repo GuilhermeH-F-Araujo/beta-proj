@@ -1,5 +1,5 @@
 -- Estado de pagamento confirmado manualmente por um administrador.
--- A ausência de registro significa pendente, sem inferir a partir da entrega.
+-- A ausencia de registro significa pendente, sem inferir a partir da entrega.
 create table if not exists public.pagamento_os (
   id_os integer primary key references public.ordem_servico(id_os) on delete cascade,
   status text not null default 'pendente' check (status in ('pendente', 'pago')),

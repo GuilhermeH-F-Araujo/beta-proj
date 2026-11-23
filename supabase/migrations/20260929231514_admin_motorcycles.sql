@@ -13,4 +13,4 @@ grant insert (ano_modelo,chassi,renavam,observacoes,ativa) on public.moto to ser
 grant update (id_cliente,quilometragem,ano_modelo,chassi,renavam,observacoes,ativa) on public.moto to service_role;
 grant delete on public.moto to service_role;
 
--- Só o servidor usa essas permissões. RLS existente continua ativo.
+-- So o servidor usa essas permissoes. RLS existente continua ativo.

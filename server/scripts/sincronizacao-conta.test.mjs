@@ -1,163 +1,189 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { carregarPreferenciasDaConta } from "../../client/src/services/carregarPreferenciasConta.ts";
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { carregarPreferenciasDaConta } from '../../client/src/services/carregarPreferenciasConta.ts';
 import {
   iniciarSincronizacaoConta,
   sincronizarPreferenciasConta,
   enfileirarPreferenciaConta,
   suspenderSincronizacaoConta,
   estadoSincronizacao,
-} from "../../client/src/services/sincronizacaoConta.ts";
+} from '../../client/src/services/sincronizacaoConta.ts';
 import {
   normalizarLeitura,
   salvarPreferenciasLeitura,
   lerPreferenciasLeitura,
-} from "../../client/src/services/preferenciasGlobais.ts";
+} from '../../client/src/services/preferenciasGlobais.ts';
 import {
   padraoNotificacoes,
-  salvarConfigNotificacoes,
-  lerConfigNotificacoes,
-} from "../../client/src/services/preferenciasNotificacoes.ts";
+  salvarConfiguracaoNotificacoes,
+  lerConfiguracaoNotificacoes,
+} from '../../client/src/services/preferenciasNotificacoes.ts';
 import {
   salvarInatividadeConta,
   minutosInatividade,
-} from "../../client/src/services/configuracoesSistema.ts";
-const A = "00000000-0000-4000-8000-000000000001",
-  B = "00000000-0000-4000-8000-000000000002";
-const cache = new Map();
+} from '../../client/src/services/configuracoesSistema.ts';
+const PrimeiroTipo = '00000000-0000-4000-8000-000000000001',
+  SegundoTipo = '00000000-0000-4000-8000-000000000002';
+const memoria = new Map();
 globalThis.localStorage = {
-  getItem: (k) => cache.get(k) || null,
-  setItem: (k, v) => cache.set(k, String(v)),
-  clear: () => cache.clear(),
+  getItem: (chaveAtual) => memoria.get(chaveAtual) || null,
+  setItem: (chaveAtual, valorAtual) => memoria.set(chaveAtual, String(valorAtual)),
+  clear: () => memoria.clear(),
 };
 globalThis.window = Object.assign(new EventTarget(), {
   setTimeout,
   clearTimeout,
 });
-const variables = new Map();
+const variaveis = new Map();
 globalThis.document = {
   documentElement: {
     dataset: {},
     style: {
-      setProperty: (k, v) => variables.set(k, v),
-      getPropertyValue: (k) => variables.get(k) || "",
+      setProperty: (chaveAtual, valorAtual) => variaveis.set(chaveAtual, valorAtual),
+      getPropertyValue: (chaveAtual) => variaveis.get(chaveAtual) || '',
     },
   },
 };
-const cloud = new Map();
-let active = A;
-const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
+const nuvem = new Map();
+let ativoLocal = PrimeiroTipo;
+const conteudoConteudoConteudoJson = (corpo, situacao = 200) =>
+  new Response(JSON.stringify(corpo), {
+    status: situacao,
+    headers: { 'Content-Type': 'application/json' },
   });
-function server() {
-  globalThis.fetch = async (url, init = {}) => {
-    const path = String(url);
-    if (!init.method || init.method === "GET")
-      return json({
-        conta: active,
+function servidor() {
+  globalThis.fetch = async (url, inicializacao = {}) => {
+    const caminho = String(url);
+    if (!inicializacao.method || inicializacao.method === 'GET')
+      return conteudoConteudoConteudoJson({
+        conta: ativoLocal,
         leitura: null,
         notificacoes: null,
         seguranca: null,
         somVersao: null,
-        ...cloud.get(active),
+        ...nuvem.get(ativoLocal),
       });
-    const data = JSON.parse(init.body);
-    assert.equal(data.conta, active);
-    const section = path.split("/").pop();
-    cloud.set(active, { ...cloud.get(active), [section]: data.valor });
-    return json({ ok: true, conta: active });
+    const dados = JSON.parse(inicializacao.body);
+    assert.equal(dados.conta, ativoLocal);
+    const secao = caminho.split('/').pop();
+    nuvem.set(ativoLocal, { ...nuvem.get(ativoLocal), [secao]: dados.valor });
+    return conteudoConteudoConteudoJson({ ok: true, conta: ativoLocal });
   };
 }
-test("a fresh computer restores reading, independent region sizes, sounds and inactivity from the same account", async () => {
-  cache.clear();
-  server();
-  await carregarPreferenciasDaConta(A);
-  const prefs = {
+test('a fresh computer restores reading, independent region sizes, sounds and inactivity from the same account', async () => {
+  memoria.clear();
+  servidor();
+  await carregarPreferenciasDaConta(PrimeiroTipo);
+  const preferencias = {
     ...normalizarLeitura(),
+    tema: 'escuro',
     tamanhoTexto: 150,
     tamanhoMenu: 95,
     tamanhoCabecalho: 110,
     tamanhoModais: 125,
+    tamanhoBotoes: 135,
+    tamanhoFonte: 145,
+    organizacao: {
+      ...normalizarLeitura().organizacao,
+      posicaoMenu: 'direita',
+      barras: [
+        {
+          id: 'barra-teste',
+          nome: 'Minha rotina',
+          posicao: 'inferior',
+          itens: [{ id: 'atalho-moto', atalho: 'nova-moto' }],
+        },
+      ],
+      cartoes: { clientes: ['all', 'new'] },
+    },
+    painelPersonalizacao: { x: 35, y: 70 },
+    elementos: { 'item-teste': { escala: 160, fonte: 175 } },
+    substituicoes: { 'item-teste': 'nova-moto' },
     pesoTexto: 650,
     espacoLinhas: 17,
   };
-  salvarPreferenciasLeitura(prefs);
-  const notif = padraoNotificacoes();
-  notif.ativo = true;
-  notif.toque = "sino";
-  notif.eventos.novo_cliente.som = true;
-  salvarConfigNotificacoes(notif);
-  salvarInatividadeConta(A, 60);
+  salvarPreferenciasLeitura(preferencias);
+  const notificacao = padraoNotificacoes();
+  notificacao.ativo = true;
+  notificacao.toque = 'sino';
+  notificacao.eventos.novo_cliente.som = true;
+  salvarConfiguracaoNotificacoes(notificacao);
+  salvarInatividadeConta(PrimeiroTipo, 60);
   await sincronizarPreferenciasConta();
-  assert.equal(cloud.get(A).leitura.tamanhoTexto, 150);
+  assert.equal(nuvem.get(PrimeiroTipo).leitura.tamanhoTexto, 150);
+  assert.equal(nuvem.get(PrimeiroTipo).leitura.tamanhoBotoes, 135);
   suspenderSincronizacaoConta();
-  cache.clear();
-  await carregarPreferenciasDaConta(A);
-  assert.deepEqual(lerPreferenciasLeitura(), prefs);
-  assert.equal(variables.get("--app-content-scale"), "1.5");
-  assert.equal(variables.get("--app-menu-scale"), "0.95");
-  assert.equal(variables.get("--app-modal-scale"), "1.25");
-  assert.equal(lerConfigNotificacoes().toque, "sino");
-  assert.equal(lerConfigNotificacoes().eventos.novo_cliente.som, true);
-  assert.equal(minutosInatividade(A), 60);
+  memoria.clear();
+  await carregarPreferenciasDaConta(PrimeiroTipo);
+  assert.deepEqual(lerPreferenciasLeitura(), preferencias);
+  assert.equal(variaveis.get('--app-content-scale'), '1.5');
+  assert.equal(variaveis.get('--app-menu-scale'), '0.95');
+  assert.equal(variaveis.get('--app-modal-scale'), '1.25');
+  assert.equal(variaveis.get('--app-button-scale'), '1.35');
+  assert.equal(lerConfiguracaoNotificacoes().toque, 'sino');
+  assert.equal(lerConfiguracaoNotificacoes().eventos.novo_cliente.som, true);
+  assert.equal(minutosInatividade(PrimeiroTipo), 60);
   await sincronizarPreferenciasConta();
   suspenderSincronizacaoConta();
 });
-test("another account does not inherit the previous account preferences or pending writes", async () => {
-  active = B;
-  server();
-  await carregarPreferenciasDaConta(B);
+test('another account does not inherit the previous account preferences or pending writes', async () => {
+  ativoLocal = SegundoTipo;
+  servidor();
+  await carregarPreferenciasDaConta(SegundoTipo);
+  assert.equal(lerPreferenciasLeitura().tema, 'claro');
   assert.equal(lerPreferenciasLeitura().tamanhoTexto, 110);
-  assert.equal(lerConfigNotificacoes().ativo, false);
+  assert.equal(lerPreferenciasLeitura().tamanhoBotoes, 100);
+  assert.equal(lerPreferenciasLeitura().tamanhoFonte, 100);
+  assert.deepEqual(lerPreferenciasLeitura().elementos, {});
+  assert.deepEqual(lerPreferenciasLeitura().substituicoes, {});
+  assert.equal(lerPreferenciasLeitura().organizacao.posicaoMenu, 'esquerda');
+  assert.deepEqual(lerPreferenciasLeitura().organizacao.barras, []);
+  assert.deepEqual(lerPreferenciasLeitura().painelPersonalizacao, { x: 100, y: 0 });
+  assert.equal(lerConfiguracaoNotificacoes().ativo, false);
   await sincronizarPreferenciasConta();
-  assert.equal(cloud.get(A).leitura.tamanhoTexto, 150);
-  assert.equal(cloud.get(B).leitura.tamanhoTexto, 110);
+  assert.equal(nuvem.get(PrimeiroTipo).leitura.tamanhoTexto, 150);
+  assert.equal(nuvem.get(SegundoTipo).leitura.tamanhoTexto, 110);
   suspenderSincronizacaoConta();
 });
-test("a newer edit made while a request is pending is sent after the first response", async () => {
-  active = A;
-  iniciarSincronizacaoConta(A);
-  let release;
-  const values = [];
-  globalThis.fetch = async (_url, init) => {
-    const data = JSON.parse(init.body);
-    values.push(data.valor.tamanhoTexto);
-    if (values.length === 1)
-      await new Promise((resolve) => (release = resolve));
-    return json({ ok: true, conta: A });
+test('a newer edit made while a request is pending is sent after the first response', async () => {
+  ativoLocal = PrimeiroTipo;
+  iniciarSincronizacaoConta(PrimeiroTipo);
+  let liberarRecurso;
+  const valores = [];
+  globalThis.fetch = async (_Url, inicializacao) => {
+    const dados = JSON.parse(inicializacao.body);
+    valores.push(dados.valor.tamanhoTexto);
+    if (valores.length === 1) await new Promise((resolver) => (liberarRecurso = resolver));
+    return conteudoConteudoConteudoJson({ ok: true, conta: PrimeiroTipo });
   };
-  enfileirarPreferenciaConta("leitura", {
+  enfileirarPreferenciaConta('leitura', {
     ...normalizarLeitura(),
     tamanhoTexto: 120,
   });
-  const pending = sincronizarPreferenciasConta();
-  enfileirarPreferenciaConta("leitura", {
+  const pendente = sincronizarPreferenciasConta();
+  enfileirarPreferenciaConta('leitura', {
     ...normalizarLeitura(),
     tamanhoTexto: 145,
   });
-  release();
-  await pending;
-  assert.deepEqual(values, [120, 145]);
-  assert.equal(estadoSincronizacao().estado, "salvo");
+  liberarRecurso();
+  await pendente;
+  assert.deepEqual(valores, [120, 145]);
+  assert.equal(estadoSincronizacao().estado, 'salvo');
   suspenderSincronizacaoConta();
 });
-test("failed synchronization keeps the draft and only reports saved after a successful retry", async () => {
-  iniciarSincronizacaoConta(A);
-  globalThis.fetch = async () => json({ message: "Conexão indisponível" }, 503);
-  enfileirarPreferenciaConta("seguranca", { inatividade: 20 });
+test('failed synchronization keeps the draft and only reports saved after a successful retry', async () => {
+  iniciarSincronizacaoConta(PrimeiroTipo);
+  globalThis.fetch = async () =>
+    conteudoConteudoConteudoJson({ message: 'Conexão indisponível' }, 503);
+  enfileirarPreferenciaConta('seguranca', { inatividade: 20 });
   await sincronizarPreferenciasConta();
-  assert.equal(estadoSincronizacao().estado, "erro");
-  assert.match(
-    localStorage.getItem(`estacao-conta-${A}-alteracoes-pendentes`),
-    /20/,
-  );
+  assert.equal(estadoSincronizacao().estado, 'erro');
+  assert.match(localStorage.getItem(`estacao-conta-${PrimeiroTipo}-alteracoes-pendentes`), /20/);
   suspenderSincronizacaoConta();
-  iniciarSincronizacaoConta(A);
-  server();
+  iniciarSincronizacaoConta(PrimeiroTipo);
+  servidor();
   await sincronizarPreferenciasConta();
-  assert.equal(cloud.get(A).seguranca.inatividade, 20);
-  assert.equal(estadoSincronizacao().estado, "salvo");
+  assert.equal(nuvem.get(PrimeiroTipo).seguranca.inatividade, 20);
+  assert.equal(estadoSincronizacao().estado, 'salvo');
   suspenderSincronizacaoConta();
 });

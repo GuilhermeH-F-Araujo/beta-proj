@@ -1,4 +1,4 @@
--- Registra mudanças de status feitas no painel, no app móvel ou por outras rotas.
+-- Registra mudancas de status feitas no painel, no app movel ou por outras rotas.
 create table if not exists public.order_status_history (
   id bigint generated always as identity primary key,
   order_id integer not null,
@@ -13,7 +13,7 @@ alter table public.order_status_history enable row level security;
 revoke all on public.order_status_history from public, anon, authenticated;
 grant select on public.order_status_history to service_role;
 
--- Preserva o horário dos eventos administrativos registrados antes do gatilho.
+-- Preserva o horario dos eventos administrativos registrados antes do gatilho.
 insert into public.order_status_history(order_id,previous_status,next_status,changed_at,actor_user_id,note,audit_id)
 select a.order_id, coalesce(a.details->>'antes','Desconhecido'),
   coalesce(a.details->>'depois','Desconhecido'),a.occurred_at,a.admin_user_id,

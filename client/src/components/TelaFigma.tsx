@@ -4,33 +4,30 @@ type Props = PropsWithChildren<{
   label: string;
 }>;
 
-const BASE_WIDTH = 1920;
-const BASE_HEIGHT = 1080;
+const BASE_LARGURA = 1920;
+const BASE_ALTURA = 1080;
 
-export default function TelaFigma({ label, children }: Props) {
-  const [scale, setScale] = useState(1);
+export default function TelaFigma({ label: rotulo, children: conteudo }: Props) {
+  const [escala, setEscala] = useState(1);
 
   useEffect(() => {
-    const resize = () => {
-      setScale(Math.max(
-        window.innerWidth / BASE_WIDTH,
-        window.innerHeight / BASE_HEIGHT,
-      ));
+    const ajustarTamanho = () => {
+      setEscala(Math.max(window.innerWidth / BASE_LARGURA, window.innerHeight / BASE_ALTURA));
     };
 
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+    ajustarTamanho();
+    window.addEventListener('resize', ajustarTamanho);
+    return () => window.removeEventListener('resize', ajustarTamanho);
   }, []);
 
   return (
-    <main className="viewport" aria-label={label}>
+    <main className="viewport" aria-label={rotulo}>
       <section
         className="figma-canvas"
         style={{
-          width: BASE_WIDTH,
-          height: BASE_HEIGHT,
-          transform: `translate(-50%, -50%) scale(${scale})`,
+          width: BASE_LARGURA,
+          height: BASE_ALTURA,
+          transform: `translate(-50%, -50%) scale(${escala})`,
         }}
       >
         <img
@@ -40,7 +37,7 @@ export default function TelaFigma({ label, children }: Props) {
           aria-hidden="true"
         />
         <div className="screen-vignette" aria-hidden="true" />
-        {children}
+        {conteudo}
       </section>
     </main>
   );

@@ -5,30 +5,34 @@ import TelaFigma from '../components/TelaFigma';
 import { solicitarRecuperacaoSenha } from '../services/apiAutenticacao';
 
 export default function EsqueciSenha() {
-  const navigate = useNavigate();
+  const navegar = useNavigate();
   const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [mensagem, setMensagem] = useState('');
+  const [erro, setErro] = useState('');
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    setMessage('');
+  async function tratarEnvio(evento: FormEvent) {
+    evento.preventDefault();
+    setErro('');
+    setMensagem('');
 
     if (!email.trim()) {
-      setError('Informe o e-mail cadastrado para receber as instruções.');
+      setErro('Informe o e-mail cadastrado para receber as instruções.');
       return;
     }
 
-    setLoading(true);
+    setCarregando(true);
     try {
       const response = await solicitarRecuperacaoSenha(email.trim());
-      setMessage(response.message);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível enviar as instruções agora.');
+      setMensagem(response.message);
+    } catch (erroCapturado) {
+      setErro(
+        erroCapturado instanceof Error
+          ? erroCapturado.message
+          : 'Não foi possível enviar as instruções agora.',
+      );
     } finally {
-      setLoading(false);
+      setCarregando(false);
     }
   }
 
@@ -52,9 +56,11 @@ export default function EsqueciSenha() {
           </p>
         </section>
 
-        <form className="forgot-form-v2" onSubmit={handleSubmit} noValidate>
-          {error && <AvisoAutenticacao type="error" message={error} onClose={() => setError('')} />}
-          {message && <AvisoAutenticacao type="success" message={message} onClose={() => setMessage('')} />}
+        <form className="formulario-recuperacao" onSubmit={tratarEnvio} noValidate>
+          {erro && <AvisoAutenticacao type="error" message={erro} onClose={() => setErro('')} />}
+          {mensagem && (
+            <AvisoAutenticacao type="success" message={mensagem} onClose={() => setMensagem('')} />
+          )}
 
           <label className="forgot-email-box">
             <span className="forgot-email-icon" aria-hidden="true" />
@@ -64,12 +70,12 @@ export default function EsqueciSenha() {
               autoComplete="email"
               placeholder="Digite seu e-mail cadastrado"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(evento) => setEmail(evento.target.value)}
             />
           </label>
 
-          <button className="forgot-submit-v2" type="submit" disabled={loading}>
-            <span>{loading ? 'Enviando...' : 'Enviar instruções'}</span>
+          <button className="botao-recuperacao" type="submit" disabled={carregando}>
+            <span>{carregando ? 'Enviando...' : 'Enviar instruções'}</span>
             <span className="forgot-submit-chevron" aria-hidden="true" />
           </button>
 
@@ -89,11 +95,7 @@ export default function EsqueciSenha() {
             </div>
           </div>
 
-          <button
-            className="forgot-back-link"
-            type="button"
-            onClick={() => navigate('/login')}
-          >
+          <button className="forgot-back-link" type="button" onClick={() => navegar('/login')}>
             <svg className="forgot-back-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M19 12H5" />
               <path d="M10 7L5 12L10 17" />

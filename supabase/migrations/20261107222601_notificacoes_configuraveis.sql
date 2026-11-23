@@ -1,4 +1,4 @@
--- Eventos persistentes: preferências nunca impedem o registro do evento.
+-- Eventos persistentes: preferencias nunca impedem o registro do evento.
 -- Cada administrador decide como receber os avisos no seu navegador.
 alter table public.admin_notify add column if not exists id_cliente integer references public.cliente(id_cliente) on delete set null;
 alter table public.admin_notify drop constraint if exists admin_notify_tipo_check;

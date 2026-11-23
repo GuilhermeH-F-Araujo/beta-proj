@@ -1,52 +1,59 @@
-# Estação Motos — painel web
+# Estacao Motos
 
-Este repositório reúne o painel administrativo, sua API e as alterações de banco usadas pelo projeto. O aplicativo móvel é um projeto separado e pode consumir os mesmos dados e as rotas de miniaturas desta API.
+Painel administrativo da oficina em React e TypeScript. O servidor usa Express e Supabase. O administrador acompanha clientes, motocicletas, funcionarios, ordens, pagamentos e configuracoes. Os aplicativos de cliente e mecanico usam contratos existentes e nao fazem parte deste pacote.
 
-## Estrutura de pastas
+## Comecar
 
-A transição das tabelas administrativas está documentada em
-[supabase/TABELAS.md](supabase/TABELAS.md), com o mapeamento em
-[supabase/MAPEAMENTO.md](supabase/MAPEAMENTO.md), a implantação/recuperação em
-[supabase/IMPLANTACAO.md](supabase/IMPLANTACAO.md) e os testes em
-[supabase/VALIDACAO.md](supabase/VALIDACAO.md). A aplicação no banco remoto exige
-autorização expressa; preparar os arquivos não altera o banco.
+Requisito: Node compativel com o definido no Render e npm. Execute os comandos na raiz extraida do projeto.
 
-| Local | O que contém |
-| --- | --- |
-| `client/` | Aplicação web em React e TypeScript. `index.html` é a entrada e `vite.config.ts` configura o Vite e o proxy local da API. |
-| `client/src/pages/` | Telas de login, recuperação de senha, ordens de serviço, clientes, motocicletas, histórico e perfil, com seus estilos. |
-| `client/src/components/` | Partes reutilizadas pelas telas, como cabeçalho, menus, filtros, notificações e modais. |
-| `client/src/services/` | Chamadas à API do projeto e regras compartilhadas de exibição, como status e miniaturas. |
-| `client/src/data/` | Catálogo local de modelos de motocicletas usado nas sugestões. |
-| `client/public/assets/` | Logos, favicons, ícones, imagens locais e ilustração exibida quando uma moto não tem miniatura. |
-| `server/src/` | API em Express. `index.ts` define as rotas; os demais arquivos cuidam de clientes, status, pesquisa de modelos, marcas, geração de imagens e fila de miniaturas. |
-| `server/scripts/` | Diagnósticos, verificações, testes pontuais e scripts para publicar a logo e os modelos de email no Supabase. |
-| `supabase/migrations/` | Migrações SQL versionadas para tabelas, permissões, funções e demais regras de banco. |
-| `supabase/email-templates/` | HTML dos emails de recuperação de senha e aviso de alteração de senha. |
-| `scripts/` | Scripts da raiz para iniciar o servidor e o Vite juntos e fazer uma verificação inicial. |
-| `package.json` | Comandos da raiz que coordenam `client/` e `server/`. Cada aplicação também tem seu próprio `package.json` e arquivo de dependências. |
+```bash
+npm run install:all
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+npm run check:env
+npm run dev
+```
 
-`client/.env.example` e `server/.env.example` mostram as configurações esperadas em cada parte. As credenciais efetivas ficam nos arquivos locais de ambiente e não pertencem ao código do navegador.
+Preencha SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY e SUPABASE_SECRET_KEY no arquivo do servidor. No Windows, copie os arquivos pelo explorador ou use Copy-Item. O painel abre em http://localhost:5173. A API local usa http://localhost:3001.
 
-## Serviços externos e APIs
+As variaveis anteriores continuam aceitas. Nao precisa trocar os nomes ja configurados no Render de uma vez. O adaptador fica em server/scripts/env.mjs.
 
-| Serviço | Uso neste projeto | Onde fica a integração |
-| --- | --- | --- |
-| **Supabase Auth** | Login, sessão e recuperação de senha; os emails de autenticação são enviados pela configuração de email/SMTP do projeto Supabase. | `server/src/index.ts`, `supabase/email-templates/` |
-| **Supabase Postgres e Data API** | Dados de clientes, motos, ordens, pagamentos, notificações e fila de miniaturas. | `server/src/`, `supabase/migrations/` |
-| **Supabase Storage** | Fotos de clientes e OS, avatares, prévias e miniaturas de motos; a logo pública pode ser usada no email. | `server/src/`, `server/scripts/publicar-logo-recuperacao.mjs` |
-| **Supabase Management API** | Publicação dos modelos HTML de email por um script administrativo. Não é uma chamada feita pelo painel durante o uso normal. | `server/scripts/publicar-emails-autenticacao.mjs` |
-| **Cloudflare Workers AI** | Geração de miniaturas, inclusive com configuração de múltiplas contas no servidor. | `server/src/previaModelo.ts`, `server/src/filaMiniaturas.ts` |
-| **OpenAI Images API** | Provedor alternativo de geração de imagens quando selecionado na configuração do servidor. | `server/src/previaModelo.ts` |
-| **Wikipedia API** | Pesquisa textual de modelos para auxiliar a identificação e oferecer sugestões; a prévia ainda precisa de conferência visual. | `server/src/pesquisaModelo.ts` |
-| **NHTSA vPIC API** | Sugestões adicionais de marcas. Se estiver indisponível, o catálogo de marcas principais do código continua disponível. | `server/src/marcasMotocicleta.ts` |
+## Comandos
 
-Os links de contato abrem `wa.me` e o aplicativo de email do usuário (`mailto:`); não há integração com a API oficial do WhatsApp. A interface usa **React**, **React Router** e **Vite**; a API usa **Express**, **Zod** e **supabase-js**. As chaves de Supabase e dos provedores de imagem são usadas no servidor.
+| Comando              | Uso                                                             |
+| -------------------- | --------------------------------------------------------------- |
+| npm run dev          | Inicia painel e servidor                                        |
+| npm run build        | Compila servidor e painel                                       |
+| npm start            | Inicia o servidor compilado                                     |
+| npm run typecheck    | Confere tipos, variaveis, parametros e importacoes sem uso      |
+| npm test             | Compila e executa testes de servidor e interface                |
+| npm run doctor       | Confere conexao e configuracao local                            |
+| npm run docs:api     | Sincroniza os validadores compartilhados com o contrato OpenAPI |
+| npm run format       | Formata os arquivos do projeto                                  |
+| npm run format:check | Confere a formatacao sem alterar arquivos                       |
+| npm run build:render | Instala pelo arquivo de dependencias e compila para o Render    |
 
-## Versão v78
+Os atalhos dev, build e start continuam disponiveis para ferramentas e hospedagem.
 
-Menus renderizados por uma única estrutura compartilhada, atualização automática de listas/cards, consulta de CEP, rascunhos locais por conta e skeletons. Agenda e catálogo agora possuem persistência compartilhada versionada. Ler `docs/ATUALIZACAO-V78.md` e executar as novas migrações de `ATUALIZAR-BANCO-V78.sql` antes da publicação.
+## Documentacao da API
 
-## Versão v79
+Com o projeto iniciado, abra http://localhost:5173/documentacao/ ou http://localhost:3001/documentacao/. O titulo da interface e **Documentação**. O contrato fica em server/openapi.json e pode ser baixado em /documentacao/openapi.json.
 
-Menu lateral normal e sessão compartilhada entre páginas, sem nova validação na navegação. Revalidação silenciosa e 101 testes aprovados. Consultar `docs/ATUALIZACAO-V79.md`. As duas alterações da v78 já foram aplicadas ao Supabase `estacao-motos`; a v79 não exige migração adicional.
+No Render, o mesmo caminho fica disponivel depois do deploy deste codigo. Preparar o arquivo nao publica automaticamente uma alteracao no servico hospedado.
+
+O Swagger permite testar consultas. Escritas ficam descritas, mas nao sao executadas pela interface, para evitar cadastros e exclusoes acidentais no banco real. As consultas protegidas precisam da sessao administrativa do mesmo dominio.
+
+## Onde encontrar cada assunto
+
+- ARQUITETURA.md: organizacao, responsabilidades e fluxo dos dados.
+- CONFIGURACAO.md: ambiente, integracoes e compatibilidade.
+- MANUTENCAO.md: como alterar, testar e documentar sem quebrar contratos.
+- DEPLOY-RENDER.md: configuracao da hospedagem.
+- supabase/TABELAS.md: estrutura e responsabilidade dos dados.
+- AGENTS.md: regras para manter este padrao nas proximas alteracoes.
+
+O projeto nao inclui credenciais, node_modules nem arquivos compilados. As pastas docs e motion-film foram removidas.
+
+## Miniaturas de motocicletas
+
+A central fica em /miniaturas. Consulte [MINIATURAS.md](MINIATURAS.md) para configurar Cloudflare, QR Code, pesquisa, fila e integracao de leitura dos outros percursos. O mesmo estudio e reutilizado no modal das motocicletas e das OS.

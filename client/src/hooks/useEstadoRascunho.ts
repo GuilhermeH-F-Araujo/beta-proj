@@ -1,38 +1,34 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
-import { lerRascunho, gravarRascunho } from "../services/rascunhos";
+// O rascunho e identificado pela conta, pelo formulario e pelo registro.
+// Trocar de registro nao pode reutilizar os campos de outro cadastro.
+import { useState, type Dispatch, type SetStateAction } from 'react';
+import { gravarRascunho, lerRascunho } from '../services/rascunhos';
 export function useEstadoRascunho<T>(
-  scope: string,
-  field: string,
+  escopo: string,
+  campo: string,
   inicial: T | (() => T),
 ): [T, Dispatch<SetStateAction<T>>] {
-  const initial = () =>
-    lerRascunho(
-      scope,
-      field,
-      typeof inicial === "function" ? (inicial as () => T)() : inicial,
-    );
-  const [state, setState] = useState(() => ({
-    scope,
-    field,
-    value: initial(),
+  const inicialLocal = () =>
+    lerRascunho(escopo, campo, typeof inicial === 'function' ? (inicial as () => T)() : inicial);
+  const [estado, setEstado] = useState(() => ({
+    scope: escopo,
+    field: campo,
+    value: inicialLocal(),
   }));
-  let current = state;
-  if (state.scope !== scope || state.field !== field) {
-    current = { scope, field, value: initial() };
-    setState(current);
+  let atual = estado;
+  if (estado.scope !== escopo || estado.field !== campo) {
+    atual = { scope: escopo, field: campo, value: inicialLocal() };
+    setEstado(atual);
   }
   return [
-    current.value,
-    (action) =>
-      setState((previous) => {
+    atual.value,
+    (acao) =>
+      setEstado((anterior) => {
         const base =
-          previous.scope === scope && previous.field === field
-            ? previous.value
-            : initial();
-        const next =
-          typeof action === "function" ? (action as (p: T) => T)(base) : action;
-        gravarRascunho(scope, field, next);
-        return { scope, field, value: next };
+          anterior.scope === escopo && anterior.field === campo ? anterior.value : inicialLocal();
+        const continuar =
+          typeof acao === 'function' ? (acao as (registroAtual: T) => T)(base) : acao;
+        gravarRascunho(escopo, campo, continuar);
+        return { scope: escopo, field: campo, value: continuar };
       }),
   ];
 }

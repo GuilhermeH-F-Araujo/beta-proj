@@ -1,4 +1,4 @@
--- As imagens novas ficam privadas até um administrador comparar modelo e prévia.
+-- As imagens novas ficam privadas ate um administrador comparar modelo e previa.
 alter table public.motorcycle_thumbnail_jobs
   drop constraint if exists motorcycle_thumbnail_jobs_status_check;
 alter table public.motorcycle_thumbnail_jobs
@@ -17,8 +17,8 @@ end $$;
 revoke all on function public.finish_motorcycle_thumbnail_job(bigint,uuid,text,timestamptz,text) from public,anon,authenticated;
 grant execute on function public.finish_motorcycle_thumbnail_job(bigint,uuid,text,timestamptz,text) to service_role;
 
--- A versão anterior da geração automática tinha uma chave de cache diferente.
--- Reavalia jobs concluídos sem apagar miniaturas já aprovadas pelo administrador.
+-- A versao anterior da geracao automatica tinha uma chave de cache diferente.
+-- Reavalia jobs concluidos sem apagar miniaturas ja aprovadas pelo administrador.
 update public.motorcycle_thumbnail_jobs
 set status='pending',next_retry_at=now(),last_error=null,updated_at=now()
 where status='done';

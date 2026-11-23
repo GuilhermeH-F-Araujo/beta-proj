@@ -1,4 +1,4 @@
--- Exclusão lógica: preserva motos, OS, avaliações, agendamentos e notificações
+-- Exclusao logica: preserva motos, OS, avaliacoes, agendamentos e notificacoes
 -- referenciados por id_cliente. A listagem administrativa ignora registros
 -- com excluido_em preenchido.
 alter table public.cliente add column if not exists excluido_em timestamptz;

@@ -1,6 +1,6 @@
--- Campos usados na edição do perfil no painel web e compartilhados com o app.
--- Um cliente possui várias motos; a FK existente moto.id_cliente preserva
--- a propriedade única de cada moto.
+-- Campos usados na edicao do perfil no painel web e compartilhados com o app.
+-- Um cliente possui varias motos; a FK existente moto.id_cliente preserva
+-- a propriedade unica de cada moto.
 alter table public.cliente
   add column if not exists data_nascimento date,
   add column if not exists cep varchar(8),

@@ -1,88 +1,99 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import test from 'node:test';
+import assert from 'node:assert/strict';
 import {
   normalizarLeitura,
   lerPreferenciasLeitura,
   salvarPreferenciasLeitura,
   aplicarPreferenciasLeitura,
   iniciarPreferenciasGlobais,
-} from "../../client/src/services/preferenciasGlobais.ts";
-const values = new Map();
+} from '../../client/src/services/preferenciasGlobais.ts';
+const valores = new Map();
 globalThis.localStorage = {
-  getItem: (k) => values.get(k) || null,
-  setItem: (k, v) => values.set(k, String(v)),
+  getItem: (chaveAtual) => valores.get(chaveAtual) || null,
+  setItem: (chaveAtual, valorAtual) => valores.set(chaveAtual, String(valorAtual)),
 };
-const vars = new Map();
-const root = {
+const variaveis = new Map();
+const raiz = {
   dataset: {},
   style: {
-    setProperty: (k, v) => vars.set(k, v),
-    getPropertyValue: (k) => vars.get(k) || "",
+    setProperty: (chaveAtual, valorAtual) => variaveis.set(chaveAtual, valorAtual),
+    getPropertyValue: (chaveAtual) => variaveis.get(chaveAtual) || '',
   },
 };
-class ElementStub {
-  matches(){return false}
-  querySelectorAll(){return []}
-  constructor(id = "") {
+class ElementoStub {
+  matches() {
+    return false;
+  }
+  querySelectorAll() {
+    return [];
+  }
+  constructor(id = '') {
     this.id = id;
     this.dataset = {};
-    this.tagName = "DIV";
+    this.tagName = 'DIV';
     this.parentElement = null;
   }
 }
-globalThis.Element = ElementStub;
-globalThis.HTMLElement = ElementStub;
-const body = { children: [] };
-globalThis.document = { documentElement: root, body };
+globalThis.Element = ElementoStub;
+globalThis.HTMLElement = ElementoStub;
+const corpo = { children: [] };
+globalThis.document = { documentElement: raiz, body: corpo };
 globalThis.window = new EventTarget();
-let mutation;
+let alteracao;
 globalThis.MutationObserver = class {
-  constructor(fn) {
-    mutation = fn;
+  constructor(funcao) {
+    alteracao = funcao;
   }
   observe() {}
   disconnect() {}
 };
-test("reading settings apply immediately to the shared root and survive navigation/reload", () => {
-  const next = {
+test('reading settings apply immediately to the shared root and survive navigation/reload', () => {
+  const continuar = {
     ...normalizarLeitura(),
     tamanhoTexto: 140,
+    tamanhoBotoes: 125,
     pesoTexto: 650,
     espacoLinhas: 18,
   };
-  salvarPreferenciasLeitura(next);
-  assert.equal(vars.get("--app-content-scale"), "1.4");
-  assert.equal(vars.get("--app-menu-scale"), "1");
-  assert.equal(vars.get("--app-header-scale"), "1");
-  assert.equal(vars.get("--app-modal-scale"), "1");
-  assert.equal(vars.get("--app-font-weight"), "650");
-  assert.equal(vars.get("--app-heading-weight"), "850");
-  assert.equal(vars.get("--app-line-height"), "1.8");
-  assert.equal(root.dataset.appReading, "true");
-  assert.deepEqual(lerPreferenciasLeitura(), next);
-  root.dataset = {};
+  salvarPreferenciasLeitura(continuar);
+  assert.equal(variaveis.get('--app-content-scale'), '1.4');
+  assert.equal(variaveis.get('--app-menu-scale'), '1');
+  assert.equal(variaveis.get('--app-header-scale'), '1');
+  assert.equal(variaveis.get('--app-modal-scale'), '1');
+  assert.equal(variaveis.get('--app-button-scale'), '1.25');
+  assert.equal(variaveis.get('--app-font-weight'), '650');
+  assert.equal(variaveis.get('--app-heading-weight'), '850');
+  assert.equal(variaveis.get('--app-line-height'), '1.8');
+  assert.equal(raiz.dataset.appReading, 'true');
+  assert.deepEqual(lerPreferenciasLeitura(), continuar);
+  raiz.dataset = {};
   aplicarPreferenciasLeitura();
-  assert.equal(root.dataset.appTextScale, "140");
+  assert.equal(raiz.dataset.appTextScale, '140');
+  assert.equal(variaveis.get('--app-button-scale'), '1.25');
 });
-test("a single global observer includes new portals and leaves the React root unscaled", () => {
-  const portal = new ElementStub();
-  portal.parentElement = body;
-  const reactRoot = new ElementStub("root");
-  reactRoot.parentElement = body;
-  body.children = [reactRoot];
-  const stop = iniciarPreferenciasGlobais();
-  mutation([{ addedNodes: [portal, reactRoot] }]);
-  assert.equal(portal.dataset.appPortalRoot, "true");
-  assert.equal(reactRoot.dataset.appPortalRoot, undefined);
-  stop();
+test('a single global observer includes new portals and leaves the React root unscaled', () => {
+  const portal = new ElementoStub();
+  portal.parentElement = corpo;
+  const reactRaiz = new ElementoStub('root');
+  reactRaiz.parentElement = corpo;
+  corpo.children = [reactRaiz];
+  const parar = iniciarPreferenciasGlobais();
+  alteracao([{ addedNodes: [portal, reactRaiz] }]);
+  assert.equal(portal.dataset.appPortalRoot, 'true');
+  assert.equal(reactRaiz.dataset.appPortalRoot, undefined);
+  parar();
 });
-test("corrupt settings cannot set nonfinite scale or invalid weight/spacing", () => {
-  const prefs = normalizarLeitura({
+test('corrupt settings cannot set nonfinite scale or invalid weight/spacing', () => {
+  const preferencias = normalizarLeitura({
     tamanhoTexto: Infinity,
+    tamanhoBotoes: Infinity,
     pesoTexto: -9,
     espacoLinhas: 99,
   });
-  assert.equal(prefs.tamanhoTexto, 110);
-  assert.equal(prefs.pesoTexto, 400);
-  assert.equal(prefs.espacoLinhas, 18);
+  assert.equal(preferencias.tamanhoTexto, 110);
+  assert.equal(preferencias.tamanhoBotoes, 100);
+  assert.equal(normalizarLeitura({ tamanhoBotoes: 30 }).tamanhoBotoes, 80);
+  assert.equal(normalizarLeitura({ tamanhoBotoes: 300 }).tamanhoBotoes, 150);
+  assert.equal(preferencias.pesoTexto, 400);
+  assert.equal(preferencias.espacoLinhas, 18);
 });

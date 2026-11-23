@@ -1,4 +1,4 @@
--- Mantém os dados pessoais e o cargo em uma única gravação administrativa.
+-- Mantem os dados pessoais e o cargo em uma unica gravacao administrativa.
 begin;
 
 grant select (id_funcionario, auth_user_id, cargo, perfil_acesso)

@@ -1,5 +1,5 @@
 -- Exige justificativa sempre que uma OS entra no estado cancelada.
--- O backend define app.order_note na mesma transação da troca de status.
+-- O backend define app.order_note na mesma transacao da troca de status.
 create or replace function app_private.require_cancellation_reason()
 returns trigger language plpgsql security invoker set search_path = '' as $$
 begin

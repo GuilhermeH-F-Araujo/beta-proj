@@ -1,135 +1,2045 @@
-import {useUsuarioAdmin} from '../components/RotaProtegida';
-import ConteudoCarregando from '../components/ConteudoCarregando';
-import Skeleton from '../components/Skeleton';
-import {buscarCompartilhado,salvarCompartilhado} from '../services/dadosCompartilhados';
-import {atualizarCatalogoCompartilhado} from '../services/catalogoServicos';
-import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
-import {limparRascunho} from '../services/rascunhos';
-import {useDadosVivos} from '../hooks/useDadosVivos';
-import {pode} from '../services/acessoConta';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import CartaoIndicador from '../components/CartaoIndicador';
+import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
+import { useCartaoVisivel } from '../hooks/useCartoesPagina';
+import { useAtalhoPagina } from '../hooks/useAtalhoPagina';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
-import { Icon } from '../components/MenuAdmin';
-import SeletorPeriodo, { type DateRange } from '../components/SeletorPeriodo';
+import { useNavigate } from 'react-router-dom';
+import ConteudoCarregando from '../components/ConteudoCarregando';
+import { Icone } from '../components/MenuAdmin';
+import { correspondeBusca } from '../utils/buscaAproximada';
 import '../components/modal-acoes-ordem.css';
-import { buscarOpcoesMecanicos } from '../services/funcionarios';
-import { lerCatalogoServicos, observarCatalogoServicos } from '../services/catalogoServicos';
-import { ErroRequisicaoApi, logout } from '../services/apiAutenticacao';
+import { useUsuarioAdministrador } from '../components/RotaProtegida';
+import SeletorPeriodo, { type DadosIntervalo } from '../components/SeletorPeriodo';
+import { useDadosVivos } from '../hooks/useDadosVivos';
+import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
+import { pode } from '../services/acessoConta';
+import {
+  buscarAgendamentos,
+  buscarOpcoesAgendamento,
+  excluirAgendamento,
+  salvarAgendamento,
+  type ItemAgendamento,
+  type OpcoesAgendamento,
+} from '../services/agendamentos';
+import {
+  atualizarCatalogoCompartilhado,
+  lerCatalogoServicos,
+  observarCatalogoServicos,
+} from '../services/catalogoServicos';
+import { limparRascunho } from '../services/rascunhos';
 import './agendamentos.css';
 
-type StatusAgenda='Confirmado'|'Pendente'|'Concluído'|'Cancelado';
-type Agendamento={id:number;cliente:string;telefone:string;moto:string;placa:string;servico:string;status:StatusAgenda;data:string;hora:string;mecanico:string;duracao:string;observacoes:string};
-const STORAGE_KEY='estacao-motos-agendamentos-v1';
-const APPOINTMENT_DRAFT_KEY='estacao-motos-agendamento-rascunho-servico-v1';
-const NovoUsuario=lazy(()=>import('../components/ModalNovoUsuario'));
-const nomes=['João Silva','Maria Oliveira','Pedro Lima','Fernanda Costa','Lucas Ferreira','Rafael Souza','Ana Martins','Bruno Costa','Camila Santos','Diego Rocha','Marcos Almeida','Julia Ribeiro','Paulo Nunes','Beatriz Lopes','Caio Mendes','Patricia Araujo','Eduardo Barros','Larissa Gomes','Renato Dias','Sofia Carvalho','Mateus Freitas','Daniela Reis','Vitor Campos','Isabela Moura'];
-const motos=['Honda CG160 Fan','Yamaha Fazer 250','Honda NXR 160 Bros','Yamaha MT-03','Honda Biz 125','Suzuki Yes 125','Kawasaki Ninja 400','Honda CB 500F','Honda PCX 160','Yamaha Factor 150'];
-const placas=['ABC1D23','KLM4N56','JKL3M78','QWE9R50','TYU6I12','POI7U34','ASD8F56','FGH9J78'];
-const SERVICO_PERSONALIZADO='Personalizar serviço';
-const iniciais:Agendamento[]=[
-  {id:258,cliente:'João Silva',telefone:'(11) 99999-9999',moto:motos[0],placa:placas[0],servico:'Revisão Geral',status:'Confirmado',data:'2026-06-27',hora:'09:00',mecanico:'Marcos',duracao:'1 hora',observacoes:''},
-  {id:257,cliente:'Maria Oliveira',telefone:'(11) 98888-8888',moto:motos[1],placa:placas[1],servico:'Troca de Óleo',status:'Pendente',data:'2026-06-27',hora:'11:00',mecanico:'Rafael',duracao:'1 hora',observacoes:''},
-  {id:256,cliente:'Pedro Lima',telefone:'(11) 97777-7777',moto:motos[2],placa:placas[2],servico:'Freios',status:'Confirmado',data:'2026-06-28',hora:'13:30',mecanico:'Marcos',duracao:'2 horas',observacoes:''},
-  {id:255,cliente:'Fernanda Costa',telefone:'(11) 96666-6666',moto:motos[3],placa:placas[3],servico:'Revisão Geral',status:'Confirmado',data:'2026-06-29',hora:'14:00',mecanico:'Rafael',duracao:'1 hora',observacoes:''},
-  {id:254,cliente:'Lucas Ferreira',telefone:'(11) 95555-5555',moto:motos[4],placa:placas[4],servico:'Elétrica',status:'Cancelado',data:'2026-06-29',hora:'16:00',mecanico:'Marcos',duracao:'1 hora',observacoes:''},
-  {id:253,cliente:'Rafael Souza',telefone:'(11) 94444-4444',moto:motos[5],placa:placas[5],servico:'Diagnóstico',status:'Pendente',data:'2026-06-30',hora:'09:30',mecanico:'Rafael',duracao:'1 hora',observacoes:''},
-  {id:252,cliente:'Ana Martins',telefone:'(11) 93333-3333',moto:motos[6],placa:placas[6],servico:'Troca de Pneu',status:'Confirmado',data:'2026-06-30',hora:'15:00',mecanico:'Marcos',duracao:'1 hora',observacoes:''},
-  {id:251,cliente:'Bruno Costa',telefone:'(11) 92222-2222',moto:motos[7],placa:placas[7],servico:'Revisão Geral',status:'Confirmado',data:'2026-07-01',hora:'10:30',mecanico:'Rafael',duracao:'1 hora',observacoes:''},
-];
-function seedAgenda():Agendamento[]{
-  const extra=Array.from({length:24},(_,i)=>{const ix=i%nomes.length,day=String(2+Math.floor(i/2)).padStart(2,'0');return{id:250-i,cliente:nomes[ix],telefone:`(11) 9${String(876543210-i*71).slice(0,4)}-${String(9876-i*37).slice(0,4)}`,moto:motos[(i+1)%motos.length],placa:`${['ABC','DEF','GHI','JKL','MNO','PQR'][i%6]}${i+1}X${i+3}${i+5}`,servico:['Revisão Geral','Troca de Óleo','Freios','Elétrica'][i%4],status:(i<7?'Confirmado':i<13?'Pendente':i<20?'Concluído':'Cancelado') as StatusAgenda,data:`2026-07-${day}`,hora:`${String(8+(i%9)).padStart(2,'0')}:${i%2?'30':'00'}`,mecanico:i%2?'Rafael':'Marcos',duracao:i%3?'1 hora':'2 horas',observacoes:''};});
-  return [...iniciais,...extra];
+type SituacaoAgenda = 'Confirmado' | 'Pendente' | 'Concluído' | 'Cancelado';
+type Agendamento = ItemAgendamento;
+const CHAVE_RASCUNHO_AGENDAMENTO = 'estacao-motos-agendamento-rascunho-servico';
+const NovoUsuario = lazy(() => import('../components/ModalNovoUsuario'));
+const SERVICO_PERSONALIZADO = 'Personalizar serviço';
+function dadosRotulo(valor: string) {
+  const [outroItem, mesAtual, dadosAtual] = valor.split('-');
+  return `${dadosAtual}/${mesAtual}/${outroItem}`;
 }
-function readAgenda(){try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){const parsed=JSON.parse(raw);if(Array.isArray(parsed))return parsed.filter((item:Agendamento)=>item.id>1000000) as Agendamento[];}}catch{/* usa dados iniciais */}return [];}
-function dateLabel(value:string){const [y,m,d]=value.split('-');return `${d}/${m}/${y}`;}
-function toInputDate(d:Date){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-function initials(value:string){return value.split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();}
-function StatusDropdown({value,onChange}:{value:string;onChange:(value:string)=>void}){
-  const [open,setOpen]=useState(false);const root=useRef<HTMLDivElement>(null);
-  const options=[{label:'Todos',tone:'todos'},...(['Confirmado','Pendente','Concluído','Cancelado'] as StatusAgenda[]).map(label=>({label,tone:label.toLowerCase().replace('í','i')}))];
-  useEffect(()=>{if(!open)return;const close=(event:PointerEvent)=>{if(event.target instanceof Node&&!root.current?.contains(event.target))setOpen(false);};const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpen(false);};document.addEventListener('pointerdown',close);document.addEventListener('keydown',key);return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',key);};},[open]);
-  const tone=value==='Todos'?'todos':value.toLowerCase().replace('í','i');
-  return <div className="appointment-status-filter" ref={root}><span className="appointment-filter-caption">Status</span><button type="button" className="appointment-status-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span className={`appointment-filter-dot ${tone}`}/><span>{value==='Todos'?'Todos':value}</span><Icon name="chevron" size={13}/></button>{open&&<div className="appointment-status-menu" role="listbox" aria-label="Filtrar por status">{options.map(option=><button key={option.label} type="button" role="option" aria-selected={value===option.label} className={value===option.label?'selected':''} onClick={()=>{onChange(option.label);setOpen(false);}}><span className={`appointment-filter-dot ${option.tone}`}/><span>{option.label==='Todos'?'Todos os status':option.label}</span>{value===option.label&&<Icon name="check" size={14}/>}</button>)}</div>}</div>;
+function destinoEntradaDados(dadosAtual: Date) {
+  return `${dadosAtual.getFullYear()}-${String(dadosAtual.getMonth() + 1).padStart(2, '0')}-${String(dadosAtual.getDate()).padStart(2, '0')}`;
 }
-type AppointmentChoice={value:string;description?:string;icon:string};
-function ChoiceIcon({name,size=15}:{name:string;size?:number}){return /^https:\/\//i.test(name)?<img className="appointment-choice-external-icon" src={name} width={size} height={size} alt="" loading="lazy"/>:<Icon name={name} size={size}/>;}
-function AppointmentDropdown({id,value,placeholder,options,onChange,ariaLabel,emptyMessage='Nenhuma opção disponível no momento.'}:{id:string;value:string;placeholder:string;options:AppointmentChoice[];onChange:(value:string)=>void;ariaLabel:string;emptyMessage?:string}){
-  const [open,setOpen]=useState(false);const root=useRef<HTMLDivElement>(null),menuId=`${id}-options`,selected=options.find(option=>option.value===value);
-  useEffect(()=>{if(!open)return;const outside=(event:PointerEvent)=>{if(event.target instanceof Node&&!root.current?.contains(event.target))setOpen(false);};const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpen(false);};document.addEventListener('pointerdown',outside);document.addEventListener('keydown',key);return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',key);};},[open]);
-  return <div className={`appointment-choice${open?' is-open':''}`} ref={root}><button id={id} type="button" className="appointment-choice-trigger" role="combobox" aria-label={ariaLabel} aria-controls={menuId} aria-expanded={open} aria-haspopup="listbox" onClick={()=>setOpen(v=>!v)} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();setOpen(true);}}}><span className={`appointment-choice-icon${selected?' selected':''}`}><ChoiceIcon name={selected?.icon??options[0]?.icon??'check'} size={15}/></span><span className={`appointment-choice-value${selected?'':' placeholder'}`}>{selected?.value??placeholder}</span><Icon name="chevron" size={14}/></button>{open&&<div className="appointment-choice-menu" id={menuId} role="listbox" aria-label={ariaLabel}>{options.length?options.map(option=><button key={option.value} type="button" role="option" aria-selected={value===option.value} className={`appointment-choice-option${value===option.value?' selected':''}`} onClick={()=>{onChange(option.value);setOpen(false);}}><span className="appointment-choice-option-icon"><ChoiceIcon name={option.icon} size={16}/></span><span className="appointment-choice-option-copy"><strong>{option.value}</strong>{option.description&&<small>{option.description}</small>}</span>{value===option.value&&<Icon name="check" size={15}/>}</button>):<p className="appointment-choice-empty">{emptyMessage}</p>}</div>}</div>;
+function iniciaisLocal(valor: string) {
+  return valor
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((textoAtual) => textoAtual[0])
+    .join('')
+    .toUpperCase();
 }
-function PaginaNovoAgendamento({value,onClose,onSave,onGoServices,clients,phoneByClient,mechanics,mechanicsLoading,mechanicsError,onRetryMechanics,serviceCatalogOptions,saving}:{value?:Agendamento;onClose:()=>void;onSave:(item:Agendamento)=>void;onGoServices:(draft:Agendamento)=>void;clients:string[];phoneByClient:Record<string,string>;mechanics:AppointmentChoice[];mechanicsLoading:boolean;mechanicsError:string;onRetryMechanics:()=>void;serviceCatalogOptions:AppointmentChoice[];saving:boolean}){
-  const [cliente,setCliente]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'cliente',value?.cliente??''),[telefone,setTelefone]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'telefone',value?.telefone??''),[moto,setMoto]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'moto',value?.moto??''),[servico,setServico]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'servico',value?.servico??''),[data,setData]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'data',value?.data??toInputDate(new Date())),[hora,setHora]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'hora',value?.hora??'09:00'),[timeOpen,setTimeOpen]=useState(false),[clockHour,setClockHour]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'clockHour',9),[clockMinute,setClockMinute]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'clockMinute',0),[clockPeriod,setClockPeriod]=useEstadoRascunho<'AM'|'PM'>(`agenda-${value?.id??'novo'}`,'clockPeriod','AM'),[clockPart,setClockPart]=useEstadoRascunho<'hour'|'minute'>(`agenda-${value?.id??'novo'}`,'clockPart','hour'),[manualTime,setManualTime]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'manualTime',value?.hora??'09:00'),[mecanico,setMecanico]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'mecanico',value?.mecanico??''),[duracao,setDuracao]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'duracao',value?.duracao??'1 hora'),[observacoes,setObservacoes]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'observacoes',value?.observacoes??''),[placa,setPlaca]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'placa',value?.placa??''),[userOpen,setUserOpen]=useState(false),[durationOpen,setDurationOpen]=useState(false),[durationHours,setDurationHours]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'durationHours',''),[durationMinutes,setDurationMinutes]=useEstadoRascunho(`agenda-${value?.id??'novo'}`,'durationMinutes',''),[clientOpen,setClientOpen]=useState(false),[validation,setValidation]=useState('');
-  const clientRoot=useRef<HTMLDivElement>(null),clientOptions=clients.filter(name=>`${name} ${phoneByClient[name]??''}`.toLowerCase().includes(cliente.toLowerCase())).slice(0,6);
-  useEffect(()=>{if(!clientOpen)return;const outside=(event:PointerEvent)=>{if(event.target instanceof Node&&!clientRoot.current?.contains(event.target))setClientOpen(false);};const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setClientOpen(false);};document.addEventListener('pointerdown',outside);document.addEventListener('keydown',key);return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',key);};},[clientOpen]);
-  const savedServiceOption=servico&&!serviceCatalogOptions.some(option=>option.value===servico)?[{value:servico,description:'Serviço salvo neste agendamento',icon:'wrench'}]:[];
-  const serviceOptions=[...serviceCatalogOptions,...savedServiceOption,{value:SERVICO_PERSONALIZADO,description:'Cadastre um novo serviço na tela de Serviços',icon:'pencil'}];
-  const standardDurations=['30 minutos','1 hora','1 hora e 30 minutos','2 horas','3 horas'];
-  const savedDurationOption=duracao&&!standardDurations.includes(duracao)&&!/^\d+\s*(h|hora)/i.test(duracao)?[{value:duracao,description:'Duração deste agendamento',icon:'clock'}]:[];
-  const durationOptions=[...standardDurations.map(value=>({value,description:'Tempo reservado na agenda',icon:'clock'})),...savedDurationOption,{value:'Personalizar',description:'Defina horas e minutos',icon:'clock'}];
-  const dialHours=Array.from({length:12},(_,index)=>index+1);
-  const dialMinutes=Array.from({length:12},(_,index)=>index*5);
-  function openCustomDuration(){const h=duracao.match(/(\d+)\s*(?:h|hora)/i)?.[1]??'';const m=duracao.match(/(\d+)\s*(?:minuto|min)/i)?.[1]??'';setDurationHours(h);setDurationMinutes(m);setDurationOpen(true);}
-  function saveCustomDuration(){const h=Math.min(24,Math.max(0,Number(durationHours)||0)),m=Math.min(59,Math.max(0,Number(durationMinutes)||0));if(!h&&!m)return;setDuracao([h?`${h} ${h===1?'hora':'horas'}`:'',m?`${m} ${m===1?'minuto':'minutos'}`:''].filter(Boolean).join(' e '));setDurationOpen(false);}
-  function formatDialTime(hour=clockHour,minute=clockMinute,period=clockPeriod){const hour24=(hour%12)+(period==='PM'?12:0);return `${String(hour24).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;}
-  function openTimePicker(){const [h,m]=hora.split(':').map(Number),hour24=Number.isFinite(h)?h:9,minute=Number.isFinite(m)?m:0;setClockHour(hour24%12||12);setClockMinute(minute);setClockPeriod(hour24>=12?'PM':'AM');setClockPart('hour');setManualTime(hora||'09:00');setTimeOpen(true);}
-  function chooseClockHour(hour:number){setClockHour(hour);setClockPart('minute');setManualTime(formatDialTime(hour,clockMinute,clockPeriod));}
-  function chooseClockMinute(minute:number){setClockMinute(minute);setManualTime(formatDialTime(clockHour,minute,clockPeriod));}
-  function chooseClockPeriod(period:'AM'|'PM'){setClockPeriod(period);setManualTime(formatDialTime(clockHour,clockMinute,period));}
-  function editManualTime(raw:string){const next=raw.replace(/[^\d:]/g,'').slice(0,5);setManualTime(next);const match=next.match(/^(\d{2}):(\d{2})$/);if(!match)return;const h=Number(match[1]),m=Number(match[2]);if(h>23||m>59)return;setClockHour(h%12||12);setClockMinute(m);setClockPeriod(h>=12?'PM':'AM');}
-  function selectClockPoint(event:MouseEvent<HTMLDivElement>){const rect=event.currentTarget.getBoundingClientRect(),dx=event.clientX-(rect.left+rect.width/2),dy=event.clientY-(rect.top+rect.height/2),angle=(Math.atan2(dx,-dy)+Math.PI*2)%(Math.PI*2);if(clockPart==='hour'){const value=Math.round(angle/(Math.PI/6))%12;chooseClockHour(value||12);}else chooseClockMinute(Math.round(angle/(Math.PI/30))%60);}
-  const manualTimeValid=/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(manualTime);
-  function confirmTime(){if(!manualTimeValid)return;setHora(manualTime);setTimeOpen(false);}
-  useEffect(()=>{if(!durationOpen)return;const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setDurationOpen(false);};document.addEventListener('keydown',key);return()=>document.removeEventListener('keydown',key);},[durationOpen]);
-  useEffect(()=>{if(!timeOpen)return;const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setTimeOpen(false);};document.addEventListener('keydown',key);return()=>document.removeEventListener('keydown',key);},[timeOpen]);
-  function submit(e:FormEvent){e.preventDefault();if(!cliente.trim()||!moto||!servico.trim()||!mecanico||!mechanics.some(option=>option.value===mecanico)){setValidation('Confira cliente, motocicleta, serviço e mecânico da equipe para continuar.');return;}setValidation('');onSave({id:value?.id&&value.id>0?value.id:Date.now(),cliente:cliente.trim(),telefone,moto,placa,servico:servico.trim(),status:value?.status??'Confirmado',data,hora,mecanico,duracao,observacoes});}
-  function goToServices(){onGoServices({id:value?.id??-1,cliente:cliente.trim(),telefone,moto,placa,servico:'',status:value?.status??'Confirmado',data,hora,mecanico,duracao,observacoes});}
-  return <>{!userOpen&&!durationOpen&&!timeOpen&&<div className="appointment-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><form className="appointment-modal" role="dialog" aria-modal="true" aria-labelledby="appointment-modal-title" onSubmit={submit}>
-    <header className="appointment-modal-head"><div className="appointment-modal-title-icon"><Icon name="calendar" size={23}/></div><div><h2 id="appointment-modal-title">{value?.id&&value.id>0?'Editar agendamento':'Novo agendamento'}</h2><p>Preencha os dados para agendar um serviço.</p></div><button type="button" className="appointment-close" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17}/></button></header>
-    <div className="appointment-form-content"><div className="appointment-field appointment-field-client"><label htmlFor="ap-client">Cliente</label><div className="appointment-client-row"><div className="appointment-search-control" ref={clientRoot}><Icon name="search" size={15}/><input id="ap-client" autoComplete="off" required placeholder="Buscar cliente por nome ou telefone..." value={cliente} onFocus={()=>setClientOpen(true)} onChange={e=>{const n=e.target.value;setCliente(n);setClientOpen(true);if(phoneByClient[n])setTelefone(phoneByClient[n]);}}/><Icon name="chevron" size={14}/>{clientOpen&&<div className="appointment-client-suggestions" role="listbox" aria-label="Clientes cadastrados">{clientOptions.length?clientOptions.map(name=><button key={name} type="button" role="option" aria-selected={cliente===name} onPointerDown={event=>event.preventDefault()} onClick={()=>{setCliente(name);setTelefone(phoneByClient[name]??'');setClientOpen(false);}}><span className="appointment-client-avatar">{initials(name)}</span><span><strong>{name}</strong><small>{phoneByClient[name]||'Cliente cadastrado'}</small></span>{cliente===name&&<Icon name="check" size={14}/>}</button>):<p>{cliente?'Nenhum cliente com esse nome ou telefone.':'Digite para localizar um cliente cadastrado.'}</p>}</div>}</div><button type="button" className="appointment-new-client-button" onClick={()=>setUserOpen(true)}><Icon name="plus" size={14}/><span>Novo cliente</span></button></div></div>
-      <div className="appointment-fields-grid"><div className="appointment-field"><label htmlFor="ap-moto">Motocicleta</label><AppointmentDropdown id="ap-moto" ariaLabel="Motocicleta" value={moto} placeholder="Selecione uma motocicleta" options={motos.map((value,index)=>({value,description:`Placa ${placas[index%placas.length]}`,icon:'bike'}))} onChange={selected=>{setMoto(selected);setPlaca(placas[Math.max(0,motos.indexOf(selected))%placas.length]??'');setValidation('');}}/></div><div className="appointment-field"><label htmlFor="ap-service">Serviço</label><AppointmentDropdown id="ap-service" ariaLabel="Serviço" value={servico} placeholder="Selecione o serviço" options={serviceOptions} onChange={selected=>{if(selected===SERVICO_PERSONALIZADO){goToServices();return;}setServico(selected);setValidation('');}}/></div>
-      <div className="appointment-field"><label htmlFor="ap-date">Data</label><div className="appointment-input-icon"><input id="ap-date" type="date" required value={data} onChange={e=>setData(e.target.value)}/><Icon name="calendar" size={15}/></div></div><div className="appointment-field"><label>Horário</label><button type="button" className="appointment-time-trigger" aria-haspopup="dialog" onClick={openTimePicker}><Icon name="clock" size={15}/><span>{hora}</span><Icon name="chevron" size={13}/></button></div>
-      <div className="appointment-field"><label htmlFor="ap-mechanic">Mecânico responsável</label><AppointmentDropdown id="ap-mechanic" ariaLabel="Mecânico responsável" value={mecanico} placeholder={mechanicsLoading?'Carregando equipe…':mechanicsError?'Não foi possível carregar':'Selecione o mecânico'} options={mechanics} emptyMessage={mechanicsError||'Nenhum mecânico ativo cadastrado. Cadastre um em Funcionários.'} onChange={selected=>{setMecanico(selected);setValidation('');}}/>{mechanicsError&&<button type="button" className="appointment-retry-mechanics" onClick={onRetryMechanics}>Tentar carregar novamente</button>}</div><div className="appointment-field"><label htmlFor="ap-duration">Duração estimada</label><AppointmentDropdown id="ap-duration" ariaLabel="Duração estimada" value={duracao} placeholder="Selecione a duração" options={durationOptions} onChange={selected=>{if(selected==='Personalizar')openCustomDuration();else setDuracao(selected);}}/></div></div>
-      <div className="appointment-field appointment-observations"><label htmlFor="ap-notes">Observações</label><textarea id="ap-notes" maxLength={300} rows={3} placeholder="Adicione informações importantes sobre o serviço..." value={observacoes} onChange={e=>setObservacoes(e.target.value)}/><span>{observacoes.length}/300</span></div>
-    </div>{validation&&<p className="appointment-form-error" role="alert"><Icon name="info" size={14}/>{validation}</p>}<footer className="appointment-modal-footer"><p><Icon name="info" size={15}/>O agendamento poderá ser alterado posteriormente.</p><div><button type="button" className="appointment-cancel" onClick={onClose}>Cancelar</button><button type="submit" className="appointment-confirm" disabled={saving}><Icon name="calendar" size={15}/>{value?'Salvar alterações':'Confirmar agendamento'}</button></div></footer>
-  </form></div>}{userOpen&&<Suspense fallback={null}><NovoUsuario initialRole="Cliente" replaceBackground onClose={()=>setUserOpen(false)} onCreated={user=>{if(user){setCliente(user.name);setTelefone(user.phone);}}}/></Suspense>}{durationOpen&&createPortal(<div className="appointment-duration-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setDurationOpen(false);}}><section className="appointment-duration-modal" role="dialog" aria-modal="true" aria-labelledby="appointment-duration-title"><header><span><Icon name="clock" size={20}/></span><div><h3 id="appointment-duration-title">Definir tempo personalizado</h3><p>Informe quanto tempo reservar para este atendimento.</p></div><button type="button" aria-label="Fechar" onClick={()=>setDurationOpen(false)}><Icon name="close" size={17}/></button></header><div className="appointment-duration-fields"><label><span>Horas</span><div><input autoFocus type="number" min="0" max="24" step="1" inputMode="numeric" placeholder="0" value={durationHours} onChange={event=>setDurationHours(event.target.value)}/><small>h</small></div></label><b>:</b><label><span>Minutos</span><div><input type="number" min="0" max="59" step="5" inputMode="numeric" placeholder="00" value={durationMinutes} onChange={event=>setDurationMinutes(event.target.value)}/><small>min</small></div></label></div><div className="appointment-duration-preview"><Icon name="clock" size={16}/><span>Duração estimada</span><strong>{Number(durationHours)||Number(durationMinutes)?[Number(durationHours)?`${Number(durationHours)}h`:'',Number(durationMinutes)?`${Number(durationMinutes)}min`:''].filter(Boolean).join(' '):'Defina horas e minutos'}</strong></div><footer><button type="button" className="appointment-cancel" onClick={()=>setDurationOpen(false)}>Cancelar</button><button type="button" className="appointment-confirm" disabled={!Number(durationHours)&&!Number(durationMinutes)} onClick={saveCustomDuration}><Icon name="check" size={15}/>Aplicar duração</button></footer></section></div>,document.body)}{timeOpen&&createPortal(<div className="appointment-time-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setTimeOpen(false);}}><section className="appointment-time-modal appointment-clock-modal" role="dialog" aria-modal="true" aria-labelledby="appointment-time-title"><header><span><Icon name="clock" size={20}/></span><div><h3 id="appointment-time-title">Escolher horário</h3><p>Ajuste os ponteiros ou digite o horário.</p></div><button type="button" aria-label="Fechar" onClick={()=>setTimeOpen(false)}><Icon name="close" size={17}/></button></header><div className="appointment-clock-summary"><div><small>HORÁRIO SELECIONADO</small><strong>{manualTime||'--:--'}</strong></div><label><span>Digitar horário <small>(24h)</small></span><input aria-label="Digite o horário no formato de 24 horas" inputMode="numeric" maxLength={5} placeholder="09:30" value={manualTime} onChange={event=>editManualTime(event.target.value)}/></label></div><div className="appointment-clock-layout"><div className={`appointment-clock-face picking-${clockPart}`} aria-label="Mostrador de relógio" role="group" onClick={selectClockPoint}><span className="appointment-clock-face-inner"/>{Array.from({length:60},(_,index)=><i key={`tick-${index}`} className={`appointment-clock-tick${index%5===0?' major':''}`} style={{transform:`translate(-50%,-50%) rotate(${index*6}deg) translateY(-111px)`}}/>)}{(clockPart==='hour'?dialHours:dialMinutes).map((value,index)=>{const angle=(clockPart==='hour'?value%12:index)*30*Math.PI/180,radius=85,x=Math.sin(angle)*radius,y=-Math.cos(angle)*radius,label=clockPart==='hour'?String(value):String(value).padStart(2,'0'),selected=clockPart==='hour'?clockHour===value:Math.round(clockMinute/5)*5%60===value;return <button type="button" key={value} aria-label={clockPart==='hour'?`Selecionar ${value} horas`:`Selecionar ${value} minutos`} aria-pressed={selected} className={`appointment-clock-number${selected?' selected':''}${selected&&clockPart==='hour'?' active':''}`} style={{left:`calc(50% + ${x}px)`,top:`calc(50% + ${y}px)`}} onClick={event=>{event.stopPropagation();clockPart==='hour'?chooseClockHour(value):chooseClockMinute(value);}}>{label}</button>;})}<span className={`appointment-clock-hand hour${clockPart==='hour'?' active':''}`} style={{transform:`translate(-50%,-100%) rotate(${(clockHour%12)*30+clockMinute*.5}deg)`}}/><span className={`appointment-clock-hand minute${clockPart==='minute'?' active':''}`} style={{transform:`translate(-50%,-100%) rotate(${clockMinute*6}deg)`}}/><span className="appointment-clock-center"/></div><aside className="appointment-clock-controls"><p>Selecione no relógio</p><div className="appointment-clock-tabs" role="tablist" aria-label="Selecionar hora ou minuto"><button type="button" role="tab" aria-selected={clockPart==='hour'} className={clockPart==='hour'?'active':''} onClick={()=>setClockPart('hour')}>Hora</button><button type="button" role="tab" aria-selected={clockPart==='minute'} className={clockPart==='minute'?'active':''} onClick={()=>setClockPart('minute')}>Minutos</button></div><span className="appointment-clock-period-label">Período do dia</span><div className="appointment-clock-period"><button type="button" aria-pressed={clockPeriod==='AM'} className={clockPeriod==='AM'?'active':''} onClick={()=>chooseClockPeriod('AM')}>AM <small>manhã</small></button><button type="button" aria-pressed={clockPeriod==='PM'} className={clockPeriod==='PM'?'active':''} onClick={()=>chooseClockPeriod('PM')}>PM <small>tarde/noite</small></button></div><small className="appointment-clock-tip">Toque em um número para mover o ponteiro.</small></aside></div>{manualTime&&manualTime.length>=5&&!manualTimeValid&&<p className="appointment-clock-error" role="alert">Digite um horário válido entre 00:00 e 23:59.</p>}<footer><button type="button" className="appointment-cancel" onClick={()=>setTimeOpen(false)}>Cancelar</button><button type="button" className="appointment-confirm" disabled={!manualTimeValid} onClick={confirmTime}><Icon name="check" size={15}/>Confirmar horário</button></footer></section></div>,document.body)}</>;
+function SituacaoSeletor({
+  value: valor,
+  onChange: aoAlterar,
+}: {
+  value: string;
+  onChange: (valor: string) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const raiz = useRef<HTMLDivElement>(null);
+  const opcoes = [
+    { label: 'Todos', tone: 'todos' },
+    ...(['Confirmado', 'Pendente', 'Concluído', 'Cancelado'] as SituacaoAgenda[]).map((rotulo) => ({
+      label: rotulo,
+      tone: rotulo.toLowerCase().replace('í', 'i'),
+    })),
+  ];
+  useEffect(() => {
+    if (!aberto) return;
+    const fechar = (evento: PointerEvent) => {
+      if (evento.target instanceof Node && !raiz.current?.contains(evento.target)) setAberto(false);
+    };
+    const chave = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setAberto(false);
+    };
+    document.addEventListener('pointerdown', fechar);
+    document.addEventListener('keydown', chave);
+    return () => {
+      document.removeEventListener('pointerdown', fechar);
+      document.removeEventListener('keydown', chave);
+    };
+  }, [aberto]);
+  const tom = valor === 'Todos' ? 'todos' : valor.toLowerCase().replace('í', 'i');
+  return (
+    <div className="appointment-status-filter" ref={raiz}>
+      <span className="appointment-filter-caption">Status</span>
+      <button
+        type="button"
+        className="appointment-status-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={aberto}
+        onClick={() => setAberto((valorAtual) => !valorAtual)}
+      >
+        <span className={`appointment-filter-dot ${tom}`} />
+        <span>{valor === 'Todos' ? 'Todos' : valor}</span>
+        <Icone name="chevron" size={13} />
+      </button>
+      {aberto && (
+        <div className="appointment-status-menu" role="listbox" aria-label="Filtrar por status">
+          {opcoes.map((opcao) => (
+            <button
+              key={opcao.label}
+              type="button"
+              role="option"
+              aria-selected={valor === opcao.label}
+              className={valor === opcao.label ? 'selected' : ''}
+              onClick={() => {
+                aoAlterar(opcao.label);
+                setAberto(false);
+              }}
+            >
+              <span className={`appointment-filter-dot ${opcao.tone}`} />
+              <span>{opcao.label === 'Todos' ? 'Todos os status' : opcao.label}</span>
+              {valor === opcao.label && <Icone name="check" size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
-function Calendario({month,items,selected,onMonth,onSelect}:{month:Date;items:Agendamento[];selected:string;onMonth:(d:Date)=>void;onSelect:(d:string)=>void}){
-  const first=new Date(month.getFullYear(),month.getMonth(),1),start=first.getDay(),days=new Date(month.getFullYear(),month.getMonth()+1,0).getDate(),prev=new Date(month.getFullYear(),month.getMonth(),0).getDate();
-  const cells=Array.from({length:42},(_,i)=>{const n=i-start+1,inside=n>0&&n<=days,date=new Date(month.getFullYear(),month.getMonth(),n);return{date:toInputDate(date),day:inside?n:n<=0?prev+n:n-days,inside};});
-  const monthName=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(month);
-  const statusCounts={confirmed:items.filter(a=>a.status==='Confirmado').length,pending:items.filter(a=>a.status==='Pendente').length,done:items.filter(a=>a.status==='Concluído').length,cancelled:items.filter(a=>a.status==='Cancelado').length};
-  return <section className="appointment-side-card appointment-calendar"><header><Icon name="calendar" size={17}/><h2>Calendário</h2></header><div className="calendar-month"><button aria-label="Mês anterior" onClick={()=>onMonth(new Date(month.getFullYear(),month.getMonth()-1,1))}><Icon name="left" size={14}/></button><strong>{monthName}</strong><button aria-label="Próximo mês" onClick={()=>onMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}><Icon name="right" size={14}/></button></div><div className="calendar-grid">{['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(x=><span className="calendar-weekday" key={x}>{x}</span>)}{cells.map((cell,i)=>{const count=items.filter(a=>a.data===cell.date);return <button type="button" key={`${cell.date}-${i}`} aria-pressed={selected===cell.date} className={`${cell.inside?'':'outside'}${selected===cell.date?' selected':''}`} onClick={()=>onSelect(selected===cell.date?'':cell.date)}>{cell.day}{count.length>0&&<i className={`dot-${count[0].status.toLowerCase().replace('í','i')}`}/>}</button>;})}</div><div className="calendar-legend"><span><i className="confirmed"/>{statusCounts.confirmed}</span><span><i className="pending"/>{statusCounts.pending}</span><span><i className="done"/>{statusCounts.done}</span><span><i className="cancelled"/>{statusCounts.cancelled}</span></div></section>;
+type OpcaoAgendamento = { value: string; label?: string; description?: string; icon: string };
+function EscolhaIcone({ name: nomeLocal, size: tamanho = 15 }: { name: string; size?: number }) {
+  return /^https:\/\//i.test(nomeLocal) ? (
+    <img
+      className="appointment-choice-external-icon"
+      src={nomeLocal}
+      width={tamanho}
+      height={tamanho}
+      alt=""
+      loading="lazy"
+    />
+  ) : (
+    <Icone name={nomeLocal} size={tamanho} />
+  );
 }
-export default function Agendamentos(){
-  const usuario=useUsuarioAdmin();
-  const navigate=useNavigate(),[name,setName]=useState('Administrador'),access=!!usuario,[accessError,setAccessError]=useState(''),[retry,setRetry]=useState(0),[collapsed,setCollapsed]=useState(false),[appointments,setAppointments]=useState<Agendamento[]>(readAgenda),[search,setSearch]=useState(''),[status,setStatus]=useState('Todos'),[range,setRange]=useState<DateRange|null>(null),[activeCard,setActiveCard]=useState<string|null>(null),[selectedDate,setSelectedDate]=useState(''),[month,setMonth]=useState(new Date()),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(8),[modal,setModal]=useState<Agendamento|undefined>(),[modalOpen,setModalOpen]=useState(false),[view,setView]=useState<Agendamento>(),[deleting,setDeleting]=useState<Agendamento>(),[toast,setToast]=useState(''),[mechanics,setMechanics]=useState<AppointmentChoice[]>([]),[mechanicsLoading,setMechanicsLoading]=useState(false),[mechanicsError,setMechanicsError]=useState(''),[mechanicsRetry,setMechanicsRetry]=useState(0),[serviceCatalog,setServiceCatalog]=useState(lerCatalogoServicos);
-  
-  useEffect(()=>observarCatalogoServicos(()=>setServiceCatalog(lerCatalogoServicos())),[]);
-  useEffect(()=>{if(!access)return;const controller=new AbortController(),mes=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit'}).format(new Date()).slice(0,7);setMechanicsLoading(true);setMechanicsError('');buscarOpcoesMecanicos(controller.signal).then(({itens})=>{if(controller.signal.aborted)return;const nomesReais=itens.filter(item=>item.cargo.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()==='mecanico'&&!['desligado','afastado','ferias'].includes(item.situacao)).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')).map(item=>({value:item.nome,description:item.departamento||'Mecânico da equipe',icon:'staff'}));setMechanics(nomesReais);}).catch(error=>{if(!controller.signal.aborted)setMechanicsError(error instanceof Error?error.message:'Não foi possível carregar os mecânicos.');}).finally(()=>{if(!controller.signal.aborted)setMechanicsLoading(false);});return()=>controller.abort();},[access,mechanicsRetry]);
-  useEffect(()=>{try{const raw=sessionStorage.getItem(APPOINTMENT_DRAFT_KEY);if(!raw)return;const draft=JSON.parse(raw) as Agendamento;sessionStorage.removeItem(APPOINTMENT_DRAFT_KEY);if(draft&&typeof draft==='object'){setModal(draft);setModalOpen(true);}}catch{sessionStorage.removeItem(APPOINTMENT_DRAFT_KEY);}},[]);
-  const [carregando,setCarregando]=useState(true),[salvando,setSalvando]=useState(false),[erroCarga,setErroCarga]=useState('');
-  async function atualizarAgenda(){const remote=await buscarCompartilhado<Agendamento[]>('agenda');const list=remote??(pode('agendamentos','criar')?await salvarCompartilhado('agenda',readAgenda()):[]);return list}
-  useEffect(()=>{if(!access)return;let active=true;Promise.all([atualizarAgenda(),atualizarCatalogoCompartilhado()]).then(([data,catalog])=>{if(active){setAppointments(data);setServiceCatalog(catalog)}}).catch(e=>{if(active)setErroCarga(e.message)}).finally(()=>{if(active)setCarregando(false)});return()=>{active=false}},[access]);
-  useDadosVivos(async valido=>{try{const data=await atualizarAgenda();const opts=await buscarOpcoesMecanicos();const catalog=await atualizarCatalogoCompartilhado();if(valido()){setAppointments(data);setServiceCatalog(catalog);setMechanics(opts.itens.filter(p=>p.cargo==='Mecânico'&&!['desligado','afastado','ferias'].includes(p.situacao)).map(p=>({value:p.nome,description:p.departamento||'Mecânico da equipe',icon:'staff'})));setErroCarga('')}}catch(e){if(valido())setErroCarga(e instanceof Error?e.message:'Não foi possível atualizar a agenda.')}},access&&!carregando&&!salvando);
-  async function persistirAgenda(list:Agendamento[]){if(salvando)return false;setSalvando(true);try{const saved=await salvarCompartilhado('agenda',list);setAppointments(saved);localStorage.setItem(STORAGE_KEY,JSON.stringify(saved));return true}catch(e){setErroCarga(e instanceof Error?e.message:'Não foi possível salvar.');await atualizarAgenda().then(setAppointments).catch(()=>{});return false}finally{setSalvando(false)}}
-  async function excluirAgenda(id:number){if(await persistirAgenda(appointments.filter(item=>item.id!==id))){setDeleting(undefined);setToast('Agendamento removido.')}}
-  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),3200);return()=>clearTimeout(t);},[toast]);
-  const counts=useMemo(()=>({total:appointments.length,confirmed:appointments.filter(a=>a.status==='Confirmado').length,pending:appointments.filter(a=>a.status==='Pendente').length,cancelled:appointments.filter(a=>a.status==='Cancelado').length,done:appointments.filter(a=>a.status==='Concluído').length}),[appointments]);
-  const filtered=useMemo(()=>appointments.filter(a=>{const d=new Date(`${a.data}T12:00:00`),base=new Date((selectedDate||toInputDate(new Date()))+'T00:00:00'),end=new Date(base);end.setDate(end.getDate()+30);const withinPeriod=range?a.data>=range.from&&a.data<=range.to:d>=base&&d<=end;return(status==='Todos'||a.status===status)&&(!selectedDate||a.data===selectedDate)&&withinPeriod&&(`${a.cliente} ${a.moto} ${a.placa} ${a.telefone}`.toLowerCase().includes(search.toLowerCase()));}),[appointments,status,selectedDate,search,range,month]);
-  const pages=Math.max(1,Math.ceil(filtered.length/pageSize)),current=Math.min(page,pages),rows=filtered.slice((current-1)*pageSize,current*pageSize),clients=[...new Set(appointments.map(a=>a.cliente))],phoneByClient=Object.fromEntries(appointments.map(a=>[a.cliente,a.telefone]));
-  const serviceCatalogOptions=serviceCatalog.servicos.filter(item=>item.ativo).map(item=>({value:item.nome,description:`${serviceCatalog.categorias.find(category=>category.id===item.categoriaId)?.nome??'Serviço'} · ${item.duracao}`,icon:item.icone}));
-  async function save(item:Agendamento){if(!pode("agendamentos",appointments.some(a=>a.id===item.id)?"editar":"criar")){setToast("Seu cargo não permite salvar este agendamento.");return;}if(!await persistirAgenda(appointments.some(a=>a.id===item.id)?appointments.map(a=>a.id===item.id?item:a):[item,...appointments]))return;setModalOpen(false);setModal(undefined);limparRascunho(`agenda-${modal?.id??'novo'}`);setToast('Agendamento salvo com sucesso.');}
-  function startEdit(item:Agendamento){if(!pode("agendamentos","editar")){setToast("Seu cargo não permite editar agendamentos.");return;}setView(undefined);setModal(item);setModalOpen(true);}
-  async function onLogout(){try{await logout();navigate('/login',{replace:true});}catch{setToast('Não foi possível sair agora.');}}
-  const cardData=[{title:'Total de agendamentos',value:counts.total,subtitle:'Todos os agendamentos',tone:'red',icon:'calendar',filter:'Todos'},{title:'Confirmados',value:counts.confirmed,subtitle:`${counts.total?Math.round(counts.confirmed/counts.total*100):0}% do total`,tone:'green',icon:'check',filter:'Confirmado'},{title:'Pendentes',value:counts.pending,subtitle:`${counts.total?Math.round(counts.pending/counts.total*100):0}% do total`,tone:'amber',icon:'clock',filter:'Pendente'},{title:'Cancelados',value:counts.cancelled,subtitle:`${counts.total?Math.round(counts.cancelled/counts.total*100):0}% do total`,tone:'blue',icon:'calendar',filter:'Cancelado'},{title:'Concluídos',value:counts.done,subtitle:`${counts.total?Math.round(counts.done/counts.total*100):0}% do total`,tone:'gray',icon:'calendar',filter:'Concluído'}];
-  if(!access)return <div className="appointments-auth">{accessError?<div><p>{accessError}</p><button onClick={()=>{setAccessError('');setRetry(x=>x+1);}}>Tentar novamente</button></div>:<Skeleton/>}</div>;
-  return <div className="appointments-viewport"><div className="appointments-main"><main className="appointments-content"><ConteudoCarregando carregando={carregando}>{erroCarga&&<p role="alert">{erroCarga}<button onClick={()=>atualizarAgenda().then(data=>{setAppointments(data);setErroCarga('')}).catch(e=>setErroCarga(e.message))}>Tentar novamente</button></p>}<header className="appointments-page-title"><div><h1>Agendamentos</h1><p>Gerencie os agendamentos de serviços da sua oficina.</p></div><button className="appointment-new-button" onClick={()=>{setModal(undefined);setModalOpen(true);}}><Icon name="plus" size={15}/>Novo agendamento</button></header>
-    <div className="appointment-metrics">{cardData.map(c=><button type="button" key={c.title} className={`appointment-metric-card${activeCard===c.title?' is-selected':''}`} aria-pressed={activeCard===c.title} onClick={()=>{setStatus(c.filter);setActiveCard(c.title);setSelectedDate('');setPage(1);}}><span className={`metric-symbol ${c.tone}`}><Icon name={c.icon} size={18}/></span><div><strong>{c.value}</strong><p>{c.title}</p><small className={c.tone}>{c.subtitle}</small></div></button>)}</div>
-    <div className="appointments-layout"><section className="appointment-list-card"><div className="appointment-filters"><label className="appointment-list-search"><Icon name="search" size={16}/><input placeholder="Buscar por cliente, moto ou placa..." value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/></label><StatusDropdown value={status} onChange={value=>{setStatus(value);setActiveCard(null);setPage(1);}}/><div className="appointment-period-filter"><span className="appointment-filter-caption">Período</span><SeletorPeriodo mode="range" value={range} placeholder="Próximos 30 dias" label="Selecionar período de agendamentos" onApply={value=>{setRange(value);setSelectedDate('');setPage(1);}}/></div><button type="button" className="appointment-clear" onClick={()=>{setStatus('Todos');setActiveCard(null);setRange(null);setSelectedDate('');setSearch('');setPage(1);}}><Icon name="close" size={14}/>Limpar filtros</button></div>
-    {selectedDate&&<button className="selected-date-filter" onClick={()=>setSelectedDate('')}>Filtrando por {dateLabel(selectedDate)} <Icon name="close" size={12}/></button>}
-    <div className="appointment-table-wrap"><table className="appointment-table"><thead><tr><th>Data e Hora</th><th>Cliente / Contato</th><th>Motocicleta</th><th>Serviço</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(a=><tr key={a.id}><td><strong><Icon name="calendar" size={13}/>{dateLabel(a.data)}</strong><small>{a.hora}</small></td><td><strong>{a.cliente}</strong><small>{a.telefone} <Icon name="whatsapp" size={12}/></small></td><td><strong>{a.moto}</strong><small>PLACA {a.placa}</small></td><td>{a.servico}</td><td><span className={`appointment-status ${a.status.toLowerCase().replace('í','i')}`}><i/>{a.status}</span></td><td><div className="appointment-row-actions"><button aria-label={`Ver ${a.cliente}`} onClick={()=>setView(a)}><Icon name="eye" size={15}/></button><button aria-label={`Editar ${a.cliente}`} onClick={()=>startEdit(a)}><Icon name="pencil" size={15}/></button><button aria-label={`Excluir agendamento de ${a.cliente}`} className="delete" onClick={()=>setDeleting(a)}><Icon name="trash" size={15}/></button></div></td></tr>)}{!rows.length&&<tr><td className="appointment-empty" colSpan={6}>Nenhum agendamento encontrado para os filtros selecionados.</td></tr>}</tbody></table></div><footer className="appointment-pagination"><span>Mostrando {filtered.length?(current-1)*pageSize+1:0} a {Math.min(current*pageSize,filtered.length)} de {filtered.length} agendamentos</span><nav aria-label="Paginação de agendamentos"><button disabled={current===1} onClick={()=>setPage(x=>Math.max(1,x-1))}><Icon name="left" size={13}/></button>{Array.from({length:pages},(_,i)=>i+1).map(n=><button key={n} className={n===current?'active':''} onClick={()=>setPage(n)}>{n}</button>)}<button disabled={current===pages} onClick={()=>setPage(x=>Math.min(pages,x+1))}><Icon name="right" size={13}/></button></nav><select aria-label="Resultados por página" value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setPage(1);}}><option value={8}>8 por página</option><option value={16}>16 por página</option></select></footer></section>
-    <aside className="appointments-sidebar"><Calendario month={month} items={appointments} selected={selectedDate||toInputDate(new Date())} onMonth={setMonth} onSelect={setSelectedDate}/><section className="appointment-side-card appointment-status-summary"><h2>Status dos agendamentos</h2>{[['Confirmado',counts.confirmed,'Agendamento confirmado pelo cliente.'],['Pendente',counts.pending,'Aguardando confirmação do cliente.'],['Concluído',counts.done,'Serviço realizado com sucesso.'],['Cancelado',counts.cancelled,'Agendamento cancelado.']].map(([s,n,d])=><div key={String(s)}><i className={`summary-dot ${String(s).toLowerCase().replace('í','i')}`}/><span><strong>{s}</strong><small>{d}</small></span><b>{n}</b></div>)}</section></aside></div>
-    </ConteudoCarregando></main></div>{toast&&<div className="appointment-toast" role="status">{toast}</div>}{modalOpen&&<PaginaNovoAgendamento value={modal} clients={clients} phoneByClient={phoneByClient} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={()=>setMechanicsRetry(value=>value+1)} serviceCatalogOptions={serviceCatalogOptions} saving={salvando} onClose={()=>{setModalOpen(false);setModal(undefined);}} onGoServices={draft=>{try{sessionStorage.setItem(APPOINTMENT_DRAFT_KEY,JSON.stringify(draft));}catch{/* Se o armazenamento estiver bloqueado, a navegação continua normalmente. */}setModalOpen(false);setModal(undefined);navigate('/servicos');}} onSave={save} />}{view&&<div className="appointment-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setView(undefined);}}><section className="appointment-view-modal appointment-view-redesigned" role="dialog" aria-modal="true" aria-labelledby="appointment-view-title"><header className="appointment-view-header"><span><Icon name="calendar" size={19}/></span><div><small>ESTAÇÃO MOTOS · AGENDAMENTOS</small><strong id="appointment-view-title">Detalhes do atendimento</strong></div><button type="button" aria-label="Fechar" onClick={()=>setView(undefined)}><Icon name="close" size={17}/></button></header><div className="appointment-view-content"><div className="appointment-view-person"><span className="appointment-view-avatar">{initials(view.cliente)}</span><div className="appointment-view-person-copy"><small>CLIENTE</small><h2>{view.cliente}</h2><div><span><Icon name="bike" size={14}/>{view.moto}</span><b>PLACA {view.placa}</b></div></div><span className={`appointment-status ${view.status.toLowerCase().replace('í','i')}`}><i/>{view.status}</span></div><div className="appointment-view-grid"><article><span><Icon name="calendar" size={16}/></span><div><small>Data e horário</small><strong>{dateLabel(view.data)} · {view.hora}</strong></div></article><article><span><Icon name="wrench" size={16}/></span><div><small>Serviço</small><strong>{view.servico}</strong></div></article><article><span><Icon name="staff" size={16}/></span><div><small>Mecânico responsável</small><strong>{view.mecanico}</strong></div></article><article><span><Icon name="clock" size={16}/></span><div><small>Duração estimada</small><strong>{view.duracao||'Não informada'}</strong></div></article><article className="appointment-view-contact"><span><Icon name="whatsapp" size={16}/></span><div><small>Contato do cliente</small><strong>{view.telefone||'Não informado'}</strong></div></article></div>{view.observacoes&&<div className="appointment-view-notes"><small>OBSERVAÇÕES</small><p>{view.observacoes}</p></div>}<footer className="appointment-view-footer"><button type="button" className="appointment-cancel" onClick={()=>setView(undefined)}>Fechar</button><button type="button" className="appointment-confirm" onClick={()=>startEdit(view)}><Icon name="pencil" size={14}/>Editar agendamento</button></footer></div></section></div>}{deleting&&<div className="oa-confirm-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setDeleting(undefined);}}><section className="oa-confirm" role="alertdialog" aria-modal="true" aria-labelledby="appointment-delete-title"><span className="oa-confirm-icon destructive"><Icon name="trash" size={19}/></span><div><button type="button" className="oa-confirm-close" aria-label="Fechar" onClick={()=>setDeleting(undefined)}><Icon name="close" size={15}/></button><h3 id="appointment-delete-title">Excluir agendamento?</h3><p>Tem certeza que deseja excluir o agendamento de <strong>{deleting.cliente}</strong> para <strong>{deleting.servico}</strong>, em {dateLabel(deleting.data)} às {deleting.hora}?</p><p>Esta ação é permanente e não poderá ser desfeita.</p><div className="oa-confirm-actions"><button type="button" onClick={()=>setDeleting(undefined)}>Manter agendamento</button><button type="button" className="danger" onClick={()=>{if(!pode("agendamentos","excluir")){setToast("Seu cargo não permite excluir agendamentos.");return;}void excluirAgenda(deleting.id);}}><Icon name="trash" size={13}/>Excluir agendamento</button></div></div></section></div>}</div>;
+function SeletorAgendamento({
+  id,
+  value: valor,
+  placeholder: textoAjuda,
+  options: opcoes,
+  onChange: aoAlterar,
+  ariaLabel: ariaRotulo,
+  emptyMessage: vazioMensagem = 'Nenhuma opção disponível no momento.',
+}: {
+  id: string;
+  value: string;
+  placeholder: string;
+  options: OpcaoAgendamento[];
+  onChange: (valor: string) => void;
+  ariaLabel: string;
+  emptyMessage?: string;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const raiz = useRef<HTMLDivElement>(null);
+  const menuId = `${id}-options`;
+  const selecionado = opcoes.find((opcao) => opcao.value === valor);
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (evento: PointerEvent) => {
+      if (evento.target instanceof Node && !raiz.current?.contains(evento.target)) setAberto(false);
+    };
+    const chave = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setAberto(false);
+    };
+    document.addEventListener('pointerdown', fora);
+    document.addEventListener('keydown', chave);
+    return () => {
+      document.removeEventListener('pointerdown', fora);
+      document.removeEventListener('keydown', chave);
+    };
+  }, [aberto]);
+  return (
+    <div className={`appointment-choice${aberto ? ' is-open' : ''}`} ref={raiz}>
+      <button
+        id={id}
+        type="button"
+        className="appointment-choice-trigger"
+        role="combobox"
+        aria-label={ariaRotulo}
+        aria-controls={menuId}
+        aria-expanded={aberto}
+        aria-haspopup="listbox"
+        onClick={() => setAberto((valorAtual) => !valorAtual)}
+        onKeyDown={(evento) => {
+          if (evento.key === 'ArrowDown') {
+            evento.preventDefault();
+            setAberto(true);
+          }
+        }}
+      >
+        <span className={`appointment-choice-icon${selecionado ? ' selected' : ''}`}>
+          <EscolhaIcone name={selecionado?.icon ?? opcoes[0]?.icon ?? 'check'} size={15} />
+        </span>
+        <span className={`appointment-choice-value${selecionado ? '' : ' placeholder'}`}>
+          {selecionado?.label ?? selecionado?.value ?? textoAjuda}
+        </span>
+        <Icone name="chevron" size={14} />
+      </button>
+      {aberto && (
+        <div className="appointment-choice-menu" id={menuId} role="listbox" aria-label={ariaRotulo}>
+          {opcoes.length ? (
+            opcoes.map((opcao) => (
+              <button
+                key={opcao.value}
+                type="button"
+                role="option"
+                aria-selected={valor === opcao.value}
+                className={`appointment-choice-option${valor === opcao.value ? ' selected' : ''}`}
+                onClick={() => {
+                  aoAlterar(opcao.value);
+                  setAberto(false);
+                }}
+              >
+                <span className="appointment-choice-option-icon">
+                  <EscolhaIcone name={opcao.icon} size={16} />
+                </span>
+                <span className="appointment-choice-option-copy">
+                  <strong>{opcao.label ?? opcao.value}</strong>
+                  {opcao.description && <small>{opcao.description}</small>}
+                </span>
+                {valor === opcao.value && <Icone name="check" size={15} />}
+              </button>
+            ))
+          ) : (
+            <p className="appointment-choice-empty">{vazioMensagem}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+function PaginaNovoAgendamento({
+  value: valor,
+  onClose: aoFechar,
+  onSave: aoSalvar,
+  onGoServices: aoIrServicos,
+  clients: clientes,
+  mechanics: mecanicos,
+  mechanicsLoading: carregandoMecanicos,
+  mechanicsError: mecanicosErro,
+  onRetryMechanics: aoTentarNovamenteMecanicos,
+  onRefreshOptions: aoAtualizarOpcoes,
+  onMechanicsError: aoErroMecanicos,
+  serviceCatalogOptions: opcoesCatalogoServicos,
+  saving: salvandoLocal,
+}: {
+  value?: Agendamento;
+  onClose: () => void;
+  onSave: (item: Agendamento) => void;
+  onGoServices: (rascunho: Agendamento) => void;
+  clients: OpcoesAgendamento['clientes'];
+  mechanics: OpcaoAgendamento[];
+  mechanicsLoading: boolean;
+  mechanicsError: string;
+  onRetryMechanics: () => void;
+  onRefreshOptions: () => Promise<OpcoesAgendamento>;
+  onMechanicsError: (mensagem: string) => void;
+  serviceCatalogOptions: OpcaoAgendamento[];
+  saving: boolean;
+}) {
+  const [cliente, setCliente] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'cliente',
+    valor?.cliente ?? '',
+  );
+  const [clienteId, setClienteId] = useState<number | null>(valor?.clienteId ?? null);
+  const [telefone, setTelefone] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'telefone',
+    valor?.telefone ?? '',
+  );
+  const [moto, setMoto] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'moto',
+    valor?.moto ?? '',
+  );
+  const [motoId, setMotoId] = useState<number | null>(valor?.motoId ?? null);
+  const [servico, setServico] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'servico',
+    valor?.servico ?? '',
+  );
+  const [dados, setDados] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'data',
+    valor?.data ?? destinoEntradaDados(new Date()),
+  );
+  const [hora, setHora] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'hora',
+    valor?.hora ?? '09:00',
+  );
+  const [horarioAberto, setHorarioAberto] = useState(false);
+  const [relogioHora, setRelogioHora] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'clockHour',
+    9,
+  );
+  const [relogioMinuto, setRelogioMinuto] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'clockMinute',
+    0,
+  );
+  const [relogioPeriodo, setRelogioPeriodo] = useEstadoRascunho<'AM' | 'PM'>(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'clockPeriod',
+    'AM',
+  );
+  const [relogioParte, setRelogioParte] = useEstadoRascunho<'hour' | 'minute'>(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'clockPart',
+    'hour',
+  );
+  const [manualHorario, setManualHorario] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'manualTime',
+    valor?.hora ?? '09:00',
+  );
+  const [mecanico, setMecanico] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'mecanico',
+    valor?.mecanicoId ? String(valor.mecanicoId) : '',
+  );
+  const [duracao, setDuracao] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'duracao',
+    valor?.duracao ?? '1 hora',
+  );
+  const [observacoes, setObservacoes] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'observacoes',
+    valor?.observacoes ?? '',
+  );
+  const [placa, setPlaca] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'placa',
+    valor?.placa ?? '',
+  );
+  const [useResultadoAtualAberto, setUsuarioAberto] = useState(false);
+  const [duracaoAberto, setDuracaoAberto] = useState(false);
+  const [duracaoHoras, setDuracaoHoras] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'durationHours',
+    '',
+  );
+  const [duracaoMinutos, setDuracaoMinutos] = useEstadoRascunho(
+    `agenda-${valor?.id ?? 'novo'}`,
+    'durationMinutes',
+    '',
+  );
+  const [clienteAberto, setClienteAberto] = useState(false);
+  const [validacao, setValidacao] = useState('');
+  const clienteRaiz = useRef<HTMLDivElement>(null);
+  const clienteOpcoes = clientes
+    .filter((item) => correspondeBusca(cliente, `${item.nome} ${item.telefone ?? ''}`))
+    .slice(0, 6);
+  useEffect(() => {
+    if (!clienteAberto) return;
+    const fora = (evento: PointerEvent) => {
+      if (evento.target instanceof Node && !clienteRaiz.current?.contains(evento.target))
+        setClienteAberto(false);
+    };
+    const chave = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setClienteAberto(false);
+    };
+    document.addEventListener('pointerdown', fora);
+    document.addEventListener('keydown', chave);
+    return () => {
+      document.removeEventListener('pointerdown', fora);
+      document.removeEventListener('keydown', chave);
+    };
+  }, [clienteAberto]);
+  const clienteSelecionado = clientes.find((item) => item.id === clienteId);
+  const motosDisponiveis = clienteSelecionado?.motos ?? [];
+  const salvoServicoOpcao =
+    servico && !opcoesCatalogoServicos.some((opcao) => opcao.value === servico)
+      ? [{ value: servico, description: 'Serviço salvo neste agendamento', icon: 'wrench' }]
+      : [];
+  const servicoOpcoes = [
+    ...opcoesCatalogoServicos,
+    ...salvoServicoOpcao,
+    {
+      value: SERVICO_PERSONALIZADO,
+      description: 'Cadastre um novo serviço na tela de Serviços',
+      icon: 'pencil',
+    },
+  ];
+  const standardDuracoes = ['30 minutos', '1 hora', '1 hora e 30 minutos', '2 horas', '3 horas'];
+  const salvoDuracaoOpcao =
+    duracao && !standardDuracoes.includes(duracao) && !/^\d+\s*(h|hora)/i.test(duracao)
+      ? [{ value: duracao, description: 'Duração deste agendamento', icon: 'clock' }]
+      : [];
+  const duracaoOpcoes = [
+    ...standardDuracoes.map((valor) => ({
+      value: valor,
+      description: 'Tempo reservado na agenda',
+      icon: 'clock',
+    })),
+    ...salvoDuracaoOpcao,
+    { value: 'Personalizar', description: 'Defina horas e minutos', icon: 'clock' },
+  ];
+  const dialHoras = Array.from({ length: 12 }, (_, indiceLocal) => indiceLocal + 1);
+  const dialMinutos = Array.from({ length: 12 }, (_, indiceLocal) => indiceLocal * 5);
+  function abertoCustomDuracao() {
+    const alturaAtual = duracao.match(/(\d+)\s*(?:h|hora)/i)?.[1] ?? '';
+    const mesAtual = duracao.match(/(\d+)\s*(?:minuto|min)/i)?.[1] ?? '';
+    setDuracaoHoras(alturaAtual);
+    setDuracaoMinutos(mesAtual);
+    setDuracaoAberto(true);
+  }
+  function salvarCustomDuracao() {
+    const alturaAtual = Math.min(24, Math.max(0, Number(duracaoHoras) || 0));
+    const mesAtual = Math.min(59, Math.max(0, Number(duracaoMinutos) || 0));
+    if (!alturaAtual && !mesAtual) return;
+    setDuracao(
+      [
+        alturaAtual ? `${alturaAtual} ${alturaAtual === 1 ? 'hora' : 'horas'}` : '',
+        mesAtual ? `${mesAtual} ${mesAtual === 1 ? 'minuto' : 'minutos'}` : '',
+      ]
+        .filter(Boolean)
+        .join(' e '),
+    );
+    setDuracaoAberto(false);
+  }
+  function formatarDialHorario(
+    horaLocal = relogioHora,
+    minuto = relogioMinuto,
+    periodo = relogioPeriodo,
+  ) {
+    const horaCompleta = (horaLocal % 12) + (periodo === 'PM' ? 12 : 0);
+    return `${String(horaCompleta).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
+  }
+  function abertoHorarioSeletor() {
+    const [alturaAtual, mesAtual] = hora.split(':').map(Number);
+    const horaCompleta = Number.isFinite(alturaAtual) ? alturaAtual : 9;
+    const minuto = Number.isFinite(mesAtual) ? mesAtual : 0;
+    setRelogioHora(horaCompleta % 12 || 12);
+    setRelogioMinuto(minuto);
+    setRelogioPeriodo(horaCompleta >= 12 ? 'PM' : 'AM');
+    setRelogioParte('hour');
+    setManualHorario(hora || '09:00');
+    setHorarioAberto(true);
+  }
+  function escolherRelogioHora(horaLocal: number) {
+    setRelogioHora(horaLocal);
+    setRelogioParte('minute');
+    setManualHorario(formatarDialHorario(horaLocal, relogioMinuto, relogioPeriodo));
+  }
+  function escolherRelogioMinuto(minuto: number) {
+    setRelogioMinuto(minuto);
+    setManualHorario(formatarDialHorario(relogioHora, minuto, relogioPeriodo));
+  }
+  function escolherRelogioPeriodo(periodo: 'AM' | 'PM') {
+    setRelogioPeriodo(periodo);
+    setManualHorario(formatarDialHorario(relogioHora, relogioMinuto, periodo));
+  }
+  function editarManualHorario(bruto: string) {
+    const continuar = bruto.replace(/[^\d:]/g, '').slice(0, 5);
+    setManualHorario(continuar);
+    const correspondencia = continuar.match(/^(\d{2}):(\d{2})$/);
+    if (!correspondencia) return;
+    const alturaAtual = Number(correspondencia[1]);
+    const mesAtual = Number(correspondencia[2]);
+    if (alturaAtual > 23 || mesAtual > 59) return;
+    setRelogioHora(alturaAtual % 12 || 12);
+    setRelogioMinuto(mesAtual);
+    setRelogioPeriodo(alturaAtual >= 12 ? 'PM' : 'AM');
+  }
+  function selecionarPontoRelogio(evento: MouseEvent<HTMLDivElement>) {
+    const retangulo = evento.currentTarget.getBoundingClientRect();
+    const diferencaHorizontal = evento.clientX - (retangulo.left + retangulo.width / 2);
+    const diferencaVertical = evento.clientY - (retangulo.top + retangulo.height / 2);
+    const angulo =
+      (Math.atan2(diferencaHorizontal, -diferencaVertical) + Math.PI * 2) % (Math.PI * 2);
+    if (relogioParte === 'hour') {
+      const valor = Math.round(angulo / (Math.PI / 6)) % 12;
+      escolherRelogioHora(valor || 12);
+    } else escolherRelogioMinuto(Math.round(angulo / (Math.PI / 30)) % 60);
+  }
+  const manualHorarioValido = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(manualHorario);
+  function confirmarHorario() {
+    if (!manualHorarioValido) return;
+    setHora(manualHorario);
+    setHorarioAberto(false);
+  }
+  useEffect(() => {
+    if (!duracaoAberto) return;
+    const chave = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setDuracaoAberto(false);
+    };
+    document.addEventListener('keydown', chave);
+    return () => document.removeEventListener('keydown', chave);
+  }, [duracaoAberto]);
+  useEffect(() => {
+    if (!horarioAberto) return;
+    const chave = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setHorarioAberto(false);
+    };
+    document.addEventListener('keydown', chave);
+    return () => document.removeEventListener('keydown', chave);
+  }, [horarioAberto]);
+  function enviar(eventoRecebido: FormEvent) {
+    eventoRecebido.preventDefault();
+    if (
+      !clienteId ||
+      !motoId ||
+      !servico.trim() ||
+      !mecanico ||
+      !mecanicos.some((opcao) => opcao.value === mecanico)
+    ) {
+      setValidacao('Confira cliente, motocicleta, serviço e mecânico da equipe para continuar.');
+      return;
+    }
+    setValidacao('');
+    aoSalvar({
+      id: valor?.id && valor.id > 0 ? valor.id : 0,
+      clienteId,
+      cliente: cliente.trim(),
+      telefone,
+      motoId,
+      moto,
+      placa,
+      servico: servico.trim(),
+      status: valor?.status ?? 'Confirmado',
+      data: dados,
+      hora,
+      mecanicoId: Number(mecanico),
+      mecanico: mecanicos.find((opcao) => opcao.value === mecanico)?.label ?? mecanico,
+      duracao,
+      observacoes,
+    });
+  }
+  function irParaServicos() {
+    aoIrServicos({
+      id: valor?.id ?? -1,
+      clienteId: clienteId ?? 0,
+      cliente: cliente.trim(),
+      telefone,
+      motoId: motoId ?? 0,
+      moto,
+      placa,
+      servico: '',
+      status: valor?.status ?? 'Confirmado',
+      data: dados,
+      hora,
+      mecanicoId: mecanico ? Number(mecanico) : null,
+      mecanico: mecanicos.find((opcao) => opcao.value === mecanico)?.label ?? mecanico,
+      duracao,
+      observacoes,
+    });
+  }
+  return (
+    <>
+      {!useResultadoAtualAberto && !duracaoAberto && !horarioAberto && (
+        <div
+          className="appointment-overlay"
+          onMouseDown={(eventoRecebido) => {
+            if (eventoRecebido.target === eventoRecebido.currentTarget) aoFechar();
+          }}
+        >
+          <form
+            className="appointment-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="appointment-modal-title"
+            onSubmit={enviar}
+          >
+            <header className="appointment-modal-head">
+              <div className="appointment-modal-title-icon">
+                <Icone name="calendar" size={23} />
+              </div>
+              <div>
+                <h2 id="appointment-modal-title">
+                  {valor?.id && valor.id > 0 ? 'Editar agendamento' : 'Novo agendamento'}
+                </h2>
+                <p>Preencha os dados para agendar um serviço.</p>
+              </div>
+              <button
+                type="button"
+                className="appointment-close"
+                aria-label="Fechar"
+                onClick={aoFechar}
+              >
+                <Icone name="close" size={17} />
+              </button>
+            </header>
+            <div className="appointment-form-content">
+              <div className="appointment-field appointment-field-client">
+                <label htmlFor="ap-client">Cliente</label>
+                <div className="appointment-client-row">
+                  <div className="appointment-search-control" ref={clienteRaiz}>
+                    <Icone name="search" size={15} />
+                    <input
+                      id="ap-client"
+                      autoComplete="off"
+                      required
+                      placeholder="Buscar cliente por nome ou telefone..."
+                      value={cliente}
+                      onFocus={() => setClienteAberto(true)}
+                      onChange={(eventoRecebido) => {
+                        const numero = eventoRecebido.target.value;
+                        setCliente(numero);
+                        setClienteId(null);
+                        setMoto('');
+                        setMotoId(null);
+                        setPlaca('');
+                        setClienteAberto(true);
+                      }}
+                    />
+                    <Icone name="chevron" size={14} />
+                    {clienteAberto && (
+                      <div
+                        className="appointment-client-suggestions"
+                        role="listbox"
+                        aria-label="Clientes cadastrados"
+                      >
+                        {clienteOpcoes.length ? (
+                          clienteOpcoes.map((clienteLocal) => (
+                            <button
+                              key={clienteLocal.id}
+                              type="button"
+                              role="option"
+                              aria-selected={clienteId === clienteLocal.id}
+                              onPointerDown={(evento) => evento.preventDefault()}
+                              onClick={() => {
+                                setCliente(clienteLocal.nome);
+                                setClienteId(clienteLocal.id);
+                                setTelefone(clienteLocal.telefone ?? '');
+                                setMoto('');
+                                setMotoId(null);
+                                setPlaca('');
+                                setClienteAberto(false);
+                              }}
+                            >
+                              <span className="appointment-client-avatar">
+                                {iniciaisLocal(clienteLocal.nome)}
+                              </span>
+                              <span>
+                                <strong>{clienteLocal.nome}</strong>
+                                <small>
+                                  {clienteLocal.telefone || 'Cliente cadastrado'}
+                                </small>
+                              </span>
+                              {clienteId === clienteLocal.id && <Icone name="check" size={14} />}
+                            </button>
+                          ))
+                        ) : (
+                          <p>
+                            {cliente
+                              ? 'Nenhum cliente com esse nome ou telefone.'
+                              : 'Digite para localizar um cliente cadastrado.'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="appointment-new-client-button"
+                    onClick={() => setUsuarioAberto(true)}
+                  >
+                    <Icone name="plus" size={14} />
+                    <span>Novo cliente</span>
+                  </button>
+                </div>
+              </div>
+              <div className="appointment-fields-grid">
+                <div className="appointment-field">
+                  <label htmlFor="ap-moto">Motocicleta</label>
+                  <SeletorAgendamento
+                    id="ap-moto"
+                    ariaLabel="Motocicleta"
+                    value={motoId ? String(motoId) : ''}
+                    placeholder="Selecione uma motocicleta"
+                    options={motosDisponiveis.map((motoLocal) => ({
+                      value: String(motoLocal.id),
+                      label: `${motoLocal.modelo}${motoLocal.placa ? ` · ${motoLocal.placa}` : ''}`,
+                      description: motoLocal.placa ? `Placa ${motoLocal.placa}` : 'Sem placa informada',
+                      icon: 'bike',
+                    }))}
+                    emptyMessage={clienteId ? 'Este cliente não possui moto ativa cadastrada.' : 'Selecione o cliente primeiro.'}
+                    onChange={(selecionado) => {
+                      const motoLocal = motosDisponiveis.find((item) => String(item.id) === selecionado);
+                      if (!motoLocal) return;
+                      setMotoId(motoLocal.id);
+                      setMoto(motoLocal.modelo);
+                      setPlaca(motoLocal.placa ?? '');
+                      setValidacao('');
+                    }}
+                  />
+                </div>
+                <div className="appointment-field">
+                  <label htmlFor="ap-service">Serviço</label>
+                  <SeletorAgendamento
+                    id="ap-service"
+                    ariaLabel="Serviço"
+                    value={servico}
+                    placeholder="Selecione o serviço"
+                    options={servicoOpcoes}
+                    onChange={(selecionado) => {
+                      if (selecionado === SERVICO_PERSONALIZADO) {
+                        irParaServicos();
+                        return;
+                      }
+                      setServico(selecionado);
+                      setValidacao('');
+                    }}
+                  />
+                </div>
+                <div className="appointment-field">
+                  <label htmlFor="ap-date">Data</label>
+                  <div className="appointment-input-icon">
+                    <input
+                      id="ap-date"
+                      type="date"
+                      required
+                      value={dados}
+                      onChange={(eventoRecebido) => setDados(eventoRecebido.target.value)}
+                    />
+                    <Icone name="calendar" size={15} />
+                  </div>
+                </div>
+                <div className="appointment-field">
+                  <label>Horário</label>
+                  <button
+                    type="button"
+                    className="appointment-time-trigger"
+                    aria-haspopup="dialog"
+                    onClick={abertoHorarioSeletor}
+                  >
+                    <Icone name="clock" size={15} />
+                    <span>{hora}</span>
+                    <Icone name="chevron" size={13} />
+                  </button>
+                </div>
+                <div className="appointment-field">
+                  <label htmlFor="ap-mechanic">Mecânico responsável</label>
+                  <SeletorAgendamento
+                    id="ap-mechanic"
+                    ariaLabel="Mecânico responsável"
+                    value={mecanico}
+                    placeholder={
+                      carregandoMecanicos
+                        ? 'Carregando equipe…'
+                        : mecanicosErro
+                          ? 'Não foi possível carregar'
+                          : 'Selecione o mecânico'
+                    }
+                    options={mecanicos}
+                    emptyMessage={
+                      mecanicosErro ||
+                      'Nenhum mecânico ativo cadastrado. Cadastre um em Funcionários.'
+                    }
+                    onChange={(selecionado) => {
+                      setMecanico(selecionado);
+                      setValidacao('');
+                    }}
+                  />
+                  {mecanicosErro && (
+                    <button
+                      type="button"
+                      className="appointment-retry-mechanics"
+                      onClick={aoTentarNovamenteMecanicos}
+                    >
+                      Tentar carregar novamente
+                    </button>
+                  )}
+                </div>
+                <div className="appointment-field">
+                  <label htmlFor="ap-duration">Duração estimada</label>
+                  <SeletorAgendamento
+                    id="ap-duration"
+                    ariaLabel="Duração estimada"
+                    value={duracao}
+                    placeholder="Selecione a duração"
+                    options={duracaoOpcoes}
+                    onChange={(selecionado) => {
+                      if (selecionado === 'Personalizar') abertoCustomDuracao();
+                      else setDuracao(selecionado);
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="appointment-field appointment-observations">
+                <label htmlFor="ap-notes">Observações</label>
+                <textarea
+                  id="ap-notes"
+                  maxLength={300}
+                  rows={3}
+                  placeholder="Adicione informações importantes sobre o serviço..."
+                  value={observacoes}
+                  onChange={(eventoRecebido) => setObservacoes(eventoRecebido.target.value)}
+                />
+                <span>{observacoes.length}/300</span>
+              </div>
+            </div>
+            {validacao && (
+              <p className="appointment-form-error" role="alert">
+                <Icone name="info" size={14} />
+                {validacao}
+              </p>
+            )}
+            <footer className="appointment-modal-footer">
+              <p>
+                <Icone name="info" size={15} />O agendamento poderá ser alterado posteriormente.
+              </p>
+              <div>
+                <button type="button" className="appointment-cancel" onClick={aoFechar}>
+                  Cancelar
+                </button>
+                <button type="submit" className="appointment-confirm" disabled={salvandoLocal}>
+                  <Icone name="calendar" size={15} />
+                  {valor ? 'Salvar alterações' : 'Confirmar agendamento'}
+                </button>
+              </div>
+            </footer>
+          </form>
+        </div>
+      )}
+      {useResultadoAtualAberto && (
+        <Suspense fallback={null}>
+          <NovoUsuario
+            initialRole="Cliente"
+            replaceBackground
+            onClose={() => {
+              setUsuarioAberto(false);
+              void aoAtualizarOpcoes().catch((erro: unknown) =>
+                aoErroMecanicos(erro instanceof Error ? erro.message : 'Não foi possível atualizar os cadastros.'),
+              );
+            }}
+            onCreated={(usuarioLocal) => {
+              if (usuarioLocal) {
+                setCliente(usuarioLocal.name);
+                setTelefone(usuarioLocal.phone);
+                setClienteId(null);
+                void aoAtualizarOpcoes()
+                  .then((opcoes) => {
+                    const clienteNovo = opcoes.clientes.find(
+                      (item) =>
+                        item.id === usuarioLocal.id ||
+                        (item.nome === usuarioLocal.name && item.telefone === usuarioLocal.phone),
+                    );
+                    if (clienteNovo) setClienteId(clienteNovo.id);
+                  })
+                  .catch((erro: unknown) =>
+                    aoErroMecanicos(
+                      erro instanceof Error
+                        ? erro.message
+                        : 'Não foi possível atualizar os cadastros.',
+                    ),
+                  );
+              }
+            }}
+          />
+        </Suspense>
+      )}
+      {duracaoAberto &&
+        createPortal(
+          <div
+            className="appointment-duration-backdrop"
+            onMouseDown={(evento) => {
+              if (evento.target === evento.currentTarget) setDuracaoAberto(false);
+            }}
+          >
+            <section
+              className="appointment-duration-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="appointment-duration-title"
+            >
+              <header>
+                <span>
+                  <Icone name="clock" size={20} />
+                </span>
+                <div>
+                  <h3 id="appointment-duration-title">Definir tempo personalizado</h3>
+                  <p>Informe quanto tempo reservar para este atendimento.</p>
+                </div>
+                <button type="button" aria-label="Fechar" onClick={() => setDuracaoAberto(false)}>
+                  <Icone name="close" size={17} />
+                </button>
+              </header>
+              <div className="appointment-duration-fields">
+                <label>
+                  <span>Horas</span>
+                  <div>
+                    <input
+                      autoFocus
+                      type="number"
+                      min="0"
+                      max="24"
+                      step="1"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={duracaoHoras}
+                      onChange={(evento) => setDuracaoHoras(evento.target.value)}
+                    />
+                    <small>h</small>
+                  </div>
+                </label>
+                <b>:</b>
+                <label>
+                  <span>Minutos</span>
+                  <div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="5"
+                      inputMode="numeric"
+                      placeholder="00"
+                      value={duracaoMinutos}
+                      onChange={(evento) => setDuracaoMinutos(evento.target.value)}
+                    />
+                    <small>min</small>
+                  </div>
+                </label>
+              </div>
+              <div className="appointment-duration-preview">
+                <Icone name="clock" size={16} />
+                <span>Duração estimada</span>
+                <strong>
+                  {Number(duracaoHoras) || Number(duracaoMinutos)
+                    ? [
+                        Number(duracaoHoras) ? `${Number(duracaoHoras)}h` : '',
+                        Number(duracaoMinutos) ? `${Number(duracaoMinutos)}min` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                    : 'Defina horas e minutos'}
+                </strong>
+              </div>
+              <footer>
+                <button
+                  type="button"
+                  className="appointment-cancel"
+                  onClick={() => setDuracaoAberto(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="appointment-confirm"
+                  disabled={!Number(duracaoHoras) && !Number(duracaoMinutos)}
+                  onClick={salvarCustomDuracao}
+                >
+                  <Icone name="check" size={15} />
+                  Aplicar duração
+                </button>
+              </footer>
+            </section>
+          </div>,
+          document.body,
+        )}
+      {horarioAberto &&
+        createPortal(
+          <div
+            className="appointment-time-backdrop"
+            onMouseDown={(evento) => {
+              if (evento.target === evento.currentTarget) setHorarioAberto(false);
+            }}
+          >
+            <section
+              className="appointment-time-modal appointment-clock-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="appointment-time-title"
+            >
+              <header>
+                <span>
+                  <Icone name="clock" size={20} />
+                </span>
+                <div>
+                  <h3 id="appointment-time-title">Escolher horário</h3>
+                  <p>Ajuste os ponteiros ou digite o horário.</p>
+                </div>
+                <button type="button" aria-label="Fechar" onClick={() => setHorarioAberto(false)}>
+                  <Icone name="close" size={17} />
+                </button>
+              </header>
+              <div className="appointment-clock-summary">
+                <div>
+                  <small>HORÁRIO SELECIONADO</small>
+                  <strong>{manualHorario || '--:--'}</strong>
+                </div>
+                <label>
+                  <span>
+                    Digitar horário <small>(24h)</small>
+                  </span>
+                  <input
+                    aria-label="Digite o horário no formato de 24 horas"
+                    inputMode="numeric"
+                    maxLength={5}
+                    placeholder="09:30"
+                    value={manualHorario}
+                    onChange={(evento) => editarManualHorario(evento.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="appointment-clock-layout">
+                <div
+                  className={`appointment-clock-face picking-${relogioParte}`}
+                  aria-label="Mostrador de relógio"
+                  role="group"
+                  onClick={selecionarPontoRelogio}
+                >
+                  <span className="appointment-clock-face-inner" />
+                  {Array.from({ length: 60 }, (_, indiceLocal) => (
+                    <i
+                      key={`tick-${indiceLocal}`}
+                      className={`appointment-clock-tick${indiceLocal % 5 === 0 ? ' major' : ''}`}
+                      style={{
+                        transform: `translate(-50%,-50%) rotate(${indiceLocal * 6}deg) translateY(-111px)`,
+                      }}
+                    />
+                  ))}
+                  {(relogioParte === 'hour' ? dialHoras : dialMinutos).map((valor, indiceLocal) => {
+                    const angulo =
+                      ((relogioParte === 'hour' ? valor % 12 : indiceLocal) * 30 * Math.PI) / 180;
+                    const raio = 85;
+                    const itemAtual = Math.sin(angulo) * raio;
+                    const outroItem = -Math.cos(angulo) * raio;
+                    const rotulo =
+                      relogioParte === 'hour' ? String(valor) : String(valor).padStart(2, '0');
+                    const selecionado =
+                      relogioParte === 'hour'
+                        ? relogioHora === valor
+                        : (Math.round(relogioMinuto / 5) * 5) % 60 === valor;
+                    return (
+                      <button
+                        type="button"
+                        key={valor}
+                        aria-label={
+                          relogioParte === 'hour'
+                            ? `Selecionar ${valor} horas`
+                            : `Selecionar ${valor} minutos`
+                        }
+                        aria-pressed={selecionado}
+                        className={`appointment-clock-number${selecionado ? ' selected' : ''}${selecionado && relogioParte === 'hour' ? ' active' : ''}`}
+                        style={{
+                          left: `calc(50% + ${itemAtual}px)`,
+                          top: `calc(50% + ${outroItem}px)`,
+                        }}
+                        onClick={(evento) => {
+                          evento.stopPropagation();
+                          relogioParte === 'hour'
+                            ? escolherRelogioHora(valor)
+                            : escolherRelogioMinuto(valor);
+                        }}
+                      >
+                        {rotulo}
+                      </button>
+                    );
+                  })}
+                  <span
+                    className={`appointment-clock-hand hour${relogioParte === 'hour' ? ' active' : ''}`}
+                    style={{
+                      transform: `translate(-50%,-100%) rotate(${(relogioHora % 12) * 30 + relogioMinuto * 0.5}deg)`,
+                    }}
+                  />
+                  <span
+                    className={`appointment-clock-hand minute${relogioParte === 'minute' ? ' active' : ''}`}
+                    style={{ transform: `translate(-50%,-100%) rotate(${relogioMinuto * 6}deg)` }}
+                  />
+                  <span className="appointment-clock-center" />
+                </div>
+                <aside className="appointment-clock-controls">
+                  <p>Selecione no relógio</p>
+                  <div
+                    className="appointment-clock-tabs"
+                    role="tablist"
+                    aria-label="Selecionar hora ou minuto"
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={relogioParte === 'hour'}
+                      className={relogioParte === 'hour' ? 'active' : ''}
+                      onClick={() => setRelogioParte('hour')}
+                    >
+                      Hora
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={relogioParte === 'minute'}
+                      className={relogioParte === 'minute' ? 'active' : ''}
+                      onClick={() => setRelogioParte('minute')}
+                    >
+                      Minutos
+                    </button>
+                  </div>
+                  <span className="appointment-clock-period-label">Período do dia</span>
+                  <div className="appointment-clock-period">
+                    <button
+                      type="button"
+                      aria-pressed={relogioPeriodo === 'AM'}
+                      className={relogioPeriodo === 'AM' ? 'active' : ''}
+                      onClick={() => escolherRelogioPeriodo('AM')}
+                    >
+                      AM <small>manhã</small>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={relogioPeriodo === 'PM'}
+                      className={relogioPeriodo === 'PM' ? 'active' : ''}
+                      onClick={() => escolherRelogioPeriodo('PM')}
+                    >
+                      PM <small>tarde/noite</small>
+                    </button>
+                  </div>
+                  <small className="appointment-clock-tip">
+                    Toque em um número para mover o ponteiro.
+                  </small>
+                </aside>
+              </div>
+              {manualHorario && manualHorario.length >= 5 && !manualHorarioValido && (
+                <p className="appointment-clock-error" role="alert">
+                  Digite um horário válido entre 00:00 e 23:59.
+                </p>
+              )}
+              <footer>
+                <button
+                  type="button"
+                  className="appointment-cancel"
+                  onClick={() => setHorarioAberto(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="appointment-confirm"
+                  disabled={!manualHorarioValido}
+                  onClick={confirmarHorario}
+                >
+                  <Icone name="check" size={15} />
+                  Confirmar horário
+                </button>
+              </footer>
+            </section>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+function Calendario({
+  month: mesLocal,
+  items: itensLocal,
+  selected: selecionado,
+  onMonth: aoMudarMes,
+  onSelect: aoSelecionar,
+}: {
+  month: Date;
+  items: Agendamento[];
+  selected: string;
+  onMonth: (dadosAtual: Date) => void;
+  onSelect: (dadosAtual: string) => void;
+}) {
+  const primeiro = new Date(mesLocal.getFullYear(), mesLocal.getMonth(), 1);
+  const inicio = primeiro.getDay();
+  const dias = new Date(mesLocal.getFullYear(), mesLocal.getMonth() + 1, 0).getDate();
+  const anterior = new Date(mesLocal.getFullYear(), mesLocal.getMonth(), 0).getDate();
+  const celulas = Array.from({ length: 42 }, (_, indice) => {
+    const numero = indice - inicio + 1;
+    const dentro = numero > 0 && numero <= dias;
+    const dadosLocal = new Date(mesLocal.getFullYear(), mesLocal.getMonth(), numero);
+    return {
+      date: destinoEntradaDados(dadosLocal),
+      day: dentro ? numero : numero <= 0 ? anterior + numero : numero - dias,
+      inside: dentro,
+    };
+  });
+  const mesNome = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(
+    mesLocal,
+  );
+  const situacaoContagens = {
+    confirmed: itensLocal.filter((primeiroElemento) => primeiroElemento.status === 'Confirmado')
+      .length,
+    pending: itensLocal.filter((primeiroElemento) => primeiroElemento.status === 'Pendente').length,
+    done: itensLocal.filter((primeiroElemento) => primeiroElemento.status === 'Concluído').length,
+    cancelled: itensLocal.filter((primeiroElemento) => primeiroElemento.status === 'Cancelado')
+      .length,
+  };
+  return (
+    <section className="appointment-side-card appointment-calendar">
+      <header>
+        <Icone name="calendar" size={17} />
+        <h2>Calendário</h2>
+      </header>
+      <div className="calendar-month">
+        <button
+          aria-label="Mês anterior"
+          onClick={() => aoMudarMes(new Date(mesLocal.getFullYear(), mesLocal.getMonth() - 1, 1))}
+        >
+          <Icone name="left" size={14} />
+        </button>
+        <strong>{mesNome}</strong>
+        <button
+          aria-label="Próximo mês"
+          onClick={() => aoMudarMes(new Date(mesLocal.getFullYear(), mesLocal.getMonth() + 1, 1))}
+        >
+          <Icone name="right" size={14} />
+        </button>
+      </div>
+      <div className="calendar-grid">
+        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((itemAtual) => (
+          <span className="calendar-weekday" key={itemAtual}>
+            {itemAtual}
+          </span>
+        ))}
+        {celulas.map((celula, indice) => {
+          const quantidade = itensLocal.filter(
+            (primeiroElemento) => primeiroElemento.data === celula.date,
+          );
+          return (
+            <button
+              type="button"
+              key={`${celula.date}-${indice}`}
+              aria-pressed={selecionado === celula.date}
+              className={`${celula.inside ? '' : 'outside'}${selecionado === celula.date ? ' selected' : ''}`}
+              onClick={() => aoSelecionar(selecionado === celula.date ? '' : celula.date)}
+            >
+              {celula.day}
+              {quantidade.length > 0 && (
+                <i className={`dot-${quantidade[0].status.toLowerCase().replace('í', 'i')}`} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div className="calendar-legend">
+        <span>
+          <i className="confirmed" />
+          {situacaoContagens.confirmed}
+        </span>
+        <span>
+          <i className="pending" />
+          {situacaoContagens.pending}
+        </span>
+        <span>
+          <i className="done" />
+          {situacaoContagens.done}
+        </span>
+        <span>
+          <i className="cancelled" />
+          {situacaoContagens.cancelled}
+        </span>
+      </div>
+    </section>
+  );
+}
+export default function Agendamentos() {
+  const exibirCartao = useCartaoVisivel('agendamentos');
+  const usuario = useUsuarioAdministrador();
+  const navegar = useNavigate();
+  const acesso = !!usuario;
+  const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
+  const [clientesOpcoes, setClientesOpcoes] = useState<OpcoesAgendamento['clientes']>([]);
+  const [busca, setBusca] = useState('');
+  usePesquisaPagina(setBusca);
+  const [situacaoLocal, setSituacao] = useState('Todos');
+  const [intervalo, setIntervalo] = useState<DadosIntervalo | null>(null);
+  const [ativoCartao, setAtivoCartao] = useState<string | null>(null);
+  const [selecionadoDados, setSelecionadoDados] = useState('');
+  const [mesLocal, setMes] = useState(new Date());
+  const [pagina, setPagina] = useState(1);
+  const [tamanhoPagina, setPaginaTamanho] = useState(8);
+  const [modal, setModal] = useState<Agendamento | undefined>();
+  const [modalAberto, setModalAberto] = useState(false);
+  useAtalhoPagina({
+    novo: () => {
+      if (pode('agendamentos', 'criar')) {
+        setModal(undefined);
+        setModalAberto(true);
+      }
+    },
+  });
+  const [visualizacao, setVisualizacao] = useState<Agendamento>();
+  const [excluindo, setExcluindo] = useState<Agendamento>();
+  const [avisoTemporario, setAvisoTemporario] = useState('');
+  const [mecanicos, setMecanicos] = useState<OpcaoAgendamento[]>([]);
+  const [carregandoMecanicos, setMecanicosCarregando] = useState(true);
+  const [mecanicosErro, setMecanicosErro] = useState('');
+  const [mecanicosTentarNovamente, setMecanicosTentarNovamente] = useState(0);
+  const [servicoCatalogo, setServicoCatalogo] = useState(lerCatalogoServicos);
+
+  useEffect(() => observarCatalogoServicos(() => setServicoCatalogo(lerCatalogoServicos())), []);
+  useEffect(() => {
+    try {
+      const bruto = sessionStorage.getItem(CHAVE_RASCUNHO_AGENDAMENTO);
+      if (!bruto) return;
+      const rascunho = JSON.parse(bruto) as Agendamento;
+      sessionStorage.removeItem(CHAVE_RASCUNHO_AGENDAMENTO);
+      if (rascunho && typeof rascunho === 'object') {
+        setModal(rascunho);
+        setModalAberto(true);
+      }
+    } catch {
+      sessionStorage.removeItem(CHAVE_RASCUNHO_AGENDAMENTO);
+    }
+  }, []);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [erroCarga, setErroCarga] = useState('');
+  async function atualizarOpcoes() {
+    const opcoes = await buscarOpcoesAgendamento();
+    setClientesOpcoes(opcoes.clientes);
+    setMecanicos(
+      opcoes.mecanicos.map((item) => ({
+        value: String(item.id),
+        label: item.nome,
+        description: 'Mecânico ativo da equipe',
+        icon: 'staff',
+      })),
+    );
+    setMecanicosErro('');
+    setMecanicosCarregando(false);
+    return opcoes;
+  }
+  async function atualizarAgenda() {
+    return buscarAgendamentos();
+  }
+  useEffect(() => {
+    if (!acesso) return;
+    let ativoLocal = true;
+    setMecanicosCarregando(true);
+    setMecanicosErro('');
+    Promise.all([buscarAgendamentos(), buscarOpcoesAgendamento(), atualizarCatalogoCompartilhado()])
+      .then(([dados, opcoes, catalogo]) => {
+        if (ativoLocal) {
+          setAgendamentos(dados);
+          setClientesOpcoes(opcoes.clientes);
+          setMecanicos(
+            opcoes.mecanicos.map((item) => ({
+              value: String(item.id),
+              label: item.nome,
+              description: 'Mecânico ativo da equipe',
+              icon: 'staff',
+            })),
+          );
+          setServicoCatalogo(catalogo);
+          setMecanicosCarregando(false);
+        }
+      })
+      .catch((eventoRecebido) => {
+        if (ativoLocal) {
+          setErroCarga(eventoRecebido.message);
+          setMecanicosErro(eventoRecebido.message);
+          setMecanicosCarregando(false);
+        }
+      })
+      .finally(() => {
+        if (ativoLocal) setCarregando(false);
+      });
+    return () => {
+      ativoLocal = false;
+    };
+  }, [acesso, mecanicosTentarNovamente]);
+  useDadosVivos(
+    async (valido) => {
+      try {
+        const [dados, opcoesLocal, catalogo] = await Promise.all([
+          buscarAgendamentos(),
+          buscarOpcoesAgendamento(),
+          atualizarCatalogoCompartilhado(),
+        ]);
+        if (valido()) {
+          setAgendamentos(dados);
+          setClientesOpcoes(opcoesLocal.clientes);
+          setServicoCatalogo(catalogo);
+          setMecanicos(
+            opcoesLocal.mecanicos.map((registroAtual) => ({
+                value: String(registroAtual.id),
+                label: registroAtual.nome,
+                description: 'Mecânico ativo da equipe',
+                icon: 'staff',
+              })),
+          );
+          setErroCarga('');
+        }
+      } catch (erroCapturado) {
+        if (valido())
+          setErroCarga(
+            erroCapturado instanceof Error
+              ? erroCapturado.message
+              : 'Não foi possível atualizar a agenda.',
+          );
+      }
+    },
+    acesso && !carregando && !salvando,
+  );
+  async function excluirAgenda(id: number) {
+    if (salvando) return;
+    setSalvando(true);
+    try {
+      await excluirAgendamento(id);
+      setAgendamentos((itens) => itens.filter((item) => item.id !== id));
+      setExcluindo(undefined);
+      setAvisoTemporario('Agendamento removido.');
+    } catch (erro) {
+      setErroCarga(erro instanceof Error ? erro.message : 'Não foi possível excluir.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+  useEffect(() => {
+    if (!avisoTemporario) return;
+    const instanteAtual = setTimeout(() => setAvisoTemporario(''), 3200);
+    return () => clearTimeout(instanteAtual);
+  }, [avisoTemporario]);
+  const contagens = useMemo(
+    () => ({
+      total: agendamentos.length,
+      confirmed: agendamentos.filter((primeiroElemento) => primeiroElemento.status === 'Confirmado')
+        .length,
+      pending: agendamentos.filter((primeiroElemento) => primeiroElemento.status === 'Pendente')
+        .length,
+      cancelled: agendamentos.filter((primeiroElemento) => primeiroElemento.status === 'Cancelado')
+        .length,
+      done: agendamentos.filter((primeiroElemento) => primeiroElemento.status === 'Concluído')
+        .length,
+    }),
+    [agendamentos],
+  );
+  const filtrado = useMemo(
+    () =>
+      agendamentos.filter((primeiroElemento) => {
+        const dadosAtual = new Date(`${primeiroElemento.data}T12:00:00`);
+        const base = new Date((selecionadoDados || destinoEntradaDados(new Date())) + 'T00:00:00');
+        const fim = new Date(base);
+        fim.setDate(fim.getDate() + 30);
+        const dentroPeriodo = intervalo
+          ? primeiroElemento.data >= intervalo.from && primeiroElemento.data <= intervalo.to
+          : dadosAtual >= base && dadosAtual <= fim;
+        return (
+          (situacaoLocal === 'Todos' || primeiroElemento.status === situacaoLocal) &&
+          (!selecionadoDados || primeiroElemento.data === selecionadoDados) &&
+          dentroPeriodo &&
+          correspondeBusca(
+            busca,
+            `${primeiroElemento.cliente} ${primeiroElemento.moto} ${primeiroElemento.placa} ${primeiroElemento.telefone}`,
+          )
+        );
+      }),
+    [agendamentos, situacaoLocal, selecionadoDados, busca, intervalo, mesLocal],
+  );
+  const paginas = Math.max(1, Math.ceil(filtrado.length / tamanhoPagina));
+  const atual = Math.min(pagina, paginas);
+  const linhas = filtrado.slice((atual - 1) * tamanhoPagina, atual * tamanhoPagina);
+  const opcoesCatalogoServicos = servicoCatalogo.servicos
+    .filter((item) => item.ativo)
+    .map((item) => ({
+      value: item.nome,
+      description: `${servicoCatalogo.categorias.find((categoria) => categoria.id === item.categoriaId)?.nome ?? 'Serviço'} · ${item.duracao}`,
+      icon: item.icone,
+    }));
+  async function salvar(item: Agendamento) {
+    if (
+      !pode(
+        'agendamentos',
+        agendamentos.some((primeiroElemento) => primeiroElemento.id === item.id)
+          ? 'editar'
+          : 'criar',
+      )
+    ) {
+      setAvisoTemporario('Seu cargo não permite salvar este agendamento.');
+      return;
+    }
+    if (salvando) return;
+    setSalvando(true);
+    try {
+      const existente = item.id > 0 && agendamentos.some((registro) => registro.id === item.id);
+      const salvo = await salvarAgendamento(existente ? item.id : null, {
+        clienteId: item.clienteId,
+        motoId: item.motoId,
+        mecanicoId: item.mecanicoId ?? 0,
+        servico: item.servico,
+        status: item.status,
+        data: item.data,
+        hora: item.hora,
+        duracao: item.duracao,
+        observacoes: item.observacoes,
+      });
+      setAgendamentos((itens) =>
+        existente
+          ? itens.map((registro) => (registro.id === salvo.id ? salvo : registro))
+          : [salvo, ...itens],
+      );
+      setModalAberto(false);
+      setModal(undefined);
+      limparRascunho(`agenda-${modal?.id ?? 'novo'}`);
+      setAvisoTemporario('Agendamento salvo com sucesso.');
+    } catch (erro) {
+      setErroCarga(erro instanceof Error ? erro.message : 'Não foi possível salvar.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+  function inicioEditar(item: Agendamento) {
+    if (!pode('agendamentos', 'editar')) {
+      setAvisoTemporario('Seu cargo não permite editar agendamentos.');
+      return;
+    }
+    setVisualizacao(undefined);
+    setModal(item);
+    setModalAberto(true);
+  }
+  const cartaoDados = [
+    {
+      title: 'Total de agendamentos',
+      value: contagens.total,
+      subtitle: 'Todos os agendamentos',
+      tone: 'blue',
+      icon: 'list-checks',
+      filter: 'Todos',
+    },
+    {
+      title: 'Confirmados',
+      value: contagens.confirmed,
+      subtitle: `${contagens.total ? Math.round((contagens.confirmed / contagens.total) * 100) : 0}% do total`,
+      tone: 'green',
+      icon: 'check',
+      filter: 'Confirmado',
+    },
+    {
+      title: 'Pendentes',
+      value: contagens.pending,
+      subtitle: `${contagens.total ? Math.round((contagens.pending / contagens.total) * 100) : 0}% do total`,
+      tone: 'amber',
+      icon: 'clock',
+      filter: 'Pendente',
+    },
+    {
+      title: 'Cancelados',
+      value: contagens.cancelled,
+      subtitle: `${contagens.total ? Math.round((contagens.cancelled / contagens.total) * 100) : 0}% do total`,
+      tone: 'blue',
+      icon: 'circle-x',
+      filter: 'Cancelado',
+    },
+    {
+      title: 'Concluídos',
+      value: contagens.done,
+      subtitle: `${contagens.total ? Math.round((contagens.done / contagens.total) * 100) : 0}% do total`,
+      tone: 'gray',
+      icon: 'clipboard-check',
+      filter: 'Concluído',
+    },
+  ];
+  return (
+    <div className="appointments-viewport">
+      <div className="appointments-main">
+        <main className="appointments-content">
+          <ConteudoCarregando carregando={carregando}>
+            {erroCarga && (
+              <p role="alert">
+                {erroCarga}
+                <button
+                  onClick={() =>
+                    atualizarAgenda()
+                      .then((dados) => {
+                        setAgendamentos(dados);
+                        setErroCarga('');
+                      })
+                      .catch((eventoRecebido) => setErroCarga(eventoRecebido.message))
+                  }
+                >
+                  Tentar novamente
+                </button>
+              </p>
+            )}
+            <header className="appointments-page-title">
+              <div>
+                <h1>Agendamentos</h1>
+                <p>Gerencie os agendamentos de serviços da sua oficina.</p>
+              </div>
+              <button
+                className="appointment-new-button"
+                onClick={() => {
+                  setModal(undefined);
+                  setModalAberto(true);
+                }}
+              >
+                <Icone name="plus" size={15} />
+                Novo agendamento
+              </button>
+            </header>
+            <div className="appointment-metrics indicadores-grid" data-indicadores data-colunas="5">
+              {cartaoDados.map((elementoAtual) => (
+                <CartaoIndicador
+                  key={elementoAtual.title}
+                  editorId={`agendamentos:${elementoAtual.filter}`}
+                  oculto={!exibirCartao(elementoAtual.filter)}
+                  titulo={elementoAtual.title}
+                  descricao={elementoAtual.subtitle}
+                  valor={elementoAtual.value}
+                  icone={elementoAtual.icon}
+                  tom={elementoAtual.tone}
+                  total={contagens.total}
+                  ativo={ativoCartao === elementoAtual.title}
+                  aoClicar={() => {
+                    setSituacao(elementoAtual.filter);
+                    setAtivoCartao(elementoAtual.title);
+                    setSelecionadoDados('');
+                    setPagina(1);
+                  }}
+                />
+              ))}
+            </div>
+            <div className="appointments-layout">
+              <section className="appointment-list-card">
+                <div className="appointment-filters">
+                  <label className="appointment-list-search">
+                    <Icone name="search" size={16} />
+                    <input
+                      placeholder="Buscar por cliente, moto ou placa..."
+                      value={busca}
+                      onChange={(eventoRecebido) => {
+                        setBusca(eventoRecebido.target.value);
+                        setPagina(1);
+                      }}
+                    />
+                  </label>
+                  <SituacaoSeletor
+                    value={situacaoLocal}
+                    onChange={(valor) => {
+                      setSituacao(valor);
+                      setAtivoCartao(null);
+                      setPagina(1);
+                    }}
+                  />
+                  <div className="appointment-period-filter">
+                    <span className="appointment-filter-caption">Período</span>
+                    <SeletorPeriodo
+                      mode="range"
+                      value={intervalo}
+                      placeholder="Próximos 30 dias"
+                      label="Selecionar período de agendamentos"
+                      onApply={(valor) => {
+                        setIntervalo(valor);
+                        setSelecionadoDados('');
+                        setPagina(1);
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="appointment-clear"
+                    onClick={() => {
+                      setSituacao('Todos');
+                      setAtivoCartao(null);
+                      setIntervalo(null);
+                      setSelecionadoDados('');
+                      setBusca('');
+                      setPagina(1);
+                    }}
+                  >
+                    <Icone name="close" size={14} />
+                    Limpar filtros
+                  </button>
+                </div>
+                {selecionadoDados && (
+                  <button className="selected-date-filter" onClick={() => setSelecionadoDados('')}>
+                    Filtrando por {dadosRotulo(selecionadoDados)} <Icone name="close" size={12} />
+                  </button>
+                )}
+                <div className="appointment-table-wrap">
+                  <table className="appointment-table">
+                    <thead>
+                      <tr>
+                        <th>Data e Hora</th>
+                        <th>Cliente / Contato</th>
+                        <th>Motocicleta</th>
+                        <th>Serviço</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linhas.map((primeiroElemento) => (
+                        <tr key={primeiroElemento.id}>
+                          <td>
+                            <strong>
+                              <Icone name="calendar" size={13} />
+                              {dadosRotulo(primeiroElemento.data)}
+                            </strong>
+                            <small>{primeiroElemento.hora}</small>
+                          </td>
+                          <td>
+                            <strong>{primeiroElemento.cliente}</strong>
+                            <small>
+                              {primeiroElemento.telefone} <Icone name="whatsapp" size={12} />
+                            </small>
+                          </td>
+                          <td>
+                            <strong>{primeiroElemento.moto}</strong>
+                            <small>PLACA {primeiroElemento.placa}</small>
+                          </td>
+                          <td>{primeiroElemento.servico}</td>
+                          <td>
+                            <span
+                              className={`appointment-status ${primeiroElemento.status.toLowerCase().replace('í', 'i')}`}
+                            >
+                              <i />
+                              {primeiroElemento.status}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="appointment-row-actions">
+                              <button
+                                aria-label={`Ver ${primeiroElemento.cliente}`}
+                                onClick={() => setVisualizacao(primeiroElemento)}
+                              >
+                                <Icone name="eye" size={15} />
+                              </button>
+                              <button
+                                aria-label={`Editar ${primeiroElemento.cliente}`}
+                                onClick={() => inicioEditar(primeiroElemento)}
+                              >
+                                <Icone name="pencil" size={15} />
+                              </button>
+                              <button
+                                aria-label={`Excluir agendamento de ${primeiroElemento.cliente}`}
+                                className="delete"
+                                onClick={() => setExcluindo(primeiroElemento)}
+                              >
+                                <Icone name="trash" size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {!linhas.length && (
+                        <tr>
+                          <td className="appointment-empty" colSpan={6}>
+                            Nenhum agendamento encontrado para os filtros selecionados.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <footer className="appointment-pagination">
+                  <span>
+                    Mostrando {filtrado.length ? (atual - 1) * tamanhoPagina + 1 : 0} a{' '}
+                    {Math.min(atual * tamanhoPagina, filtrado.length)} de {filtrado.length}{' '}
+                    agendamentos
+                  </span>
+                  <nav aria-label="Paginação de agendamentos">
+                    <button
+                      disabled={atual === 1}
+                      onClick={() => setPagina((itemAtual) => Math.max(1, itemAtual - 1))}
+                    >
+                      <Icone name="left" size={13} />
+                    </button>
+                    {Array.from({ length: paginas }, (_, indice) => indice + 1).map((numero) => (
+                      <button
+                        key={numero}
+                        className={numero === atual ? 'active' : ''}
+                        onClick={() => setPagina(numero)}
+                      >
+                        {numero}
+                      </button>
+                    ))}
+                    <button
+                      disabled={atual === paginas}
+                      onClick={() => setPagina((itemAtual) => Math.min(paginas, itemAtual + 1))}
+                    >
+                      <Icone name="right" size={13} />
+                    </button>
+                  </nav>
+                  <select
+                    aria-label="Resultados por página"
+                    value={tamanhoPagina}
+                    onChange={(eventoRecebido) => {
+                      setPaginaTamanho(Number(eventoRecebido.target.value));
+                      setPagina(1);
+                    }}
+                  >
+                    <option value={8}>8 por página</option>
+                    <option value={16}>16 por página</option>
+                  </select>
+                </footer>
+              </section>
+              <aside className="appointments-sidebar">
+                <Calendario
+                  month={mesLocal}
+                  items={agendamentos}
+                  selected={selecionadoDados || destinoEntradaDados(new Date())}
+                  onMonth={setMes}
+                  onSelect={setSelecionadoDados}
+                />
+                <section className="appointment-side-card appointment-status-summary">
+                  <h2>Status dos agendamentos</h2>
+                  {[
+                    ['Confirmado', contagens.confirmed, 'Agendamento confirmado pelo cliente.'],
+                    ['Pendente', contagens.pending, 'Aguardando confirmação do cliente.'],
+                    ['Concluído', contagens.done, 'Serviço realizado com sucesso.'],
+                    ['Cancelado', contagens.cancelled, 'Agendamento cancelado.'],
+                  ].map(([textoAtual, numero, dadosAtual]) => (
+                    <div key={String(textoAtual)}>
+                      <i
+                        className={`summary-dot ${String(textoAtual).toLowerCase().replace('í', 'i')}`}
+                      />
+                      <span>
+                        <strong>{textoAtual}</strong>
+                        <small>{dadosAtual}</small>
+                      </span>
+                      <b>{numero}</b>
+                    </div>
+                  ))}
+                </section>
+              </aside>
+            </div>
+          </ConteudoCarregando>
+        </main>
+      </div>
+      {avisoTemporario && (
+        <div className="appointment-toast" role="status">
+          {avisoTemporario}
+        </div>
+      )}
+      {modalAberto && (
+        <PaginaNovoAgendamento
+          value={modal}
+          clients={clientesOpcoes}
+          mechanics={mecanicos}
+          mechanicsLoading={carregandoMecanicos}
+          mechanicsError={mecanicosErro}
+          onRetryMechanics={() => setMecanicosTentarNovamente((valor) => valor + 1)}
+          onRefreshOptions={atualizarOpcoes}
+          onMechanicsError={setMecanicosErro}
+          serviceCatalogOptions={opcoesCatalogoServicos}
+          saving={salvando}
+          onClose={() => {
+            setModalAberto(false);
+            setModal(undefined);
+          }}
+          onGoServices={(rascunho) => {
+            try {
+              sessionStorage.setItem(CHAVE_RASCUNHO_AGENDAMENTO, JSON.stringify(rascunho));
+            } catch {
+              /* Se o armazenamento estiver bloqueado, a navegacao continua normalmente. */
+            }
+            setModalAberto(false);
+            setModal(undefined);
+            navegar('/servicos');
+          }}
+          onSave={salvar}
+        />
+      )}
+      {visualizacao && (
+        <div
+          className="appointment-overlay"
+          onMouseDown={(eventoRecebido) => {
+            if (eventoRecebido.target === eventoRecebido.currentTarget) setVisualizacao(undefined);
+          }}
+        >
+          <section
+            className="appointment-view-modal appointment-view-redesigned"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="appointment-view-title"
+          >
+            <header className="appointment-view-header">
+              <span>
+                <Icone name="calendar" size={19} />
+              </span>
+              <div>
+                <small>ESTAÇÃO MOTOS · AGENDAMENTOS</small>
+                <strong id="appointment-view-title">Detalhes do atendimento</strong>
+              </div>
+              <button type="button" aria-label="Fechar" onClick={() => setVisualizacao(undefined)}>
+                <Icone name="close" size={17} />
+              </button>
+            </header>
+            <div className="appointment-view-content">
+              <div className="appointment-view-person">
+                <span className="appointment-view-avatar">
+                  {iniciaisLocal(visualizacao.cliente)}
+                </span>
+                <div className="appointment-view-person-copy">
+                  <small>CLIENTE</small>
+                  <h2>{visualizacao.cliente}</h2>
+                  <div>
+                    <span>
+                      <Icone name="bike" size={14} />
+                      {visualizacao.moto}
+                    </span>
+                    <b>PLACA {visualizacao.placa}</b>
+                  </div>
+                </div>
+                <span
+                  className={`appointment-status ${visualizacao.status.toLowerCase().replace('í', 'i')}`}
+                >
+                  <i />
+                  {visualizacao.status}
+                </span>
+              </div>
+              <div className="appointment-view-grid">
+                <article>
+                  <span>
+                    <Icone name="calendar" size={16} />
+                  </span>
+                  <div>
+                    <small>Data e horário</small>
+                    <strong>
+                      {dadosRotulo(visualizacao.data)} · {visualizacao.hora}
+                    </strong>
+                  </div>
+                </article>
+                <article>
+                  <span>
+                    <Icone name="wrench" size={16} />
+                  </span>
+                  <div>
+                    <small>Serviço</small>
+                    <strong>{visualizacao.servico}</strong>
+                  </div>
+                </article>
+                <article>
+                  <span>
+                    <Icone name="staff" size={16} />
+                  </span>
+                  <div>
+                    <small>Mecânico responsável</small>
+                    <strong>{visualizacao.mecanico}</strong>
+                  </div>
+                </article>
+                <article>
+                  <span>
+                    <Icone name="clock" size={16} />
+                  </span>
+                  <div>
+                    <small>Duração estimada</small>
+                    <strong>{visualizacao.duracao || 'Não informada'}</strong>
+                  </div>
+                </article>
+                <article className="appointment-view-contact">
+                  <span>
+                    <Icone name="whatsapp" size={16} />
+                  </span>
+                  <div>
+                    <small>Contato do cliente</small>
+                    <strong>{visualizacao.telefone || 'Não informado'}</strong>
+                  </div>
+                </article>
+              </div>
+              {visualizacao.observacoes && (
+                <div className="appointment-view-notes">
+                  <small>OBSERVAÇÕES</small>
+                  <p>{visualizacao.observacoes}</p>
+                </div>
+              )}
+              <footer className="appointment-view-footer">
+                <button
+                  type="button"
+                  className="appointment-cancel"
+                  onClick={() => setVisualizacao(undefined)}
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  className="appointment-confirm"
+                  onClick={() => inicioEditar(visualizacao)}
+                >
+                  <Icone name="pencil" size={14} />
+                  Editar agendamento
+                </button>
+              </footer>
+            </div>
+          </section>
+        </div>
+      )}
+      {excluindo && (
+        <div
+          className="oa-confirm-backdrop"
+          onMouseDown={(evento) => {
+            if (evento.target === evento.currentTarget) setExcluindo(undefined);
+          }}
+        >
+          <section
+            className="oa-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="appointment-delete-title"
+          >
+            <span className="oa-confirm-icon destructive">
+              <Icone name="trash" size={19} />
+            </span>
+            <div>
+              <button
+                type="button"
+                className="oa-confirm-close"
+                aria-label="Fechar"
+                onClick={() => setExcluindo(undefined)}
+              >
+                <Icone name="close" size={15} />
+              </button>
+              <h3 id="appointment-delete-title">Excluir agendamento?</h3>
+              <p>
+                Tem certeza que deseja excluir o agendamento de <strong>{excluindo.cliente}</strong>{' '}
+                para <strong>{excluindo.servico}</strong>, em {dadosRotulo(excluindo.data)} às{' '}
+                {excluindo.hora}?
+              </p>
+              <p>Esta ação é permanente e não poderá ser desfeita.</p>
+              <div className="oa-confirm-actions">
+                <button type="button" onClick={() => setExcluindo(undefined)}>
+                  Manter agendamento
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => {
+                    if (!pode('agendamentos', 'excluir')) {
+                      setAvisoTemporario('Seu cargo não permite excluir agendamentos.');
+                      return;
+                    }
+                    void excluirAgenda(excluindo.id);
+                  }}
+                >
+                  <Icone name="trash" size={13} />
+                  Excluir agendamento
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }

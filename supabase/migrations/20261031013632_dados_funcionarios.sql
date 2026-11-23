@@ -1,4 +1,4 @@
--- Proposta para os quatro frames de funcionários. Aplicar somente com autorização.
+-- Proposta para os quatro frames de funcionarios. Aplicar somente com autorizacao.
 begin;
 alter table public.funcionario
   add column if not exists data_nascimento date,
@@ -7,7 +7,7 @@ alter table public.funcionario
   add column if not exists especialidade varchar(150),
   add column if not exists endereco varchar(500),
   add column if not exists situacao varchar(20);
--- Registros existentes continuam sem situação informada; não inventar status.
+-- Registros existentes continuam sem situacao informada; nao inventar status.
 alter table public.funcionario alter column situacao set default 'ativo';
 alter table public.funcionario add constraint funcionario_situacao_check
   check(situacao in ('ativo','ferias','afastado','desligado'));

@@ -1,4 +1,4 @@
--- Dados que aparecem em Corrigir informações e registro de ações administrativas.
+-- Dados que aparecem em Corrigir informacoes e registro de acoes administrativas.
 alter table public.cliente add column if not exists cpf varchar(14);
 grant select (cpf), update (nome, telefone, email, cpf) on public.cliente to service_role;
 grant update (modelo, placa, ano, cor) on public.moto to service_role;

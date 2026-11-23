@@ -1,4 +1,4 @@
--- Os IDs já usam identidade BY DEFAULT, com sequências sincronizadas.
+-- Os IDs ja usam identidade BY DEFAULT, com sequencias sincronizadas.
 grant usage on sequence public.cliente_id_cliente_seq,public.moto_id_moto_seq,
   public.ordem_servico_id_os_seq,public.foto_os_id_foto_seq,
   public.funcionario_id_funcionario_seq to service_role;
@@ -12,8 +12,8 @@ grant select (id_funcionario,email,cpf) on public.funcionario to service_role;
 grant insert (id_funcionario) on public.mecanico to service_role;
 grant select (id_funcionario) on public.mecanico to service_role;
 
--- A função é invocada somente pelo backend depois da checagem de administrador.
--- Todas as inserções do cliente, moto, OS e metadados de fotos estão na mesma transação.
+-- A funcao e invocada somente pelo backend depois da checagem de administrador.
+-- Todas as insercoes do cliente, moto, OS e metadados de fotos estao na mesma transacao.
 create or replace function public.admin_create_order(p_payload jsonb)
 returns jsonb language plpgsql security invoker set search_path = '' as $$
 declare

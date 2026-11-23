@@ -1,100 +1,294 @@
-import {useEstadoRascunho} from '../hooks/useEstadoRascunho';
-import {limparRascunho,temRascunho} from '../services/rascunhos';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { createPortal } from 'react-dom';
-import { Icon } from './MenuAdmin';
-import { criarMotocicleta, atualizarMotocicleta, type DadosMotocicleta, type ItemMotocicleta } from '../services/apiAutenticacao';
-import { useMiniaturaExistente } from '../services/miniaturasMotocicletas';
 import catalog from '../data/catalogoMotocicletas.json';
+import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
+import {
+  atualizarMotocicleta,
+  criarMotocicleta,
+  type DadosMotocicleta,
+  type ItemMotocicleta,
+} from '../services/apiAutenticacao';
+import { useMiniaturaExistente } from '../services/miniaturasMotocicletas';
+import { limparRascunho } from '../services/rascunhos';
+import FormularioEdicaoMotocicleta from './edicaoMotocicleta/FormularioEdicaoMotocicleta';
+import { normalizarBusca, splitModelo } from './edicaoMotocicleta/auxiliares';
+import { correspondeBusca } from '../utils/buscaAproximada';
 import './modal-editar-motocicleta.css';
 
-const brandNames=catalog.map(entry=>entry.brand);
-const normalizeSearch=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();
-function BrandMark({name}:{name:string}){return <span className="bike-brand-mark" aria-hidden="true">{name==='Marca'?<Icon name="bike" size={17}/>:name.split(/[\s-]+/).map(word=>word[0]).slice(0,2).join('').toLocaleUpperCase('pt-BR')}</span>;}
-function BrazilFlag(){return <svg className="bike-edit-brazil-flag" viewBox="0 0 28 20" role="img" aria-label="Bandeira do Brasil"><rect width="28" height="20" rx="1" fill="#159447"/><path d="M14 2 26 10 14 18 2 10Z" fill="#F9D43B"/><circle cx="14" cy="10" r="5.2" fill="#123CA5"/><path d="M9 8.8c3.7-.7 7.2.1 10.1 2.3" fill="none" stroke="#FFF" strokeWidth="1.15"/></svg>;}
-function splitModel(value:string){const found=[...brandNames].sort((a,b)=>b.length-a.length).find(brand=>value.toLowerCase().startsWith(`${brand.toLowerCase()} `));return found?{brand:found,model:value.slice(found.length).trim()}:{brand:value.split(' ')[0]||'',model:value.split(' ').slice(1).join(' ')};}
-const colors=['Preta','Branca','Prata','Vermelha','Azul','Verde','Cinza','Amarela','Laranja','Outra'];
-export default function ModalEditarMotocicleta({item,clients,onClose,onSaved,onImage}:{item:ItemMotocicleta|null;clients:{id:number;name:string}[];onClose:()=>void;onSaved:()=>void;onImage:(item:ItemMotocicleta)=>void}){
-  const initial=splitModel(item?.model??'');
-  const [clientId,setClientId]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'clientId',item?.clientId??0);
-  const [brand,setBrand]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'brand',initial.brand);
-  const [model,setModel]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'model',initial.model);
-  const [plate,setPlate]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'plate',item?.plate??'');
-  const [year,setYear]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'year',item?.year?.toString()??'');
-  const [modelYear,setModelYear]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'modelYear',item?.modelYear?.toString()??'');
-  const [color,setColor]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'color',item?.color??'');
-  const [mileage,setMileage]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'mileage',item?.mileage?.toString()??'');
-  const [chassis,setChassis]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'chassis',item?.chassis??'');
-  const [renavam,setRenavam]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'renavam',item?.renavam??'');
-  const [notes,setNotes]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'notes',item?.notes??'');
-  const [active,setActive]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'active',item?.active??true);
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState('');
-  const [dirty,setDirty]=useState(false);
-  const [confirmDiscard,setConfirmDiscard]=useState(false);
-  const [pendingSave,setPendingSave]=useState<DadosMotocicleta|null>(null);
-  const [brandOpen,setBrandOpen]=useState(false);
-  const [modelOpen,setModelOpen]=useState(false);
-  const [ownerOpen,setOwnerOpen]=useState(false);
-  const [ownerSearch,setOwnerSearch]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'ownerSearch',clients.find(client=>client.id===item?.clientId)?.name??item?.client??'');
-  const [additionalOpen,setAdditionalOpen]=useEstadoRascunho(`moto-${item?.id??'nova'}`,'additionalOpen',!!(item?.chassis||item?.renavam||item?.notes||item?.active===false));
-  const brandRef=useRef<HTMLDivElement>(null);
-  const modelRef=useRef<HTMLDivElement>(null);
-  const ownerRef=useRef<HTMLDivElement>(null);
-  const displayModel=`${brand.trim()} ${model.trim()}`.trim();
-  const thumb=useMiniaturaExistente(displayModel,color||null);
-  const displayOwner=clientId?(clients.find(client=>client.id===clientId)?.name??item?.client??'Proprietário não selecionado'):'Proprietário não selecionado';
-  const brandMatches=catalog.filter(entry=>normalizeSearch(entry.brand).includes(normalizeSearch(brand))).slice(0,10);
-  const selectedBrand=catalog.find(entry=>normalizeSearch(entry.brand)===normalizeSearch(brand));
-  const modelMatches=(selectedBrand?.models??[]).filter(name=>normalizeSearch(name).includes(normalizeSearch(model))).slice(0,9);
-  const ownerMatches=clients.filter(client=>client.name.toLocaleLowerCase('pt-BR').includes(ownerSearch.trim().toLocaleLowerCase('pt-BR'))).slice(0,8);
-  useEffect(()=>{const close=(event:PointerEvent)=>{if(!brandRef.current?.contains(event.target as Node))setBrandOpen(false);if(!modelRef.current?.contains(event.target as Node))setModelOpen(false);if(!ownerRef.current?.contains(event.target as Node))setOwnerOpen(false);};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close);},[]);
-  function chooseBrand(name:string){update(()=>{if(normalizeSearch(name)!==normalizeSearch(brand))setModel('');setBrand(name);setBrandOpen(false);setModelOpen(false);});}
-  function chooseModel(name:string){update(()=>{setModel(name);setModelOpen(false);});}
-  function requestClose(){if(busy)return;if(pendingSave){setPendingSave(null);return;}onClose();}
-  useEffect(()=>{const escape=(event:KeyboardEvent)=>{if(event.key!=='Escape'||busy)return;if(pendingSave)setPendingSave(null);else if(confirmDiscard)setConfirmDiscard(false);else onClose();};window.addEventListener('keydown',escape);const old=document.body.style.overflow;document.body.style.overflow='hidden';return()=>{window.removeEventListener('keydown',escape);document.body.style.overflow=old;};},[busy,pendingSave,confirmDiscard,dirty,onClose]);
-  function update(fn:()=>void){fn();setDirty(true);setError('');}
-  async function persist(payload:DadosMotocicleta){
-    setBusy(true);setError('');
-    try{if(item)await atualizarMotocicleta(item.id,payload);else await criarMotocicleta(payload);limparRascunho(`moto-${item?.id??'nova'}`);setPendingSave(null);onSaved();}
-    catch(cause){setPendingSave(null);setError(cause instanceof Error?cause.message:'Não foi possível salvar a moto.');}
-    finally{setBusy(false);}
+type Props = {
+  item: ItemMotocicleta | null;
+  clients: { id: number; name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+  onImage: (item: ItemMotocicleta) => void;
+};
+
+// Estado e acoes ficam juntos; a composicao visual fica no componente de formulario.
+export function useEdicaoMotocicleta({
+  item,
+  clients: clientes,
+  onClose: aoFechar,
+  onSaved: aoSalvar,
+  onImage: aoImagem,
+}: Props) {
+  const inicial = splitModelo(item?.model ?? '');
+  const [idCliente, setClienteId] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'clientId',
+    item?.clientId ?? 0,
+  );
+  const [marca, setMarca] = useEstadoRascunho(`moto-${item?.id ?? 'nova'}`, 'brand', inicial.brand);
+  const [modelo, setModelo] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'model',
+    inicial.model,
+  );
+  const [placa, setPlaca] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'plate',
+    item?.plate ?? '',
+  );
+  const [ano, setAno] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'year',
+    item?.year?.toString() ?? '',
+  );
+  const [modeloAno, setModeloAno] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'modelYear',
+    item?.modelYear?.toString() ?? '',
+  );
+  const [cor, setCor] = useEstadoRascunho(`moto-${item?.id ?? 'nova'}`, 'color', item?.color ?? '');
+  const [quilometragem, setQuilometragem] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'mileage',
+    item?.mileage?.toString() ?? '',
+  );
+  const [chassis, setChassis] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'chassis',
+    item?.chassis ?? '',
+  );
+  const [renavam, setRenavam] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'renavam',
+    item?.renavam ?? '',
+  );
+  const [observacoes, setObservacoes] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'notes',
+    item?.notes ?? '',
+  );
+  const [ativo, setAtivo] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'active',
+    item?.active ?? true,
+  );
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState('');
+  const [alterado, setAlterado] = useState(false);
+  const [confirmarDescarte, setConfirmarDiscard] = useState(false);
+  const [pendenteSalvar, setPendenteSalvar] = useState<DadosMotocicleta | null>(null);
+  const [marcaAberto, setMarcaAberto] = useState(false);
+  const [modeloAberto, setModeloAberto] = useState(false);
+  const [responsavelAberto, setResponsavelAberto] = useState(false);
+  const [responsavelBusca, setResponsavelBusca] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'ownerSearch',
+    clientes.find((cliente) => cliente.id === item?.clientId)?.name ?? item?.client ?? '',
+  );
+  const [additionalAberto, setAdditionalAberto] = useEstadoRascunho(
+    `moto-${item?.id ?? 'nova'}`,
+    'additionalOpen',
+    !!(item?.chassis || item?.renavam || item?.notes || item?.active === false),
+  );
+  const marcaReferencia = useRef<HTMLDivElement>(null);
+  const modeloReferencia = useRef<HTMLDivElement>(null);
+  const responsavelReferencia = useRef<HTMLDivElement>(null);
+  const displayModelo = `${marca.trim()} ${modelo.trim()}`.trim();
+  const miniatura = useMiniaturaExistente(displayModelo, cor || null);
+  const displayResponsavel = idCliente
+    ? (clientes.find((cliente) => cliente.id === idCliente)?.name ??
+      item?.client ??
+      'Proprietário não selecionado')
+    : 'Proprietário não selecionado';
+  const marcaCorrespondencias = catalog
+    .filter((registro) => correspondeBusca(marca, registro.brand))
+    .slice(0, 10);
+  const selecionadoMarca = catalog.find(
+    (registro) => normalizarBusca(registro.brand) === normalizarBusca(marca),
+  );
+  const modeloCorrespondencias = (selecionadoMarca?.models ?? [])
+    .filter((nome) => correspondeBusca(modelo, nome))
+    .slice(0, 9);
+  const responsavelCorrespondencias = clientes
+    .filter((cliente) => correspondeBusca(responsavelBusca, cliente.name))
+    .slice(0, 8);
+  useEffect(() => {
+    const fechar = (evento: PointerEvent) => {
+      if (!marcaReferencia.current?.contains(evento.target as Node)) setMarcaAberto(false);
+      if (!modeloReferencia.current?.contains(evento.target as Node)) setModeloAberto(false);
+      if (!responsavelReferencia.current?.contains(evento.target as Node))
+        setResponsavelAberto(false);
+    };
+    document.addEventListener('pointerdown', fechar);
+    return () => document.removeEventListener('pointerdown', fechar);
+  }, []);
+  function escolherMarca(nome: string) {
+    atualizar(() => {
+      if (normalizarBusca(nome) !== normalizarBusca(marca)) setModelo('');
+      setMarca(nome);
+      setMarcaAberto(false);
+      setModeloAberto(false);
+    });
   }
-  async function save(event:FormEvent){
-    event.preventDefault();setError('');
-    const fullModel=`${brand.trim()} ${model.trim()}`.trim();
-    if(!clientId||!brand.trim()||!model.trim())return setError('Selecione o proprietário e informe marca e modelo.');
-    if(!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate.trim().toUpperCase()))return setError('Informe uma placa válida com sete caracteres.');
-    if(chassis.trim()&&chassis.trim().length!==17)return setError('O chassi deve ter 17 caracteres.');
-    if(renavam.trim()&&!/^\d{11}$/.test(renavam.trim()))return setError('O RENAVAM deve ter 11 dígitos.');
-    const payload:DadosMotocicleta={clientId,model:fullModel,plate:plate.trim().toUpperCase(),year:year?Number(year):null,
-      modelYear:modelYear?Number(modelYear):null,color:color.trim(),mileage:mileage?Number(mileage):null,
-      chassis:chassis.trim().toUpperCase(),renavam:renavam.trim(),notes:notes.trim(),active};
-    if(item){setPendingSave(payload);return;}
-    await persist(payload);
+  function escolherModelo(nome: string) {
+    atualizar(() => {
+      setModelo(nome);
+      setModeloAberto(false);
+    });
   }
-  return createPortal(<div className="bike-edit-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)requestClose();}}>
-    <form className="bike-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="bike-edit-title" onSubmit={event=>void save(event)}>
-      <div className="bike-edit-body">
-        <header className="bike-edit-header"><div className="bike-edit-header-row"><div className="bike-edit-logo"><img src="/assets/estacao-motos-logo-sidebar.png" alt="Estação Motos"/></div><span className="bike-edit-breadcrumb">MOTOCICLETAS <span>/</span> {item?'EDITAR REGISTRO':'NOVO REGISTRO'}</span><button type="button" onClick={requestClose} aria-label="Fechar" disabled={busy}><Icon name="close" size={20}/></button></div><h2 id="bike-edit-title">{item?'Editar motocicleta':'Nova motocicleta'}</h2><p>Identifique a moto e vincule o proprietário.</p></header>
-        <div className="bike-edit-passport" aria-label="Prévia da motocicleta"><svg className="bike-edit-passport-stripes" viewBox="0 0 140 164" preserveAspectRatio="none" aria-hidden="true"><path d="M0 164 74 0h40L40 164Z" fill="#fff" opacity=".32"/><path d="M0 117 52 0h15L15 117Z" fill="#fff" opacity=".78"/><path d="M17 97 60 0h13L30 97Z" fill="#D71A35"/><path d="M41 164 111 0h2L43 164Z" fill="#fff" opacity=".9"/><path d="M60 164 130 0h2L62 164Z" fill="#fff" opacity=".75"/><path d="M80 164 140 23v7L86 164Z" fill="#fff" opacity=".56"/></svg><div className="bike-edit-passport-art"><img className={thumb?'is-thumbnail':'is-fallback'} src={thumb||'/assets/motocicleta-sem-miniatura.png'} alt={thumb?`Miniatura de ${displayModel}`:'Ilustração cinza de motocicleta sem miniatura'}/></div><div className="bike-edit-passport-plate"><div><span className="bike-edit-plate-seal" aria-hidden="true">✦</span><span>BRASIL</span><BrazilFlag/></div><strong>{plate||'PLACA'}</strong><small>{plate?'IDENTIFICAÇÃO':'— — —'}</small></div><div className="bike-edit-passport-summary"><div><Icon name="bike" size={21}/><span><strong>{displayModel||'Modelo ainda não informado'}</strong><small>Marca e modelo</small></span></div><div><Icon name="user" size={20}/><span><strong>{displayOwner}</strong><small>Proprietário</small></span></div></div></div>
-        <div className="bike-edit-fields">
-          <div className="bike-edit-field bike-edit-owner" ref={ownerRef}><label htmlFor="bike-owner">Proprietário <b>*</b></label><div className="bike-edit-input-wrap"><Icon name="user" size={18}/><input id="bike-owner" required type="text" autoComplete="off" role="combobox" aria-expanded={ownerOpen} aria-controls="bike-owner-options" aria-autocomplete="list" disabled={busy||!!item?.orderCount} value={ownerSearch} placeholder="Digite o nome do cliente ou selecione" onFocus={()=>setOwnerOpen(true)} onChange={event=>update(()=>{setOwnerSearch(event.target.value);setClientId(0);setOwnerOpen(true);})} onKeyDown={event=>{if(event.key==='Escape')setOwnerOpen(false);if(event.key==='Enter'&&ownerOpen&&ownerMatches[0]){event.preventDefault();const choice=ownerMatches[0];update(()=>{setClientId(choice.id);setOwnerSearch(choice.name);setOwnerOpen(false);});}}}/><button type="button" aria-label="Mostrar clientes" disabled={busy||!!item?.orderCount} onClick={()=>setOwnerOpen(open=>!open)}><Icon name="chevron" size={15}/></button></div>{ownerOpen&&!item?.orderCount&&<div className="bike-edit-options" id="bike-owner-options" role="listbox">{ownerMatches.length?ownerMatches.map(client=><button type="button" role="option" aria-selected={clientId===client.id} key={client.id} onClick={()=>update(()=>{setClientId(client.id);setOwnerSearch(client.name);setOwnerOpen(false);})}><span className="bike-edit-owner-avatar">{client.name.slice(0,1).toLocaleUpperCase('pt-BR')}</span>{client.name}</button>):<span className="bike-edit-empty-options">Nenhum cliente encontrado.</span>}</div>}{!!item?.orderCount&&<small className="bike-edit-field-hint">A moto já possui OS; o proprietário não pode ser alterado.</small>}</div>
-          <div className="bike-edit-field" ref={brandRef}><label htmlFor="bike-brand">Marca <b>*</b></label><div className="bike-edit-input-wrap"><BrandMark name={brand||'Marca'}/><input id="bike-brand" required maxLength={40} autoComplete="off" role="combobox" aria-expanded={brandOpen} aria-controls="bike-brand-options" aria-autocomplete="list" value={brand} placeholder="Ex.: Honda, Yamaha, BMW…" onFocus={()=>{setBrandOpen(true);setModelOpen(false);}} onChange={event=>update(()=>{setBrand(event.target.value);setBrandOpen(true);setModelOpen(false);})} onKeyDown={event=>{if(event.key==='Escape')setBrandOpen(false);if(event.key==='Enter'&&brandOpen&&brandMatches[0]){event.preventDefault();chooseBrand(brandMatches[0].brand);}}}/><button type="button" aria-label="Mostrar marcas" onClick={()=>{setBrandOpen(open=>!open);setModelOpen(false);}}><Icon name="chevron" size={15}/></button></div>{brandOpen&&<div className="bike-edit-options" id="bike-brand-options" role="listbox">{brandMatches.length?brandMatches.map(entry=><button type="button" role="option" aria-selected={brand===entry.brand} key={entry.brand} onClick={()=>chooseBrand(entry.brand)}><BrandMark name={entry.brand}/><span className="bike-edit-option-label"><strong>{entry.brand}</strong><small>{entry.models.length} modelos sugeridos</small></span></button>):<span className="bike-edit-empty-options">Marca fora da lista? Continue digitando.</span>}<span className="bike-edit-options-foot">Sugestões brasileiras; outras marcas também são aceitas.</span></div>}</div>
-          <div className="bike-edit-field" ref={modelRef}><label htmlFor="bike-model">Modelo <b>*</b></label><div className="bike-edit-input-wrap"><Icon name="package" size={18}/><input id="bike-model" required maxLength={75} autoComplete="off" role="combobox" aria-expanded={modelOpen} aria-controls="bike-model-options" aria-autocomplete="list" value={model} onFocus={()=>{setModelOpen(true);setBrandOpen(false);}} onChange={event=>update(()=>{setModel(event.target.value);setModelOpen(true);})} onKeyDown={event=>{if(event.key==='Escape')setModelOpen(false);if(event.key==='Enter'&&modelOpen&&modelMatches[0]){event.preventDefault();chooseModel(modelMatches[0]);}}} placeholder="Ex.: CG 160 Fan, NXR 160, MT-03…"/><button type="button" aria-label="Mostrar modelos" onClick={()=>{setModelOpen(open=>!open);setBrandOpen(false);}}><Icon name="chevron" size={15}/></button></div>{modelOpen&&<div className="bike-edit-options" id="bike-model-options" role="listbox">{!selectedBrand?<span className="bike-edit-empty-options">Selecione uma marca acima ou digite o modelo livremente.</span>:modelMatches.length?modelMatches.map(name=><button type="button" role="option" aria-selected={model===name} key={name} onClick={()=>chooseModel(name)}><Icon name="bike" size={17}/><span>{name}</span></button>):<span className="bike-edit-empty-options">Não encontrou? Digite o modelo completo.</span>}<span className="bike-edit-options-foot">Confira a versão e a cilindrada antes de salvar.</span></div>}</div>
-          <div className="bike-edit-field bike-edit-plate-field"><label htmlFor="bike-plate">Placa <b>*</b></label><div className="bike-edit-input-wrap"><Icon name="card" size={17}/><input id="bike-plate" required maxLength={7} value={plate} onChange={event=>update(()=>setPlate(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'')))} placeholder="ABC1D23"/></div></div>
-          <div className="bike-edit-field"><label htmlFor="bike-year">Ano de fabricação</label><div className="bike-edit-input-wrap"><Icon name="calendar" size={17}/><input id="bike-year" type="number" min="1900" max="2100" value={year} onChange={event=>update(()=>setYear(event.target.value))} placeholder="Ex.: 2024"/></div></div>
-          <div className="bike-edit-field"><label htmlFor="bike-model-year">Ano do modelo</label><div className="bike-edit-input-wrap"><Icon name="calendar" size={17}/><input id="bike-model-year" type="number" min="1900" max="2100" value={modelYear} onChange={event=>update(()=>setModelYear(event.target.value))} placeholder="Ex.: 2024"/></div></div>
-          <div className="bike-edit-field"><label htmlFor="bike-color">Cor</label><div className="bike-edit-input-wrap"><Icon name="sliders" size={17}/><input id="bike-color" list="bike-colors" maxLength={40} value={color} onChange={event=>update(()=>setColor(event.target.value))} placeholder="Ex.: Preta, Azul…"/><datalist id="bike-colors">{colors.map(value=><option key={value} value={value}/>)}</datalist></div></div>
-          <div className="bike-edit-field"><label htmlFor="bike-mileage">Quilometragem atual</label><div className="bike-edit-input-wrap"><Icon name="gauge" size={17}/><input id="bike-mileage" type="number" min="0" max="10000000" value={mileage} onChange={event=>update(()=>setMileage(event.target.value))} placeholder="Ex.: 18450"/><span className="bike-edit-unit">km</span></div></div>
-        </div>
-        <div className="bike-edit-more"><button type="button" className="bike-edit-more-trigger" aria-expanded={additionalOpen} aria-controls="bike-edit-extra" onClick={()=>setAdditionalOpen(open=>!open)}><Icon name="clipboard" size={21}/><span><strong>Informações complementares</strong><small>Chassi, RENAVAM, observações e situação do cadastro</small></span><Icon name="chevron" size={18}/></button>{additionalOpen&&<div id="bike-edit-extra" className="bike-edit-more-fields"><label>Chassi<input maxLength={17} value={chassis} onChange={event=>update(()=>setChassis(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'')))} placeholder="17 caracteres"/></label><label>RENAVAM<input inputMode="numeric" maxLength={11} value={renavam} onChange={event=>update(()=>setRenavam(event.target.value.replace(/\D/g,'')))} placeholder="11 dígitos"/></label><label className="bike-edit-wide">Observações<textarea maxLength={1000} rows={2} value={notes} onChange={event=>update(()=>setNotes(event.target.value))} placeholder="Informações importantes para a equipe"/><small>{notes.length}/1000</small></label><label className="bike-edit-active"><input type="checkbox" checked={active} onChange={event=>update(()=>setActive(event.target.checked))}/><span>Cadastro ativo</span></label></div>}</div>
-        <div className="bike-edit-image-note"><Icon name="info" size={16}/><span>Miniatura gerada com IA após salvar. Fotos reais ficam na ordem de serviço.</span>{item&&<button type="button" disabled={busy} onClick={()=>{if(dirty){setError('Salve as alterações antes de abrir a IA de miniaturas.');return;}onImage(item);}}>Ajustar miniatura com IA <Icon name="right" size={13}/></button>}</div>
-      </div>
-      {error&&<p className="bike-edit-error" role="alert"><Icon name="info" size={15}/>{error}</p>}
-      <footer className="bike-edit-footer"><span>{dirty?'Alterações ainda não salvas':'* Campos obrigatórios'}</span><div><button type="button" onClick={requestClose} disabled={busy}>Cancelar</button><button type="submit" disabled={busy}><Icon name={busy?'clock':'check'} size={17}/>{busy?'Salvando…':item?'Salvar alterações':'Cadastrar motocicleta'}</button></div></footer>
-      {confirmDiscard&&<div className="bike-edit-confirm-cover"><div className="bike-edit-confirm" role="alertdialog" aria-modal="true" aria-labelledby="bike-edit-confirm-title"><span className="bike-edit-confirm-icon"><Icon name="info" size={20}/></span><h3 id="bike-edit-confirm-title">Descartar alterações?</h3><p>Os dados alterados ainda não foram salvos.</p><div><button type="button" onClick={()=>setConfirmDiscard(false)}>Continuar editando</button><button type="button" onClick={onClose}>Descartar e sair</button></div></div></div>}
-      {pendingSave&&<div className="bike-edit-confirm-cover" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)setPendingSave(null);}}><div className="bike-edit-confirm bike-edit-save-confirm" role="alertdialog" aria-modal="true" aria-labelledby="bike-save-confirm-title" aria-describedby="bike-save-confirm-description"><span className="bike-edit-confirm-icon"><Icon name="pencil" size={20}/></span><div className="bike-edit-confirm-content"><button type="button" className="bike-edit-confirm-close" aria-label="Fechar" disabled={busy} onClick={()=>setPendingSave(null)}><Icon name="close" size={18}/></button><h3 id="bike-save-confirm-title">Confirmar ação</h3><p id="bike-save-confirm-description">Deseja salvar as alterações de <strong>{item?.model}</strong>?</p><p>Os dados atualizados serão exibidos no cadastro e nas ordens vinculadas à motocicleta.</p><div><button type="button" onClick={()=>setPendingSave(null)} disabled={busy}>Cancelar</button><button type="button" onClick={()=>void persist(pendingSave)} disabled={busy}>{busy?'Salvando…':'Confirmar'}</button></div></div></div></div>}
-    </form>
-  </div>,document.body);
+  function solicitacaoFechar() {
+    if (ocupado) return;
+    if (pendenteSalvar) {
+      setPendenteSalvar(null);
+      return;
+    }
+    aoFechar();
+  }
+  useEffect(() => {
+    const escapar = (evento: KeyboardEvent) => {
+      if (evento.key !== 'Escape' || ocupado) return;
+      if (pendenteSalvar) setPendenteSalvar(null);
+      else if (confirmarDescarte) setConfirmarDiscard(false);
+      else aoFechar();
+    };
+    window.addEventListener('keydown', escapar);
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', escapar);
+      document.body.style.overflow = anterior;
+    };
+  }, [ocupado, pendenteSalvar, confirmarDescarte, alterado, aoFechar]);
+  function atualizar(funcao: () => void) {
+    funcao();
+    setAlterado(true);
+    setErro('');
+  }
+  async function persistir(conteudoEnviado: DadosMotocicleta) {
+    setOcupado(true);
+    setErro('');
+    try {
+      if (item) await atualizarMotocicleta(item.id, conteudoEnviado);
+      else await criarMotocicleta(conteudoEnviado);
+      limparRascunho(`moto-${item?.id ?? 'nova'}`);
+      setPendenteSalvar(null);
+      aoSalvar();
+    } catch (causa) {
+      setPendenteSalvar(null);
+      setErro(causa instanceof Error ? causa.message : 'Não foi possível salvar a moto.');
+    } finally {
+      setOcupado(false);
+    }
+  }
+  async function salvar(evento: FormEvent) {
+    evento.preventDefault();
+    setErro('');
+    const modeloCompleto = `${marca.trim()} ${modelo.trim()}`.trim();
+    if (!idCliente || !marca.trim() || !modelo.trim())
+      return setErro('Selecione o proprietário e informe marca e modelo.');
+    if (!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(placa.trim().toUpperCase()))
+      return setErro('Informe uma placa válida com sete caracteres.');
+    if (chassis.trim() && chassis.trim().length !== 17)
+      return setErro('O chassi deve ter 17 caracteres.');
+    if (renavam.trim() && !/^\d{11}$/.test(renavam.trim()))
+      return setErro('O RENAVAM deve ter 11 dígitos.');
+    const conteudoEnviado: DadosMotocicleta = {
+      clientId: idCliente,
+      model: modeloCompleto,
+      plate: placa.trim().toUpperCase(),
+      year: ano ? Number(ano) : null,
+      modelYear: modeloAno ? Number(modeloAno) : null,
+      color: cor.trim(),
+      mileage: quilometragem ? Number(quilometragem) : null,
+      chassis: chassis.trim().toUpperCase(),
+      renavam: renavam.trim(),
+      notes: observacoes.trim(),
+      active: ativo,
+    };
+    if (item) {
+      setPendenteSalvar(conteudoEnviado);
+      return;
+    }
+    await persistir(conteudoEnviado);
+  }
+  return {
+    additionalAberto,
+    alterado,
+    ano,
+    aoFechar,
+    aoImagem,
+    ativo,
+    atualizar,
+    chassis,
+    confirmarDescarte,
+    cor,
+    setAdditionalAberto,
+    setAno,
+    setAtivo,
+    setChassis,
+    setClienteId,
+    setConfirmarDiscard,
+    setCor,
+    setErro,
+    setMarca,
+    setMarcaAberto,
+    setModelo,
+    setModeloAberto,
+    setModeloAno,
+    setObservacoes,
+    setPendenteSalvar,
+    setPlaca,
+    setQuilometragem,
+    setRenavam,
+    setResponsavelAberto,
+    setResponsavelBusca,
+    displayModelo,
+    displayResponsavel,
+    erro,
+    escolherMarca,
+    escolherModelo,
+    idCliente,
+    item,
+    marca,
+    marcaAberto,
+    marcaCorrespondencias,
+    marcaReferencia,
+    miniatura,
+    modelo,
+    modeloAberto,
+    modeloAno,
+    modeloCorrespondencias,
+    modeloReferencia,
+    observacoes,
+    ocupado,
+    pendenteSalvar,
+    persistir,
+    placa,
+    quilometragem,
+    renavam,
+    responsavelAberto,
+    responsavelBusca,
+    responsavelCorrespondencias,
+    responsavelReferencia,
+    salvar,
+    selecionadoMarca,
+    solicitacaoFechar,
+  };
+}
+
+export default function ModalEditarMotocicleta(props: Props) {
+  const formulario = useEdicaoMotocicleta(props);
+  if (!formulario) return null;
+  return <FormularioEdicaoMotocicleta {...formulario} />;
 }

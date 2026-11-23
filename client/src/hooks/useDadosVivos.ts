@@ -1,29 +1,29 @@
-import { useEffect, useRef } from "react";
-import { observarDados } from "../services/atualizacaoDados";
+import { useEffect, useRef } from 'react';
+import { observarDados } from '../services/atualizacaoDados';
 export function useDadosVivos(
   atualizar: (valido: () => boolean) => Promise<unknown> | void,
   ativo = true,
-  chave = "",
+  chave = '',
 ) {
-  const ref = useRef(atualizar);
-  ref.current = atualizar;
+  const referencia = useRef(atualizar);
+  referencia.current = atualizar;
   useEffect(() => {
     if (!ativo) return;
-    let mounted = true,
-      busy = false;
-    const stop = observarDados(() => {
-      if (!mounted || busy) return;
-      busy = true;
+    let montado = true;
+    let ocupado = false;
+    const parar = observarDados(() => {
+      if (!montado || ocupado) return;
+      ocupado = true;
       Promise.resolve()
-        .then(() => ref.current(() => mounted))
+        .then(() => referencia.current(() => montado))
         .catch(() => {})
         .finally(() => {
-          busy = false;
+          ocupado = false;
         });
     });
     return () => {
-      mounted = false;
-      stop();
+      montado = false;
+      parar();
     };
   }, [ativo, chave]);
 }

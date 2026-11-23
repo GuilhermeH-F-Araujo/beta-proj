@@ -1,15 +1,13 @@
-import {
-  buscarNotificacoesAdmin,
-  type NotificacaoAdmin,
-} from "./apiAutenticacao";
-import { reproduzirSomDeNotificacaoNovo } from "./sonsNotificacao";
+// Somente eventos novos podem tocar. Reabrir a tela nao repete o aviso.
+import { buscarNotificacoesAdministrador, type NotificacaoAdministrador } from './apiAutenticacao';
+import { reproduzirSomDeNotificacaoNovo } from './sonsNotificacao';
 export type EstadoCentral = {
-  items: NotificacaoAdmin[];
+  items: NotificacaoAdministrador[];
   loading: boolean;
   error: string;
 };
-let estado: EstadoCentral = { items: [], loading: true, error: "" };
-let user = "";
+let estado: EstadoCentral = { items: [], loading: true, error: '' };
+let usuario = '';
 let conhecidos: Set<number> | null = null;
 let sequencia = 0;
 let pendente: Promise<void> | null = null;
@@ -17,23 +15,23 @@ let repetir = false;
 const ouvintes = new Set<() => void>();
 const publicar = (proximo: EstadoCentral) => {
   estado = proximo;
-  ouvintes.forEach((fn) => fn());
+  ouvintes.forEach((funcao) => funcao());
 };
 export const estadoNotificacoes = () => estado;
-export const observarNotificacoes = (fn: () => void) => {
-  ouvintes.add(fn);
+export const observarNotificacoes = (funcao: () => void) => {
+  ouvintes.add(funcao);
   return () => {
-    ouvintes.delete(fn);
+    ouvintes.delete(funcao);
   };
 };
 export function configurarCentralNotificacoes(id: string) {
-  if (user === id) return;
-  user = id;
+  if (usuario === id) return;
+  usuario = id;
   sequencia++;
   conhecidos = null;
   pendente = null;
   repetir = false;
-  publicar({ items: [], loading: true, error: "" });
+  publicar({ items: [], loading: true, error: '' });
 }
 export function atualizarCentralNotificacoes(): Promise<void> {
   if (pendente) {
@@ -43,25 +41,20 @@ export function atualizarCentralNotificacoes(): Promise<void> {
   const atual = sequencia;
   pendente = (async () => {
     try {
-      const resposta = await buscarNotificacoesAdmin();
+      const res = await buscarNotificacoesAdministrador();
       if (atual !== sequencia) return;
       const anteriores = conhecidos;
-      const novos = resposta.items.filter(
-        (item) => !item.read && !anteriores?.has(item.id),
-      );
-      conhecidos = new Set(resposta.items.map((item) => item.id));
-      publicar({ items: resposta.items, loading: false, error: "" });
+      const novos = res.items.filter((item) => !item.read && !anteriores?.has(item.id));
+      conhecidos = new Set(res.items.map((item) => item.id));
+      publicar({ items: res.items, loading: false, error: '' });
       if (anteriores && novos.length)
         void reproduzirSomDeNotificacaoNovo(novos.map((item) => item.kind));
-    } catch (error) {
+    } catch (erro) {
       if (atual === sequencia)
         publicar({
           ...estado,
           loading: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : "Não foi possível carregar os avisos.",
+          error: erro instanceof Error ? erro.message : 'Não foi possível carregar os avisos.',
         });
     } finally {
       if (atual === sequencia) {
@@ -75,18 +68,16 @@ export function atualizarCentralNotificacoes(): Promise<void> {
   })();
   return pendente;
 }
-export function atualizarAvisoLocal(id: number, acao: "ler" | "dispensar") {
+export function atualizarAvisoLocal(id: number, acao: 'ler' | 'dispensar') {
   sequencia++;
   pendente = null;
   repetir = false;
   publicar({
     ...estado,
     items:
-      acao === "dispensar"
+      acao === 'dispensar'
         ? estado.items.filter((item) => item.id !== id)
-        : estado.items.map((item) =>
-            item.id === id ? { ...item, read: true } : item,
-          ),
+        : estado.items.map((item) => (item.id === id ? { ...item, read: true } : item)),
   });
 }
 export function limparAvisosLocais() {

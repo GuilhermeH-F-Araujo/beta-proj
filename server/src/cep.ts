@@ -1,27 +1,26 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response } from 'express';
 export type EnderecoCep = {
   cep: string;
   rua: string;
   bairro: string;
   cidade: string;
   estado: string;
-  fonte: "correios" | "viacep";
+  fonte: 'correios' | 'viacep';
 };
-const texto = (x: unknown, max = 255) =>
-  typeof x === "string" ? x.trim().slice(0, max) : "";
+const texto = (itemAtual: unknown, maximo = 255) =>
+  typeof itemAtual === 'string' ? itemAtual.trim().slice(0, maximo) : '';
 export function normalizarEndereco(
-  data: Record<string, unknown>,
+  dados: Record<string, unknown>,
   cep: string,
-  fonte: EnderecoCep["fonte"],
+  fonte: EnderecoCep['fonte'],
 ): EnderecoCep {
-  const estado = texto(data.uf, 2).toUpperCase(),
-    cidade = texto(data.localidade, 100);
-  if (!/^[A-Z]{2}$/.test(estado) || !cidade || data.erro)
-    throw new Error("CEP não encontrado.");
+  const estado = texto(dados.uf, 2).toUpperCase();
+  const cidade = texto(dados.localidade, 100);
+  if (!/^[A-Z]{2}$/.test(estado) || !cidade || dados.erro) throw new Error('CEP não encontrado.');
   return {
     cep,
-    rua: texto(data.logradouro),
-    bairro: texto(data.bairro, 100),
+    rua: texto(dados.logradouro),
+    bairro: texto(dados.bairro, 100),
     cidade,
     estado,
     fonte,
@@ -29,181 +28,172 @@ export function normalizarEndereco(
 }
 export class ErroCep extends Error {
   constructor(
-    message: string,
-    public status: number,
+    mensagem: string,
+    public situacao: number,
   ) {
-    super(message);
+    super(mensagem);
   }
 }
 export function criarConsultaCep(
-  fetcher: typeof fetch = fetch,
-  env: NodeJS.ProcessEnv = process.env,
+  consultar: typeof fetch = fetch,
+  ambiente: NodeJS.ProcessEnv = process.env,
 ) {
-  const cache = new Map<string, { ate: number; valor: EnderecoCep }>(),
-    pending = new Map<string, Promise<EnderecoCep>>();
-  let token = "",
-    validade = 0;
-  let tokenPending: Promise<string> | undefined;
+  const memoria = new Map<string, { ate: number; valor: EnderecoCep }>();
+  const pendente = new Map<string, Promise<EnderecoCep>>();
+  let token = '';
+  let validade = 0;
+  let tokenPendente: Promise<string> | undefined;
   async function obterToken() {
-    if (env.CORREIOS_TOKEN) return env.CORREIOS_TOKEN;
+    if (ambiente.CORREIOS_TOKEN) return ambiente.CORREIOS_TOKEN;
     if (token && validade > Date.now()) return token;
-    if (tokenPending) return tokenPending;
+    if (tokenPendente) return tokenPendente;
     if (
-      !env.CORREIOS_USUARIO ||
-      !env.CORREIOS_CODIGO_ACESSO ||
-      !env.CORREIOS_CONTRATO
+      !ambiente.CORREIOS_USUARIO ||
+      !ambiente.CORREIOS_CODIGO_ACESSO ||
+      !ambiente.CORREIOS_CONTRATO
     )
-      return "";
-    tokenPending = (async () => {
-      const response = await fetcher(
-        "https://api.correios.com.br/token/v1/autentica/contrato",
-        {
-          method: "POST",
-          redirect: "error",
-          signal: AbortSignal.timeout(4000),
-          headers: {
-            Authorization:
-              "Basic " +
-              Buffer.from(
-                env.CORREIOS_USUARIO + ":" + env.CORREIOS_CODIGO_ACESSO,
-              ).toString("base64"),
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            numero: env.CORREIOS_CONTRATO,
-            ...(env.CORREIOS_DR ? { dr: Number(env.CORREIOS_DR) } : {}),
-          }),
+      return '';
+    tokenPendente = (async () => {
+      const response = await consultar('https://api.correios.com.br/token/v1/autentica/contrato', {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(4000),
+        headers: {
+          Authorization:
+            'Basic ' +
+            Buffer.from(ambiente.CORREIOS_USUARIO + ':' + ambiente.CORREIOS_CODIGO_ACESSO).toString(
+              'base64',
+            ),
+          'Content-Type': 'application/json',
         },
-      );
-      if (!response.ok) throw new Error("Autenticação postal indisponível.");
-      const data = await response.json();
-      if (typeof data.token !== "string")
-        throw new Error("Resposta postal inválida.");
-      token = data.token;
-      const expires = Date.parse(data.expiraEm ?? "");
+        body: JSON.stringify({
+          numero: ambiente.CORREIOS_CONTRATO,
+          ...(ambiente.CORREIOS_DR ? { dr: Number(ambiente.CORREIOS_DR) } : {}),
+        }),
+      });
+      if (!response.ok) throw new Error('Autenticação postal indisponível.');
+      const dados = await response.json();
+      if (typeof dados.token !== 'string') throw new Error('Resposta postal inválida.');
+      token = dados.token;
+      const expiraEmLocal = Date.parse(dados.expiraEm ?? '');
       validade = Math.min(
-        Number.isFinite(expires) ? expires - 60000 : Date.now() + 15 * 60000,
+        Number.isFinite(expiraEmLocal) ? expiraEmLocal - 60000 : Date.now() + 15 * 60000,
         Date.now() + 30 * 60000,
       );
       return token;
     })().finally(() => {
-      tokenPending = undefined;
+      tokenPendente = undefined;
     });
-    return tokenPending;
+    return tokenPendente;
   }
   return async (entrada: string) => {
-    const cep = entrada.replace(/\D/g, "");
+    const cep = entrada.replace(/\D/g, '');
     if (!/^\d{8}$/.test(cep) || !/^[\d-]+$/.test(entrada))
-      throw new ErroCep("Informe um CEP com oito números.", 400);
-    const hit = cache.get(cep);
-    if (hit && hit.ate > Date.now()) return hit.valor;
-    if (pending.has(cep)) return pending.get(cep)!;
-    const task = (async () => {
-      let result: EnderecoCep | undefined;
+      throw new ErroCep('Informe um CEP com oito números.', 400);
+    const encontrado = memoria.get(cep);
+    if (encontrado && encontrado.ate > Date.now()) return encontrado.valor;
+    if (pendente.has(cep)) return pendente.get(cep)!;
+    const tarefa = (async () => {
+      let resultado: EnderecoCep | undefined;
       try {
-        const bearer = await obterToken();
-        if (bearer) {
-          const r = await fetcher(
-            "https://api.correios.com.br/cep/v2/enderecos/" + cep,
+        const autorizacaoPortador = await obterToken();
+        if (autorizacaoPortador) {
+          const resultadoAtual = await consultar(
+            'https://api.correios.com.br/cep/v2/enderecos/' + cep,
             {
               headers: {
-                Authorization: "Bearer " + bearer,
-                Accept: "application/json",
+                Authorization: 'Bearer ' + autorizacaoPortador,
+                Accept: 'application/json',
               },
-              redirect: "error",
+              redirect: 'error',
               signal: AbortSignal.timeout(4000),
             },
           );
-          if (r.status === 401) {
-            token = "";
+          if (resultadoAtual.status === 401) {
+            token = '';
             validade = 0;
           }
-          if (r.status === 404)
+          if (resultadoAtual.status === 404)
             throw new ErroCep(
-              "CEP não encontrado. Confira ou preencha o endereço manualmente.",
+              'CEP não encontrado. Confira ou preencha o endereço manualmente.',
               404,
             );
-          if (!r.ok) throw new Error("Serviço postal indisponível.");
-          result = normalizarEndereco(await r.json(), cep, "correios");
+          if (!resultadoAtual.ok) throw new Error('Serviço postal indisponível.');
+          resultado = normalizarEndereco(await resultadoAtual.json(), cep, 'correios');
         }
-      } catch (e) {
-        if (e instanceof ErroCep) throw e;
-        if (env.CEP_PERMITIR_VIACEP === "false")
+      } catch (erroCapturado) {
+        if (erroCapturado instanceof ErroCep) throw erroCapturado;
+        if (ambiente.CEP_PERMITIR_VIACEP === 'false')
           throw new ErroCep(
-            "Não foi possível consultar o CEP. Preencha o endereço manualmente.",
+            'Não foi possível consultar o CEP. Preencha o endereço manualmente.',
             503,
           );
       }
-      if (!result) {
-        if (env.CEP_PERMITIR_VIACEP === "false")
+      if (!resultado) {
+        if (ambiente.CEP_PERMITIR_VIACEP === 'false')
           throw new ErroCep(
-            "Configure o acesso aos Correios ou preencha o endereço manualmente.",
+            'Configure o acesso aos Correios ou preencha o endereço manualmente.',
             503,
           );
         try {
-          const r = await fetcher(
-            "https://viacep.com.br/ws/" + cep + "/json/",
-            { redirect: "error", signal: AbortSignal.timeout(4000) },
-          );
-          if (!r.ok) throw new Error();
-          const data = await r.json();
-          if (data.erro)
+          const resultadoAtual = await consultar('https://viacep.com.br/ws/' + cep + '/json/', {
+            redirect: 'error',
+            signal: AbortSignal.timeout(4000),
+          });
+          if (!resultadoAtual.ok) throw new Error();
+          const dados = await resultadoAtual.json();
+          if (dados.erro)
             throw new ErroCep(
-              "CEP não encontrado. Confira ou preencha o endereço manualmente.",
+              'CEP não encontrado. Confira ou preencha o endereço manualmente.',
               404,
             );
-          result = normalizarEndereco(data, cep, "viacep");
-        } catch (e) {
-          if (e instanceof ErroCep) throw e;
+          resultado = normalizarEndereco(dados, cep, 'viacep');
+        } catch (erroCapturado) {
+          if (erroCapturado instanceof ErroCep) throw erroCapturado;
           throw new ErroCep(
-            "Não foi possível consultar o CEP. Preencha o endereço manualmente.",
+            'Não foi possível consultar o CEP. Preencha o endereço manualmente.',
             503,
           );
         }
       }
-      if (cache.size >= 1000) cache.delete(cache.keys().next().value!);
-      cache.set(cep, { ate: Date.now() + 3600000, valor: result });
-      return result;
-    })().finally(() => pending.delete(cep));
-    pending.set(cep, task);
-    return task;
+      if (memoria.size >= 1000) memoria.delete(memoria.keys().next().value!);
+      memoria.set(cep, { ate: Date.now() + 3600000, valor: resultado });
+      return resultado;
+    })().finally(() => pendente.delete(cep));
+    pendente.set(cep, tarefa);
+    return tarefa;
   };
 }
-export function rotasCep(
-  autorizar: (req: Request, res: Response) => Promise<unknown>,
-) {
-  const router = Router(),
-    consulta = criarConsultaCep();
+export function rotasCep(autorizar: (req: Request, res: Response) => Promise<unknown>) {
+  const roteador = Router();
+  const consulta = criarConsultaCep();
   const limites = new Map<string, { ate: number; n: number }>();
-  router.get("/:cep", async (req, res) => {
+  roteador.get('/:cep', async (req, res) => {
     if (!(await autorizar(req, res))) return;
-    const key = String(res.locals.adminUserId ?? req.ip);
-    let bucket = limites.get(key);
-    if (!bucket || bucket.ate < Date.now()) {
-      bucket = { ate: Date.now() + 60000, n: 0 };
+    const chave = String(res.locals.adminUserId ?? req.ip);
+    let repositorioArquivos = limites.get(chave);
+    if (!repositorioArquivos || repositorioArquivos.ate < Date.now()) {
+      repositorioArquivos = { ate: Date.now() + 60000, n: 0 };
       if (limites.size > 2000)
-        for (const [k, v] of limites) if (v.ate < Date.now()) limites.delete(k);
-      limites.set(key, bucket);
+        for (const [chaveAtual, valorAtual] of limites)
+          if (valorAtual.ate < Date.now()) limites.delete(chaveAtual);
+      limites.set(chave, repositorioArquivos);
     }
-    if (++bucket.n > 40) {
-      res
-        .status(429)
-        .json({ message: "Aguarde um momento para consultar outro CEP." });
+    if (++repositorioArquivos.n > 40) {
+      res.status(429).json({ message: 'Aguarde um momento para consultar outro CEP.' });
       return;
     }
     try {
-      res.setHeader("Cache-Control", "private, max-age=300");
+      res.setHeader('Cache-Control', 'private, max-age=300');
       res.json(await consulta(String(req.params.cep)));
-    } catch (e) {
-      res
-        .status(e instanceof ErroCep ? e.status : 503)
-        .json({
-          message:
-            e instanceof ErroCep
-              ? e.message
-              : "Não foi possível consultar o CEP.",
-        });
+    } catch (erroCapturado) {
+      res.status(erroCapturado instanceof ErroCep ? erroCapturado.situacao : 503).json({
+        message:
+          erroCapturado instanceof ErroCep
+            ? erroCapturado.message
+            : 'Não foi possível consultar o CEP.',
+      });
     }
   });
-  return router;
+  return roteador;
 }
