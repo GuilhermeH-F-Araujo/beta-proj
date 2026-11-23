@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AvisoAutenticacao from '../components/AvisoAutenticacao';
-import LogoEstacao from '../components/LogoEstacao';
 import TelaFigma from '../components/TelaFigma';
 import { buscarUsuarioAtual, entrar } from '../services/apiAutenticacao';
 
@@ -77,7 +76,7 @@ export default function Entrar() {
       <div className="auth-panel-glow" aria-hidden="true" />
 
       <section className="login-brand" aria-label="Estação Motos">
-        <LogoEstacao />
+        <img src="/assets/estacao-motos-logo.png" alt="Estação Motos" />
       </section>
 
       <section className="login-heading">
