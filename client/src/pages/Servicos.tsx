@@ -1,3 +1,5 @@
+import { useFocoModal } from '../hooks/useFocoModal';
+import IconeCadastro from '../components/IconeCadastro';
 import CartaoIndicador from '../components/CartaoIndicador';
 import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
 import { useCartaoVisivel } from '../hooks/useCartoesPagina';
@@ -209,42 +211,44 @@ function SeletorEstilizado({
             <div className="styled-dropdown-empty" role="status">
               {mensagemVazia ?? 'Nenhuma opção cadastrada.'}
             </div>
-          ) : opcoes.map((opcao) => (
-            <button
-              type="button"
-              role="option"
-              aria-selected={opcao.value === valor}
-              key={opcao.value}
-              className={`styled-dropdown-option${opcao.value === valor ? ' selected' : ''}`}
-              onClick={() => {
-                aoAlterar(opcao.value);
-                setAberto(false);
-                raiz.current?.querySelector<HTMLButtonElement>('button')?.focus();
-              }}
-            >
-              {opcao.icon ? (
-                <span
-                  className="styled-dropdown-option-icon"
-                  style={{
-                    color: opcao.color ?? '#65758a',
-                    backgroundColor: `${opcao.color ?? '#65758a'}18`,
-                  }}
-                >
-                  <CategoriaIcone name={opcao.icon} size={16} />
-                </span>
-              ) : (
-                <span className="styled-dropdown-option-icon neutral">
-                  <Icone name={leadingIcone === 'clock' ? 'clock' : 'check'} size={15} />
-                </span>
-              )}
-              <span>{opcao.label}</span>
-              {opcao.value === valor && (
-                <span className="styled-dropdown-check">
-                  <Icone name="check" size={15} />
-                </span>
-              )}
-            </button>
-          ))}
+          ) : (
+            opcoes.map((opcao) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={opcao.value === valor}
+                key={opcao.value}
+                className={`styled-dropdown-option${opcao.value === valor ? ' selected' : ''}`}
+                onClick={() => {
+                  aoAlterar(opcao.value);
+                  setAberto(false);
+                  raiz.current?.querySelector<HTMLButtonElement>('button')?.focus();
+                }}
+              >
+                {opcao.icon ? (
+                  <span
+                    className="styled-dropdown-option-icon"
+                    style={{
+                      color: opcao.color ?? '#65758a',
+                      backgroundColor: `${opcao.color ?? '#65758a'}18`,
+                    }}
+                  >
+                    <CategoriaIcone name={opcao.icon} size={16} />
+                  </span>
+                ) : (
+                  <span className="styled-dropdown-option-icon neutral">
+                    <Icone name={leadingIcone === 'clock' ? 'clock' : 'check'} size={15} />
+                  </span>
+                )}
+                <span>{opcao.label}</span>
+                {opcao.value === valor && (
+                  <span className="styled-dropdown-check">
+                    <Icone name="check" size={15} />
+                  </span>
+                )}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -465,11 +469,11 @@ function IconeSeletor({
   const [aba, setAba] = useState('Todos');
   const [selecionado, setSelecionado] = useState(valor);
   const [svgUrl, setSvgUrl] = useState(/^https:\/\//i.test(valor) ? valor : '');
+  const focoIcones = useFocoModal<HTMLElement>();
   const [urlErro, setUrlErro] = useState('');
   const filtrado = iconeOpcoes.filter(
     ([iconeLocal, rotulo, grupo]) =>
-      (aba === 'Todos' || grupo === aba) &&
-      correspondeBusca(consulta, `${rotulo} ${iconeLocal}`),
+      (aba === 'Todos' || grupo === aba) && correspondeBusca(consulta, `${rotulo} ${iconeLocal}`),
   );
   return (
     <div
@@ -480,6 +484,8 @@ function IconeSeletor({
     >
       <section
         className="icon-picker-modal"
+        ref={focoIcones}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="icon-picker-title"
@@ -631,6 +637,15 @@ function CorSeletor({
       window.removeEventListener('scroll', posicionar, true);
     };
   }, [aberto]);
+  useEffect(() => {
+    if (!aberto) return;
+    function fecharFora(evento: MouseEvent) {
+      if (evento.target instanceof Node && !containerCor.current?.contains(evento.target))
+        setAberto(false);
+    }
+    document.addEventListener('mousedown', fecharFora);
+    return () => document.removeEventListener('mousedown', fecharFora);
+  }, [aberto]);
   function escolher(corLocal: string) {
     const normalizado = corLocal.toUpperCase();
     const [continuarMatiz, continuarSaturacao, continuarBrilho] = hexadecimalParaHsv(normalizado);
@@ -694,7 +709,13 @@ function CorSeletor({
           className="services-color-popover"
           style={
             posicaoPainel
-              ? { position: 'fixed', top: posicaoPainel.top, left: posicaoPainel.left, bottom: 'auto', right: 'auto' }
+              ? {
+                  position: 'fixed',
+                  top: posicaoPainel.top,
+                  left: posicaoPainel.left,
+                  bottom: 'auto',
+                  right: 'auto',
+                }
               : undefined
           }
         >
@@ -807,14 +828,19 @@ function CorSeletor({
     </div>
   );
 }
-function CategoriaModal({
+function gerarIdCatalogo(prefixo: string) {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return prefixo + '-' + Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export function CategoriaModal({
   value: valor,
   onClose: aoFechar,
   onSave: aoSalvar,
 }: {
   value?: CategoriaServico;
   onClose: () => void;
-  onSave: (categoria: CategoriaServico) => void;
+  onSave: (categoria: CategoriaServico) => Promise<void>;
 }) {
   const [nomeLocal, setNome] = useEstadoRascunho(
     `categoria-${valor?.id ?? 'nova'}`,
@@ -837,30 +863,48 @@ function CategoriaModal({
     valor?.icone ?? 'wrench',
   );
   const [iconeAberto, setIconeAberto] = useState(false);
+  const focoCategoria = useFocoModal<HTMLFormElement>(!iconeAberto);
   const [erro, setErro] = useState('');
-  function enviar(evento: FormEvent) {
+  const [salvandoCategoria, setSalvandoCategoria] = useState(false);
+  async function enviar(evento: FormEvent) {
     evento.preventDefault();
+    if (salvandoCategoria) return;
     if (!nomeLocal.trim()) {
       setErro('Informe o nome da categoria.');
       return;
     }
-    aoSalvar({
-      id: valor?.id ?? `cat-${crypto.randomUUID()}`,
-      nome: nomeLocal.trim(),
-      descricao: descricaoLocal.trim(),
-      cor: corLocal,
-      icone: iconeLocal,
-    });
+    setErro('');
+    setSalvandoCategoria(true);
+    try {
+      await aoSalvar({
+        id: valor?.id ?? gerarIdCatalogo('cat'),
+        nome: nomeLocal.trim(),
+        descricao: descricaoLocal.trim(),
+        cor: corLocal,
+        icone: iconeLocal,
+      });
+    } catch (causa) {
+      setErro(causa instanceof Error ? causa.message : 'Não foi possível salvar a categoria.');
+    } finally {
+      setSalvandoCategoria(false);
+    }
   }
   return (
     <div
       className={`services-modal-backdrop${iconeAberto ? ' category-picker-open' : ''}`}
       onMouseDown={(evento) => {
-        if (evento.target === evento.currentTarget) aoFechar();
+        if (
+          evento.target === evento.currentTarget &&
+          !evento.currentTarget.querySelector('.services-color-popover') &&
+          !salvandoCategoria
+        )
+          aoFechar();
       }}
     >
       <form
         className="category-modal"
+        ref={focoCategoria}
+        tabIndex={-1}
         style={{ visibility: iconeAberto ? 'hidden' : undefined }}
         role="dialog"
         aria-modal="true"
@@ -953,8 +997,8 @@ function CategoriaModal({
           <button type="button" className="services-btn secondary" onClick={aoFechar}>
             Cancelar
           </button>
-          <button type="submit" className="services-btn primary">
-            Salvar categoria
+          <button type="submit" className="services-btn primary" disabled={salvandoCategoria}>
+            {salvandoCategoria ? 'Salvando…' : 'Salvar categoria'}
           </button>
         </footer>
         {iconeAberto && (
@@ -1041,7 +1085,9 @@ export default function Servicos() {
       }
     } catch (erro) {
       if (valido()) {
-        setErroCarga(erro instanceof Error ? erro.message : 'Não foi possível atualizar o catálogo.');
+        setErroCarga(
+          erro instanceof Error ? erro.message : 'Não foi possível atualizar o catálogo.',
+        );
         if (mostrarEstado) {
           setAvisoTemporarioErro(true);
           setAvisoTemporario('Não foi possível atualizar os serviços. Tente novamente.');
@@ -1105,8 +1151,11 @@ export default function Servicos() {
   const atual = Math.min(pagina, paginas);
   const linhas = filtrado.slice((atual - 1) * 8, atual * 8);
   useEffect(() => observarCatalogoServicos(() => setCatalogo(lerCatalogoServicos())), []);
-  async function persistir(continuar: typeof catalogo) {
-    if (salvando) return false;
+  async function persistir(continuar: typeof catalogo, erroNoFormulario = false) {
+    if (salvando) {
+      if (erroNoFormulario) throw new Error('Aguarde o salvamento em andamento e tente novamente.');
+      return false;
+    }
     setSalvando(true);
     try {
       await salvarCatalogoServicos(continuar);
@@ -1119,6 +1168,7 @@ export default function Servicos() {
       await atualizarCatalogoCompartilhado()
         .then(setCatalogo)
         .catch(() => {});
+      if (erroNoFormulario) throw erro;
       return false;
     } finally {
       setSalvando(false);
@@ -1196,7 +1246,7 @@ export default function Servicos() {
     }
     const salvo: ItemCatalogoServico = {
       ...formulario,
-      id: editando?.id ?? `svc-${crypto.randomUUID()}`,
+      id: editando?.id ?? gerarIdCatalogo('svc'),
       nome: formulario.nome.trim(),
       descricao: formulario.descricao.trim(),
       icone: categoria?.icone ?? formulario.icone,
@@ -1213,7 +1263,7 @@ export default function Servicos() {
     const categoriasLocal = categoriaEditando
       ? catalogo.categorias.map((item) => (item.id === categoria.id ? categoria : item))
       : [...catalogo.categorias, categoria];
-    if (!(await persistir({ ...catalogo, categorias: categoriasLocal }))) return;
+    if (!(await persistir({ ...catalogo, categorias: categoriasLocal }, true))) return;
     limparRascunho(`categoria-${categoriaEditando?.id ?? 'nova'}`);
     setCategoriaEditando(undefined);
     setAvisoTemporario(categoriaEditando ? 'Categoria atualizada.' : 'Categoria criada.');
@@ -1261,7 +1311,7 @@ export default function Servicos() {
                   disabled={!pode('servicos', 'editar')}
                   onClick={() => setCategoriaEditando(null)}
                 >
-                  <Icone name="plus" size={15} />
+                  <IconeCadastro tipo="categoria" />
                   Nova categoria
                 </button>
                 <button
@@ -1273,7 +1323,7 @@ export default function Servicos() {
                     focusEditor();
                   }}
                 >
-                  <Icone name="plus" size={16} />
+                  <IconeCadastro tipo="servico" />
                   Novo serviço
                 </button>
               </div>
@@ -1349,7 +1399,11 @@ export default function Servicos() {
                     type="button"
                     className={`services-icon-action${atualizandoLista ? ' is-refreshing' : ''}`}
                     aria-label={atualizandoLista ? 'Atualizando catálogo' : 'Atualizar catálogo'}
-                    title={atualizandoLista ? 'Atualizando dados do banco...' : 'Atualizar serviços e categorias'}
+                    title={
+                      atualizandoLista
+                        ? 'Atualizando dados do banco...'
+                        : 'Atualizar serviços e categorias'
+                    }
                     disabled={atualizandoLista || carregando}
                     onClick={() => void atualizarListaCatalogo(true)}
                   >
@@ -1586,170 +1640,17 @@ export default function Servicos() {
                   </nav>
                 </footer>
               </section>
-              <form className="service-editor-card" onSubmit={salvarServico}>
-                <header>
-                  <span>
-                    <Icone name={editando ? 'pencil' : 'wrench'} size={16} />
-                  </span>
-                  <div>
-                    <h2>{editando ? 'Editar serviço' : 'Adicionar novo serviço'}</h2>
-                    <small>
-                      {editando
-                        ? editando.nome
-                        : 'Preencha os dados para disponibilizar um serviço.'}
-                    </small>
-                  </div>
-                </header>
-                {editando && (
-                  <div className="service-edit-context">
-                    <span>Editando serviço existente</span>
-                    <button type="button" onClick={restaurarFormulario}>
-                      Sair da edição <Icone name="close" size={12} />
-                    </button>
-                  </div>
-                )}
-                <div className="service-editor-fields">
-                  <label className="services-field">
-                    <span>
-                      Nome do serviço <b>*</b>
-                    </span>
-                    <input
-                      maxLength={80}
-                      placeholder="Ex.: Troca de Óleo do Motor"
-                      value={formulario.nome}
-                      onChange={(evento) =>
-                        setFormulario({ ...formulario, nome: evento.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="services-field">
-                    <span>
-                      Categoria <b>*</b>
-                    </span>
-                    <CategoriaSelecionar
-                      value={formulario.categoriaId}
-                      categories={catalogo.categorias}
-                      onChange={(valor) => {
-                        const categoria = catalogo.categorias.find((item) => item.id === valor);
-                        setFormulario({
-                          ...formulario,
-                          categoriaId: valor,
-                          icone: categoria?.icone ?? formulario.icone,
-                        });
-                      }}
-                    />
-                  </label>
-                  <label className="services-field">
-                    <span>
-                      Descrição <b>*</b>
-                    </span>
-                    <textarea
-                      maxLength={300}
-                      placeholder="Descreva o serviço em detalhes..."
-                      value={formulario.descricao}
-                      onChange={(evento) =>
-                        setFormulario({ ...formulario, descricao: evento.target.value })
-                      }
-                    />
-                  </label>
-                  <div className="service-price-row">
-                    <label className="services-field">
-                      <span>
-                        Preço (R$) <b>*</b>
-                      </span>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        placeholder="0,00"
-                        value={formulario.preco || ''}
-                        onChange={(evento) =>
-                          setFormulario({ ...formulario, preco: Number(evento.target.value) })
-                        }
-                      />
-                    </label>
-                    <label className="services-field">
-                      <span>
-                        Custo do serviço (R$) <b>*</b>
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0,00"
-                        value={Number.isFinite(formulario.custo) ? formulario.custo : ''}
-                        onChange={(evento) =>
-                          setFormulario({
-                            ...formulario,
-                            custo:
-                              evento.target.value === '' ? Number.NaN : Number(evento.target.value),
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="service-duration-row">
-                    <label className="services-field">
-                      <span>
-                        Tempo médio <b>*</b>
-                      </span>
-                      <DuracaoSelecionar
-                        value={formulario.duracao}
-                        onChange={(valor) => setFormulario({ ...formulario, duracao: valor })}
-                      />
-                    </label>
-                    <div className="services-field">
-                      <span>Status</span>
-                      <button
-                        type="button"
-                        className={`service-switch${formulario.ativo ? ' enabled' : ''}`}
-                        aria-pressed={formulario.ativo}
-                        onClick={() => setFormulario({ ...formulario, ativo: !formulario.ativo })}
-                      >
-                        <i />
-                        <span>{formulario.ativo ? 'Ativo' : 'Inativo'}</span>
-                      </button>
-                    </div>
-                  </div>
-                  <label className="services-field">
-                    <span>
-                      Informações adicionais <small>(opcional)</small>
-                    </span>
-                    <textarea
-                      className="service-extra-textarea"
-                      maxLength={300}
-                      placeholder="Observações, recomendações ou detalhes importantes..."
-                      value={formulario.adicional}
-                      onChange={(evento) =>
-                        setFormulario({ ...formulario, adicional: evento.target.value })
-                      }
-                    />
-                  </label>
-                  {formularioErro && (
-                    <p className="services-form-error" role="alert">
-                      {formularioErro}
-                    </p>
-                  )}
-                </div>
-                <footer>
-                  <button
-                    type="button"
-                    className="services-btn secondary"
-                    onClick={restaurarFormulario}
-                  >
-                    <img
-                      className="service-reset-icon"
-                      src="/assets/services/reload-single.svg"
-                      alt=""
-                      aria-hidden="true"
-                    />
-                    Limpar
-                  </button>
-                  <button type="submit" className="services-btn primary">
-                    {editando ? 'Salvar alterações' : 'Salvar serviço'}
-                  </button>
-                </footer>
-              </form>
+              <EditorServico
+                {...{
+                  formulario,
+                  setFormulario,
+                  editando,
+                  formularioErro,
+                  restaurarFormulario,
+                  salvarServico,
+                  categorias: catalogo.categorias,
+                }}
+              />
             </div>
             <section className="services-categories-card" id="services-categories">
               <header>
@@ -1763,7 +1664,7 @@ export default function Servicos() {
                   disabled={!pode('servicos', 'editar')}
                   onClick={() => setCategoriaEditando(null)}
                 >
-                  <Icone name="plus" size={13} />
+                  <IconeCadastro tipo="categoria" />
                   Nova categoria
                 </button>
               </header>
@@ -1849,5 +1750,197 @@ export default function Servicos() {
         />
       )}
     </div>
+  );
+}
+
+export function EditorServico({
+  formulario,
+  setFormulario,
+  editando,
+  formularioErro,
+  restaurarFormulario,
+  salvarServico,
+  categorias,
+}: {
+  formulario: Omit<ItemCatalogoServico, 'id'>;
+  setFormulario: (valor: Omit<ItemCatalogoServico, 'id'>) => void;
+  editando: ItemCatalogoServico | null;
+  formularioErro: string;
+  restaurarFormulario: () => void;
+  salvarServico: (evento: FormEvent) => void;
+  categorias: CategoriaServico[];
+}) {
+  return (
+    <form className="service-editor-card" onSubmit={salvarServico}>
+      <header>
+        <span>
+          <Icone name={editando ? 'pencil' : 'wrench'} size={16} />
+        </span>
+        <div>
+          <h2>{editando ? 'Editar serviço' : 'Adicionar novo serviço'}</h2>
+          <small>
+            {editando ? editando.nome : 'Preencha os dados para disponibilizar um serviço.'}
+          </small>
+        </div>
+      </header>
+      {editando && (
+        <div className="service-edit-context">
+          <span>Editando serviço existente</span>
+          <button type="button" onClick={restaurarFormulario}>
+            Sair da edição <Icone name="close" size={12} />
+          </button>
+        </div>
+      )}
+      <div className="service-editor-fields">
+        <label className="services-field">
+          <span>
+            Nome do serviço <b>*</b>
+          </span>
+          <input
+            maxLength={80}
+            placeholder="Ex.: Troca de Óleo do Motor"
+            value={formulario.nome}
+            onChange={(evento) => setFormulario({ ...formulario, nome: evento.target.value })}
+          />
+        </label>
+        <label className="services-field">
+          <span>
+            Categoria <b>*</b>
+          </span>
+          <CategoriaSelecionar
+            value={formulario.categoriaId}
+            categories={categorias}
+            onChange={(valor) => {
+              const categoria = categorias.find((item) => item.id === valor);
+              setFormulario({
+                ...formulario,
+                categoriaId: valor,
+                icone: categoria?.icone ?? formulario.icone,
+              });
+            }}
+          />
+        </label>
+        <label className="services-field">
+          <span>
+            Descrição <b>*</b>
+          </span>
+          <textarea
+            maxLength={300}
+            placeholder="Descreva o serviço em detalhes..."
+            value={formulario.descricao}
+            onChange={(evento) => setFormulario({ ...formulario, descricao: evento.target.value })}
+          />
+        </label>
+        <div className="service-price-row">
+          <label className="services-field">
+            <span>
+              Preço (R$) <b>*</b>
+            </span>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="0,00"
+              value={formulario.preco || ''}
+              onChange={(evento) =>
+                setFormulario({ ...formulario, preco: Number(evento.target.value) })
+              }
+            />
+          </label>
+          <label className="services-field">
+            <span>
+              Custo do serviço (R$) <b>*</b>
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0,00"
+              value={Number.isFinite(formulario.custo) ? formulario.custo : ''}
+              onChange={(evento) =>
+                setFormulario({
+                  ...formulario,
+                  custo: evento.target.value === '' ? Number.NaN : Number(evento.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+        <div className="service-duration-row">
+          <label className="services-field">
+            <span>
+              Tempo médio <b>*</b>
+            </span>
+            <DuracaoSelecionar
+              value={formulario.duracao}
+              onChange={(valor) => setFormulario({ ...formulario, duracao: valor })}
+            />
+          </label>
+          <div className="services-field">
+            <span>Status</span>
+            <button
+              type="button"
+              className={`service-switch${formulario.ativo ? ' enabled' : ''}`}
+              aria-pressed={formulario.ativo}
+              onClick={() => setFormulario({ ...formulario, ativo: !formulario.ativo })}
+            >
+              <i />
+              <span>{formulario.ativo ? 'Ativo' : 'Inativo'}</span>
+            </button>
+          </div>
+        </div>
+        <label className="services-field">
+          <span>
+            Informações adicionais <small>(opcional)</small>
+          </span>
+          <textarea
+            className="service-extra-textarea"
+            maxLength={300}
+            placeholder="Observações, recomendações ou detalhes importantes..."
+            value={formulario.adicional}
+            onChange={(evento) => setFormulario({ ...formulario, adicional: evento.target.value })}
+          />
+        </label>
+        {formularioErro && (
+          <p className="services-form-error" role="alert">
+            {formularioErro}
+          </p>
+        )}
+      </div>
+      <footer>
+        <button type="button" className="services-btn secondary" onClick={restaurarFormulario}>
+          <img
+            className="service-reset-icon"
+            src="/assets/services/reload-single.svg"
+            alt=""
+            aria-hidden="true"
+          />
+          Limpar
+        </button>
+        <button type="submit" className="services-btn primary">
+          {editando ? 'Salvar alterações' : 'Salvar serviço'}
+        </button>
+      </footer>
+    </form>
+  );
+}
+
+export function CadastroCatalogoOS({
+  aoFechar,
+  aoSalvar,
+}: {
+  aoFechar: () => void;
+  aoSalvar: () => void;
+}) {
+  return (
+    <CategoriaModal
+      onClose={aoFechar}
+      onSave={async (categoria) => {
+        const atual = await atualizarCatalogoCompartilhado();
+        await salvarCatalogoServicos({ ...atual, categorias: [...atual.categorias, categoria] });
+        limparRascunho('categoria-nova');
+        aoSalvar();
+      }}
+    />
   );
 }

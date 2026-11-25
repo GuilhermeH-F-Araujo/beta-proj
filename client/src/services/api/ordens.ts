@@ -18,6 +18,8 @@ export type OpcoesNovaOrdem = {
     mileage: number | null;
   }[];
   mechanics: { id: number; name: string }[];
+  services: { id: string; name: string; categoryId: string; duration: string; price: number }[];
+  serviceCategories: { id: string; name: string }[];
 };
 
 export type DadosNovaOrdem = {
@@ -35,9 +37,12 @@ export type DadosNovaOrdem = {
   mechanicId: number | null;
   entryAt: string;
   forecastAt: string;
+  noForecastConfirmed: boolean;
+  photoCaptureVersion: 2;
   problem: string;
   observations: string;
-  photos: { data: string }[];
+  services: string[];
+  photos: { position: 'front' | 'left' | 'rear' | 'right' | 'extra'; data: string }[];
 };
 
 export function buscarOpcoesNovaOrdem() {
@@ -185,7 +190,12 @@ export type DetalhesOrdem = {
   };
   services: { description: string; price: number }[];
   parts: { name: string; quantity: number; unitPrice: number }[];
-  photos: { id: number; url: string; recordedAt: string | null }[];
+  photos: {
+    id: number;
+    url: string;
+    position: 'front' | 'left' | 'rear' | 'right' | 'extra' | null;
+    recordedAt: string | null;
+  }[];
   serviceTotal: number;
   partsTotal: number;
   paymentStatus: 'pendente' | 'pago';

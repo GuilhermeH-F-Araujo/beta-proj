@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
@@ -83,12 +84,14 @@ export default function ModalAcoesOrdem({
     inicialAba === 'delete' && podeExcluirPermanentemente ? 'delete' : null,
   );
   const [sucesso, setSucesso] = useState('');
+  const focoAcoes = useFocoModal<HTMLElement>(!confirmacao && !sucesso);
+  const focoConfirmacao = useFocoModal<HTMLElement>(!!confirmacao && !sucesso);
+  const focoSucesso = useFocoModal<HTMLElement>(!!sucesso);
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
-    if (inicialAba === 'delete')
-      setConfirmacao(podeExcluirPermanentemente ? 'delete' : null);
+    if (inicialAba === 'delete') setConfirmacao(podeExcluirPermanentemente ? 'delete' : null);
   }, [inicialAba, podeExcluirPermanentemente]);
 
   useEffect(() => {
@@ -219,6 +222,8 @@ export default function ModalAcoesOrdem({
         >
           <section
             className="oa-shell"
+            ref={focoAcoes}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label={`Ações da OS #${idOrdem}`}
@@ -620,6 +625,8 @@ export default function ModalAcoesOrdem({
         >
           <section
             className="oa-confirm"
+            ref={focoConfirmacao}
+            tabIndex={-1}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="oa-confirm-title"
@@ -690,7 +697,13 @@ export default function ModalAcoesOrdem({
             if (evento.target === evento.currentTarget) aoFechar();
           }}
         >
-          <section className="oa-success" role="dialog" aria-modal="true">
+          <section
+            className="oa-success"
+            ref={focoSucesso}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+          >
             <span>
               <Icone name="check" size={23} />
             </span>

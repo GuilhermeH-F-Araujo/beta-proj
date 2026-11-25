@@ -1,230 +1,167 @@
 import { Icone } from '../MenuAdmin';
 import type { useFormularioNovaOrdem } from '../ModalNovaOrdem';
-import { mascaraCpf, mascaraTelefone } from './auxiliares';
+import DadosMotocicleta from './DadosMotocicleta';
 
-// Os campos acompanham o gancho, sem repetir uma segunda definicao do formulario.
+type EstadoFormulario = NonNullable<ReturnType<typeof useFormularioNovaOrdem>>;
 type Props = Pick<
   EstadoFormulario,
   | 'carregando'
   | 'clienteAberto'
   | 'clienteBusca'
+  | 'clienteDoPerfil'
   | 'clienteChaves'
-  | 'modoCliente'
   | 'clienteSecao'
   | 'concluido'
   | 'correspondencias'
-  | 'cpf'
   | 'setClienteAberto'
   | 'setClienteBusca'
   | 'setClienteId'
-  | 'setModoCliente'
-  | 'setCpf'
   | 'setIndiceClienteDestacado'
-  | 'setEmail'
-  | 'setErro'
-  | 'setNome'
-  | 'setTelefone'
   | 'setCadastroClienteAberto'
+  | 'setErro'
   | 'indiceClienteDestacado'
-  | 'email'
   | 'escolherCliente'
   | 'idCliente'
-  | 'nome'
   | 'opcoes'
-  | 'telefone'
-  | 'cadastroClienteAberto'
+  | 'idMotocicleta'
+  | 'motocicletaSecao'
+  | 'motosCliente'
+  | 'quilometragem'
+  | 'setQuilometragem'
+  | 'escolherMoto'
+  | 'onCriarMotocicleta'
 >;
-
-type EstadoFormulario = NonNullable<ReturnType<typeof useFormularioNovaOrdem>>;
 
 export default function DadosCliente(props: Props) {
   const {
     carregando,
     clienteAberto,
     clienteBusca,
+    clienteDoPerfil,
     clienteChaves,
-    modoCliente,
     clienteSecao,
     concluido,
     correspondencias,
-    cpf,
     setClienteAberto,
     setClienteBusca,
     setClienteId,
-    setModoCliente,
-    setCpf,
     setIndiceClienteDestacado,
-    setEmail,
-    setErro,
-    setNome,
-    setTelefone,
     setCadastroClienteAberto,
+    setErro,
     indiceClienteDestacado,
-    email,
     escolherCliente,
     idCliente,
-    nome,
     opcoes,
-    telefone,
-    cadastroClienteAberto,
   } = props;
   return (
-    <section className="os-create-card" ref={clienteSecao}>
+    <section className="os-create-card os-create-personal-card">
       <div className="os-create-section-title">
-        <span className="os-create-number">01</span>
+        <span className="os-create-number">
+          <Icone name="users" size={17} />
+        </span>
         <div>
-          <h3>Cliente</h3>
-          <p>Quem é o proprietário da motocicleta?</p>
+          <h3>Cliente e motocicleta</h3>
+          <p>Selecione o proprietário e a moto deste atendimento.</p>
         </div>
-        {concluido[0] && <Icone name="check" size={18} />}
+        {concluido[0] && concluido[1] && <Icone name="check" size={18} />}
       </div>
-      <div className="os-create-switch">
-        <button
-          type="button"
-          className={modoCliente === 'existing' && !cadastroClienteAberto ? 'active' : ''}
-          onClick={() => {
-            setCadastroClienteAberto(false);
-            setModoCliente('existing');
-            escolherCliente(null);
-          }}
-        >
-          Buscar cliente
-        </button>
-        <button
-          type="button"
-          className={cadastroClienteAberto ? 'active' : ''}
-          onClick={() => {
-            setCadastroClienteAberto(true);
-            setErro('');
-          }}
-        >
-          Cadastrar novo
-        </button>
-      </div>
-      {modoCliente === 'existing' ? (
-        <>
-          <div className="os-create-search-wrap">
-            <label className="os-create-field">
-              <span>
-                Busque por nome ou telefone <b>*</b>
-              </span>
-              <span className="os-create-combobox">
-                <Icone name="search" size={17} />
-                <input
-                  role="combobox"
-                  aria-autocomplete="list"
-                  aria-expanded={clienteAberto}
-                  aria-controls="os-client-options"
-                  aria-activedescendant={
-                    clienteAberto && correspondencias[indiceClienteDestacado]
-                      ? `os-client-${correspondencias[indiceClienteDestacado].id}`
-                      : undefined
-                  }
-                  placeholder={
-                    carregando ? 'Carregando clientes...' : 'Digite para encontrar um cliente'
-                  }
-                  value={clienteBusca}
-                  onChange={(evento) => {
-                    setClienteBusca(evento.target.value);
-                    setClienteId(null);
-                    setClienteAberto(true);
-                    setIndiceClienteDestacado(0);
-                  }}
-                  onFocus={() => setClienteAberto(true)}
-                  onBlur={() => window.setTimeout(() => setClienteAberto(false), 120)}
-                  onKeyDown={clienteChaves}
-                  disabled={carregando || !opcoes}
-                />
-              </span>
-            </label>
-            {clienteAberto && (
-              <div className="os-create-options" id="os-client-options" role="listbox">
-                {correspondencias.length ? (
-                  correspondencias.map((cliente, indice) => (
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={idCliente === cliente.id}
-                      id={`os-client-${cliente.id}`}
-                      className={indiceClienteDestacado === indice ? 'highlighted' : ''}
-                      key={cliente.id}
-                      onMouseDown={(evento) => {
-                        evento.preventDefault();
-                        escolherCliente(cliente.id);
-                      }}
-                    >
-                      <span className="os-create-option-avatar">{cliente.name.charAt(0)}</span>
-                      <span>
-                        <strong>{cliente.name}</strong>
-                        <small>{cliente.phone || 'Telefone não informado'}</small>
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <p>Nenhum cliente encontrado. Use “Cadastrar novo”.</p>
-                )}
-              </div>
-            )}
-          </div>
-          {idCliente && (
-            <div className="os-create-selection">
-              <span>
-                <Icone name="check" size={15} />
-              </span>
-              <strong>{nome}</strong>
-              <small>{telefone || 'Sem telefone'}</small>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="os-create-fields">
+
+      <section className="os-create-search-wrap" ref={clienteSecao}>
+        {clienteDoPerfil !== undefined ? (
+          <label className="os-create-field">
+            <span>Cliente</span>
+            <input value={clienteDoPerfil} readOnly />
+          </label>
+        ) : (
           <label className="os-create-field">
             <span>
-              Nome completo <b>*</b>
+              Cliente <b>*</b>
             </span>
-            <input
-              maxLength={100}
-              value={nome}
-              onChange={(eventoRecebido) => setNome(eventoRecebido.target.value)}
-              placeholder="Nome do cliente"
-            />
-          </label>
-          <div className="os-create-row">
-            <label className="os-create-field">
-              <span>
-                WhatsApp <b>*</b>
-              </span>
+            <span className="os-create-combobox os-create-client-combobox">
+              <Icone name="search" size={17} />
               <input
-                inputMode="tel"
-                value={telefone}
-                onChange={(eventoRecebido) =>
-                  setTelefone(mascaraTelefone(eventoRecebido.target.value))
+                role="combobox"
+                aria-label="Buscar cliente por nome ou telefone"
+                aria-autocomplete="list"
+                aria-expanded={clienteAberto}
+                aria-controls="os-client-options"
+                aria-activedescendant={
+                  clienteAberto
+                    ? indiceClienteDestacado === correspondencias.length
+                      ? 'os-client-create'
+                      : correspondencias[indiceClienteDestacado]
+                        ? `os-client-${correspondencias[indiceClienteDestacado].id}`
+                        : undefined
+                    : undefined
                 }
-                placeholder="(11) 99999-9999"
+                placeholder={carregando ? 'Carregando clientes…' : 'Nome ou telefone do cliente'}
+                value={clienteBusca}
+                disabled={carregando || !opcoes}
+                onChange={(evento) => {
+                  setClienteBusca(evento.target.value);
+                  setClienteId(null);
+                  setClienteAberto(true);
+                  setIndiceClienteDestacado(0);
+                }}
+                onFocus={() => setClienteAberto(true)}
+                onBlur={() => window.setTimeout(() => setClienteAberto(false), 120)}
+                onKeyDown={clienteChaves}
               />
-            </label>
-            <label className="os-create-field">
-              <span>CPF</span>
-              <input
-                inputMode="numeric"
-                value={cpf}
-                onChange={(eventoRecebido) => setCpf(mascaraCpf(eventoRecebido.target.value))}
-                placeholder="000.000.000-00"
-              />
-            </label>
-          </div>
-          <label className="os-create-field">
-            <span>E-mail</span>
-            <input
-              type="email"
-              maxLength={150}
-              value={email}
-              onChange={(eventoRecebido) => setEmail(eventoRecebido.target.value)}
-              placeholder="cliente@exemplo.com"
-            />
+              <span className={`os-create-client-state${idCliente ? ' is-selected' : ''}`}>
+                <Icone name={idCliente ? 'check' : 'chevron'} size={16} />
+              </span>
+            </span>
           </label>
-        </div>
-      )}
+        )}
+        {clienteAberto && (
+          <div className="os-create-options" id="os-client-options" role="listbox">
+            {correspondencias.map((cliente, indice) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={idCliente === cliente.id}
+                id={`os-client-${cliente.id}`}
+                className={indiceClienteDestacado === indice ? 'highlighted' : ''}
+                key={cliente.id}
+                onMouseDown={(evento) => {
+                  evento.preventDefault();
+                  escolherCliente(cliente.id);
+                }}
+              >
+                <span className="os-create-option-avatar">{cliente.name.charAt(0)}</span>
+                <span>
+                  <strong>{cliente.name}</strong>
+                  <small>{cliente.phone || 'Telefone não informado'}</small>
+                </span>
+              </button>
+            ))}
+            {!correspondencias.length && <p>Nenhum cliente corresponde à busca.</p>}
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              id="os-client-create"
+              className={`os-create-option-create${indiceClienteDestacado === correspondencias.length ? ' highlighted' : ''}`}
+              onMouseDown={(evento) => {
+                evento.preventDefault();
+                setClienteAberto(false);
+                setErro('');
+                setCadastroClienteAberto(true);
+              }}
+            >
+              <span className="os-create-option-avatar">
+                <Icone name="plus" size={15} />
+              </span>
+              <span>
+                <strong>Criar usuário</strong>
+                <small>Adicionar um cliente novo à oficina</small>
+              </span>
+            </button>
+          </div>
+        )}
+      </section>
+
+      <DadosMotocicleta {...props} />
     </section>
   );
 }

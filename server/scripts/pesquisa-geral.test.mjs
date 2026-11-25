@@ -22,6 +22,9 @@ function banco(tabelas = {}, falhas = []) {
         order() {
           return this;
         },
+        in() {
+          return this;
+        },
         limit(valor) {
           registro.limit = valor;
           return this;
@@ -75,8 +78,16 @@ test('pesquisa inclui OS, placas, funcionarios, servicos e agenda sem expor camp
     ordem_servico: [{ id_os: 42, problema_relatado: 'Freio', status: 'aguardando' }],
     moto: [{ id_moto: 2, modelo: 'Freio moto', placa: 'ABC1234' }],
     funcionario: [{ id_funcionario: 3, nome: 'Freio', cargo: 'Mecânico' }],
-    catalogo: { dados: { servicos: [{ id: 's1', nome: 'Freio novo', descricao: 'Troca' }] } },
-    agenda: { dados: [{ id: 1, cliente: 'Ana', servico: 'Freio', data: '2026-11-18' }] },
+    servicos: [{ id: 's1', nome: 'Freio novo', descricao: 'Troca' }],
+    agendamento: [
+      {
+        id_agendamento: 1,
+        id_cliente: 1,
+        id_moto: 2,
+        servico_solicitado: 'Freio',
+        data_hora: '2026-11-18T10:00:00Z',
+      },
+    ],
   });
   const resultado = await pesquisarGeral(db, administrador, 'Freio');
   assert.deepEqual(

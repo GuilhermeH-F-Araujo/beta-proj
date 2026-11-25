@@ -261,7 +261,7 @@
   width: 48px;
   height: 42px;
   border-radius: 6px;
-  background: var(--theme-canvas, #f4f7f9);
+  background: var(--theme-surface, #fff);
   color: var(--theme-muted, #aab4bd);
   overflow: hidden;
 }

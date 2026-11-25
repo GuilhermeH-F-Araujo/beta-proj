@@ -1,3 +1,4 @@
+import IconeCadastro from '../components/IconeCadastro';
 import { useCartaoVisivel } from '../hooks/useCartoesPagina';
 import { useCargaInicial } from '../hooks/useCargaInicial';
 import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
@@ -229,7 +230,7 @@ export default function Funcionarios() {
                       <Icone name="search" size={17} />
                     </label>
                     <button className="staff-primary" onClick={() => setNovo(true)}>
-                      <Icone name="plus" size={17} />
+                      <IconeCadastro tipo="funcionario" />
                       Novo Funcionário
                     </button>
                   </div>
@@ -311,11 +312,7 @@ export default function Funcionarios() {
             ) : primeiraCarga ? (
               <SkeletonPagina caminho={id ? `/funcionarios/${id}` : '/funcionarios'} />
             ) : id && perfil ? (
-              <Suspense
-                fallback={
-                  <SkeletonPagina caminho={`/funcionarios/${id}`} />
-                }
-              >
+              <Suspense fallback={<SkeletonPagina caminho={`/funcionarios/${id}`} />}>
                 <Perfil
                   profile={perfil}
                   onRefresh={atualizar}

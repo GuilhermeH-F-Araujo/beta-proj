@@ -1,3 +1,6 @@
+import ModalDetalhesAgendamento from '../components/ModalDetalhesAgendamento';
+import { useFocoModal } from '../hooks/useFocoModal';
+import IconeCadastro from '../components/IconeCadastro';
 import CartaoIndicador from '../components/CartaoIndicador';
 import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
 import { useCartaoVisivel } from '../hooks/useCartoesPagina';
@@ -541,6 +544,11 @@ function PaginaNovoAgendamento({
       observacoes,
     });
   }
+  const focoAgendamento = useFocoModal<HTMLFormElement>(
+    !useResultadoAtualAberto && !duracaoAberto && !horarioAberto,
+  );
+  const focoDuracao = useFocoModal<HTMLElement>(duracaoAberto);
+  const focoHorario = useFocoModal<HTMLElement>(horarioAberto);
   function irParaServicos() {
     aoIrServicos({
       id: valor?.id ?? -1,
@@ -571,6 +579,8 @@ function PaginaNovoAgendamento({
         >
           <form
             className="appointment-modal"
+            ref={focoAgendamento}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="appointment-modal-title"
@@ -648,9 +658,7 @@ function PaginaNovoAgendamento({
                               </span>
                               <span>
                                 <strong>{clienteLocal.nome}</strong>
-                                <small>
-                                  {clienteLocal.telefone || 'Cliente cadastrado'}
-                                </small>
+                                <small>{clienteLocal.telefone || 'Cliente cadastrado'}</small>
                               </span>
                               {clienteId === clienteLocal.id && <Icone name="check" size={14} />}
                             </button>
@@ -686,12 +694,20 @@ function PaginaNovoAgendamento({
                     options={motosDisponiveis.map((motoLocal) => ({
                       value: String(motoLocal.id),
                       label: `${motoLocal.modelo}${motoLocal.placa ? ` · ${motoLocal.placa}` : ''}`,
-                      description: motoLocal.placa ? `Placa ${motoLocal.placa}` : 'Sem placa informada',
+                      description: motoLocal.placa
+                        ? `Placa ${motoLocal.placa}`
+                        : 'Sem placa informada',
                       icon: 'bike',
                     }))}
-                    emptyMessage={clienteId ? 'Este cliente não possui moto ativa cadastrada.' : 'Selecione o cliente primeiro.'}
+                    emptyMessage={
+                      clienteId
+                        ? 'Este cliente não possui moto ativa cadastrada.'
+                        : 'Selecione o cliente primeiro.'
+                    }
                     onChange={(selecionado) => {
-                      const motoLocal = motosDisponiveis.find((item) => String(item.id) === selecionado);
+                      const motoLocal = motosDisponiveis.find(
+                        (item) => String(item.id) === selecionado,
+                      );
                       if (!motoLocal) return;
                       setMotoId(motoLocal.id);
                       setMoto(motoLocal.modelo);
@@ -836,7 +852,9 @@ function PaginaNovoAgendamento({
             onClose={() => {
               setUsuarioAberto(false);
               void aoAtualizarOpcoes().catch((erro: unknown) =>
-                aoErroMecanicos(erro instanceof Error ? erro.message : 'Não foi possível atualizar os cadastros.'),
+                aoErroMecanicos(
+                  erro instanceof Error ? erro.message : 'Não foi possível atualizar os cadastros.',
+                ),
               );
             }}
             onCreated={(usuarioLocal) => {
@@ -875,6 +893,8 @@ function PaginaNovoAgendamento({
           >
             <section
               className="appointment-duration-modal"
+              ref={focoDuracao}
+              tabIndex={-1}
               role="dialog"
               aria-modal="true"
               aria-labelledby="appointment-duration-title"
@@ -973,6 +993,8 @@ function PaginaNovoAgendamento({
           >
             <section
               className="appointment-time-modal appointment-clock-modal"
+              ref={focoHorario}
+              tabIndex={-1}
               role="dialog"
               aria-modal="true"
               aria-labelledby="appointment-time-title"
@@ -1289,6 +1311,7 @@ export default function Agendamentos() {
   });
   const [visualizacao, setVisualizacao] = useState<Agendamento>();
   const [excluindo, setExcluindo] = useState<Agendamento>();
+  const focoExclusao = useFocoModal<HTMLElement>(!!excluindo);
   const [avisoTemporario, setAvisoTemporario] = useState('');
   const [mecanicos, setMecanicos] = useState<OpcaoAgendamento[]>([]);
   const [carregandoMecanicos, setMecanicosCarregando] = useState(true);
@@ -1382,11 +1405,11 @@ export default function Agendamentos() {
           setServicoCatalogo(catalogo);
           setMecanicos(
             opcoesLocal.mecanicos.map((registroAtual) => ({
-                value: String(registroAtual.id),
-                label: registroAtual.nome,
-                description: 'Mecânico ativo da equipe',
-                icon: 'staff',
-              })),
+              value: String(registroAtual.id),
+              label: registroAtual.nome,
+              description: 'Mecânico ativo da equipe',
+              icon: 'staff',
+            })),
           );
           setErroCarga('');
         }
@@ -1593,7 +1616,7 @@ export default function Agendamentos() {
                   setModalAberto(true);
                 }}
               >
-                <Icone name="plus" size={15} />
+                <IconeCadastro tipo="agenda" />
                 Novo agendamento
               </button>
             </header>
@@ -1812,7 +1835,7 @@ export default function Agendamentos() {
                   ].map(([textoAtual, numero, dadosAtual]) => (
                     <div key={String(textoAtual)}>
                       <i
-                        className={`summary-dot ${String(textoAtual).toLowerCase().replace('í', 'i')}`}
+                        className={`appointment-summary-dot ${String(textoAtual).toLowerCase().replace('í', 'i')}`}
                       />
                       <span>
                         <strong>{textoAtual}</strong>
@@ -1862,128 +1885,11 @@ export default function Agendamentos() {
         />
       )}
       {visualizacao && (
-        <div
-          className="appointment-overlay"
-          onMouseDown={(eventoRecebido) => {
-            if (eventoRecebido.target === eventoRecebido.currentTarget) setVisualizacao(undefined);
-          }}
-        >
-          <section
-            className="appointment-view-modal appointment-view-redesigned"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="appointment-view-title"
-          >
-            <header className="appointment-view-header">
-              <span>
-                <Icone name="calendar" size={19} />
-              </span>
-              <div>
-                <small>ESTAÇÃO MOTOS · AGENDAMENTOS</small>
-                <strong id="appointment-view-title">Detalhes do atendimento</strong>
-              </div>
-              <button type="button" aria-label="Fechar" onClick={() => setVisualizacao(undefined)}>
-                <Icone name="close" size={17} />
-              </button>
-            </header>
-            <div className="appointment-view-content">
-              <div className="appointment-view-person">
-                <span className="appointment-view-avatar">
-                  {iniciaisLocal(visualizacao.cliente)}
-                </span>
-                <div className="appointment-view-person-copy">
-                  <small>CLIENTE</small>
-                  <h2>{visualizacao.cliente}</h2>
-                  <div>
-                    <span>
-                      <Icone name="bike" size={14} />
-                      {visualizacao.moto}
-                    </span>
-                    <b>PLACA {visualizacao.placa}</b>
-                  </div>
-                </div>
-                <span
-                  className={`appointment-status ${visualizacao.status.toLowerCase().replace('í', 'i')}`}
-                >
-                  <i />
-                  {visualizacao.status}
-                </span>
-              </div>
-              <div className="appointment-view-grid">
-                <article>
-                  <span>
-                    <Icone name="calendar" size={16} />
-                  </span>
-                  <div>
-                    <small>Data e horário</small>
-                    <strong>
-                      {dadosRotulo(visualizacao.data)} · {visualizacao.hora}
-                    </strong>
-                  </div>
-                </article>
-                <article>
-                  <span>
-                    <Icone name="wrench" size={16} />
-                  </span>
-                  <div>
-                    <small>Serviço</small>
-                    <strong>{visualizacao.servico}</strong>
-                  </div>
-                </article>
-                <article>
-                  <span>
-                    <Icone name="staff" size={16} />
-                  </span>
-                  <div>
-                    <small>Mecânico responsável</small>
-                    <strong>{visualizacao.mecanico}</strong>
-                  </div>
-                </article>
-                <article>
-                  <span>
-                    <Icone name="clock" size={16} />
-                  </span>
-                  <div>
-                    <small>Duração estimada</small>
-                    <strong>{visualizacao.duracao || 'Não informada'}</strong>
-                  </div>
-                </article>
-                <article className="appointment-view-contact">
-                  <span>
-                    <Icone name="whatsapp" size={16} />
-                  </span>
-                  <div>
-                    <small>Contato do cliente</small>
-                    <strong>{visualizacao.telefone || 'Não informado'}</strong>
-                  </div>
-                </article>
-              </div>
-              {visualizacao.observacoes && (
-                <div className="appointment-view-notes">
-                  <small>OBSERVAÇÕES</small>
-                  <p>{visualizacao.observacoes}</p>
-                </div>
-              )}
-              <footer className="appointment-view-footer">
-                <button
-                  type="button"
-                  className="appointment-cancel"
-                  onClick={() => setVisualizacao(undefined)}
-                >
-                  Fechar
-                </button>
-                <button
-                  type="button"
-                  className="appointment-confirm"
-                  onClick={() => inicioEditar(visualizacao)}
-                >
-                  <Icone name="pencil" size={14} />
-                  Editar agendamento
-                </button>
-              </footer>
-            </div>
-          </section>
-        </div>
+        <ModalDetalhesAgendamento
+          item={visualizacao}
+          aoFechar={() => setVisualizacao(undefined)}
+          aoEditar={pode('agendamentos', 'editar') ? () => inicioEditar(visualizacao) : undefined}
+        />
       )}
       {excluindo && (
         <div
@@ -1994,6 +1900,8 @@ export default function Agendamentos() {
         >
           <section
             className="oa-confirm"
+            ref={focoExclusao}
+            tabIndex={-1}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="appointment-delete-title"

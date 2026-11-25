@@ -45,7 +45,25 @@ export function setCookiesSessao(
   }
 }
 
+// Cada requisicao autenticada consultava o Auth Admin para ver se a conta foi bloqueada.
+// Um cache curto evita essa ida extra ao Supabase; bloquear alguem leva no maximo
+// BLOQUEIO_TTL_MS para valer (e chamar esquecerBloqueio aplica na hora).
+const BLOQUEIO_TTL_MS = 30_000;
+const LIMITE_CACHE_BLOQUEIO = 5_000;
+const cacheBloqueio = new Map<string, { bloqueada: boolean; expira: number }>();
+export function esquecerBloqueio(idUsuario?: string) {
+  if (idUsuario) cacheBloqueio.delete(idUsuario);
+  else cacheBloqueio.clear();
+}
 export async function contaEstaBloqueada(idUsuario: string) {
+  const emCache = cacheBloqueio.get(idUsuario);
+  if (emCache && emCache.expira > Date.now()) return emCache.bloqueada;
+  const bloqueada = await consultarBloqueio(idUsuario);
+  if (cacheBloqueio.size >= LIMITE_CACHE_BLOQUEIO) cacheBloqueio.clear();
+  cacheBloqueio.set(idUsuario, { bloqueada, expira: Date.now() + BLOQUEIO_TTL_MS });
+  return bloqueada;
+}
+async function consultarBloqueio(idUsuario: string) {
   const privilegiado = createSupabaseAdmin();
   if (!privilegiado) return false;
   const { data: dados, error: erro } = await privilegiado.auth.admin.getUserById(idUsuario);

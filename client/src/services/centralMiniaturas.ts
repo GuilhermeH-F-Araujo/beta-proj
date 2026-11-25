@@ -1,3 +1,9 @@
+import { request } from './api/transporte';
+import {
+  impedimentoPublicacaoMiniatura,
+  exigeConferenciaManualMiniatura,
+} from '../../../server/src/shared/validacaoMiniatura';
+export { exigeConferenciaManualMiniatura };
 export const API_MINIATURAS = (
   (import.meta.env?.VITE_URL_API ?? import.meta.env?.VITE_API_URL) ||
   ''
@@ -26,17 +32,58 @@ export type PedidoMiniatura = {
   candidato?: string | null;
   imagem?: string | null;
   atual?: string | null;
-  verificacao?: { direcao: string; inteira: boolean; problemas: string[]; automatica: boolean };
+  verificacao?: {
+    direcao: string;
+    inteira: boolean;
+    vistaLateral?: boolean;
+    pinturaPersonalizavel?: boolean;
+    problemas: string[];
+    automatica: boolean;
+    fidelidade?: string;
+    pontuacaoFidelidade?: number;
+    fundoTransparente?: boolean;
+  };
   pesquisa?: {
+    progresso?: {
+      etapa: string;
+      descricao: string;
+      tentativa: number;
+      iniciado_em: string;
+      concluido_em?: string;
+      duracao_ms?: number;
+      detalhes?: string;
+    }[];
+    feita_em?: string;
+    usadas?: { titulo: string; url: string }[];
     etapa?: string;
     semFoto?: boolean;
-    fontes: { titulo: string; url: string; resumo: string; imagem?: string; licenca?: string }[];
+    fontes: {
+      titulo: string;
+      url: string;
+      resumo: string;
+      imagem?: string;
+      licenca?: string;
+      correspondencia?: 'exata' | 'familia';
+    }[];
     avisos: string[];
   };
   historico?: { id: string; criado_em: string }[];
 };
+export function candidataPublicavel(pedido: PedidoMiniatura) {
+  return pedido.status === 'revisao' && !impedimentoPublicacaoMiniatura(pedido.verificacao);
+}
+export function motivoBloqueioPublicacao(pedido: PedidoMiniatura) {
+  return pedido.status === 'revisao' ? impedimentoPublicacaoMiniatura(pedido.verificacao) : null;
+}
+export type SituacaoGeracao = {
+  disponivel: boolean;
+  motivo: 'ok' | 'pausada' | 'sem_credenciais' | 'credenciais_recusadas' | 'sem_tokens';
+  mensagem: string;
+  retomaEm: string | null;
+};
 export type ConfiguracaoMiniaturas = {
   geracao: boolean;
+  situacao?: SituacaoGeracao;
   pesquisaAmpliada: boolean;
   retomaEm?: string | null;
   limite: number;
@@ -48,10 +95,20 @@ export async function requisitarMiniaturas<T>(
   metodo = 'GET',
   corpo?: unknown,
   token?: string,
+  signal?: AbortSignal,
 ): Promise<T> {
   const arquivo = corpo instanceof Blob;
+  if (!token)
+    return request<T>(caminho, {
+      method: metodo,
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+      headers: corpo ? { 'Content-Type': arquivo ? corpo.type : 'application/json' } : {},
+      body: corpo ? (arquivo ? corpo : JSON.stringify(corpo)) : undefined,
+    });
   const response = await fetch(`${API_MINIATURAS}${caminho}`, {
     method: metodo,
+    ...(signal ? { signal } : {}),
     credentials: token ? 'omit' : 'include',
     cache: 'no-store',
     headers: {
@@ -111,3 +168,5 @@ export const nomesSituacao: Record<string, string> = {
   aprovada: 'Aprovada',
   descartada: 'Descartada',
 };
+
+export { miniaturaEmAberto } from '../../../server/src/shared/validacaoMiniatura';

@@ -1,3 +1,4 @@
+import { useFocoModal } from '../../hooks/useFocoModal';
 import PreferenciasAcessibilidade from '../../components/configuracoes/PreferenciasAcessibilidade';
 import CampoCep from '../../components/CampoCep';
 import LogoEstacao from '../../components/LogoEstacao';
@@ -39,6 +40,7 @@ export default function ConteudoConfiguracoes(props: Props) {
     salvo,
     usuarioLocal,
   } = props;
+  const focoEdicao = useFocoModal<HTMLElement>(!!editarSecao);
   return (
     <div className="orders-viewport settings-app">
       <div className="orders-main">
@@ -239,8 +241,12 @@ export default function ConteudoConfiguracoes(props: Props) {
             <ModalAdicionarFuncionario
               initialRole="Administrador"
               onClose={() => setFuncionarioModalAberto(false)}
-              onSubmitted={() => {
-                setSalvo('Solicitação de cadastro enviada para aprovação.');
+              onSubmitted={(resultado) => {
+                setSalvo(
+                  resultado?.approvalPending
+                    ? 'Solicitação de cadastro enviada para aprovação.'
+                    : 'Funcionário cadastrado com sucesso.',
+                );
               }}
             />
           )}
@@ -254,6 +260,8 @@ export default function ConteudoConfiguracoes(props: Props) {
             >
               <section
                 className="settings-edit-modal"
+                ref={focoEdicao}
+                tabIndex={-1}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="settings-edit-title"

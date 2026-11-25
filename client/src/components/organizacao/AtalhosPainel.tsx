@@ -84,11 +84,7 @@ export function ProvedorAtalhos({ children }: { children: ReactNode }) {
           />
         )}
         {modal === 'novo-funcionario' && (
-          <ModalFuncionario
-            onClose={fechar}
-            onSubmitted={() => fechar()}
-            initialRole="Administrador"
-          />
+          <ModalFuncionario onClose={fechar} onSubmitted={() => {}} initialRole="Administrador" />
         )}
         {['novo-usuario', 'novo-cliente'].includes(modal) && (
           <ModalUsuario

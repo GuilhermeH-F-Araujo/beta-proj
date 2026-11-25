@@ -480,15 +480,26 @@
   overflow: auto;
 }
 .entry-photos a {
+  overflow: hidden;
   min-width: 0;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  border-radius: 5px;
+  background: var(--theme-canvas, #f5f7f9);
 }
 .entry-photos img {
   width: 100%;
   height: 110px;
   object-fit: cover;
   display: block;
-  border-radius: 5px;
+  border-radius: 5px 5px 0 0;
+}
+.entry-photo-caption {
+  padding: 5px 6px;
+  color: var(--theme-muted, #778390);
+  font-size: 10px;
+  font-weight: 650;
+  text-align: center;
 }
 .details-empty {
   color: var(--theme-muted, #8995a3) !important;

@@ -30,13 +30,19 @@ type LinhaAgendamento = {
   duracao: string | null;
 };
 type Cliente = { id_cliente: number; nome: string; telefone: string | null };
-type Moto = { id_moto: number; id_cliente: number; modelo: string; placa: string | null };
+type Moto = {
+  id_moto: number;
+  id_cliente: number;
+  modelo: string;
+  placa: string | null;
+  foto?: string | null;
+};
 type Funcionario = { id_funcionario: number; nome: string };
 
 const situacoesBanco = {
   Confirmado: 'confirmado',
   Pendente: 'solicitado',
-  'Concluído': 'concluido',
+  Concluído: 'concluido',
   Cancelado: 'cancelado',
 } as const;
 const situacoesPainel = {
@@ -46,7 +52,11 @@ const situacoesPainel = {
   cancelado: 'Cancelado',
 } as const;
 const normalizar = (valor: string) =>
-  valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  valor
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 
 async function relacionamentos(
   db: SupabaseClient,
@@ -61,11 +71,7 @@ async function relacionamentos(
       .eq('id_cliente', clienteId)
       .is('excluido_em', null)
       .maybeSingle(),
-    db
-      .from('moto')
-      .select('id_moto,id_cliente,ativa')
-      .eq('id_moto', motoId)
-      .maybeSingle(),
+    db.from('moto').select('id_moto,id_cliente,ativa').eq('id_moto', motoId).maybeSingle(),
     db.from('mecanico').select('id_funcionario').eq('id_funcionario', mecanicoId).maybeSingle(),
     db
       .from('funcionario')
@@ -107,13 +113,15 @@ async function carregarLista(db: SupabaseClient, idAgendamento?: number) {
   const registros = (linhas ?? []) as LinhaAgendamento[];
   const clientesIds = [...new Set(registros.map((item) => item.id_cliente))];
   const motosIds = [...new Set(registros.map((item) => item.id_moto))];
-  const mecanicosIds = [...new Set(registros.flatMap((item) => (item.id_mecanico ? [item.id_mecanico] : [])))];
+  const mecanicosIds = [
+    ...new Set(registros.flatMap((item) => (item.id_mecanico ? [item.id_mecanico] : []))),
+  ];
   const [clientes, motos, mecanicos] = await Promise.all([
     clientesIds.length
       ? db.from('cliente').select('id_cliente,nome,telefone').in('id_cliente', clientesIds)
       : Promise.resolve({ data: [], error: null }),
     motosIds.length
-      ? db.from('moto').select('id_moto,id_cliente,modelo,placa').in('id_moto', motosIds)
+      ? db.from('moto').select('id_moto,id_cliente,modelo,placa,foto').in('id_moto', motosIds)
       : Promise.resolve({ data: [], error: null }),
     mecanicosIds.length
       ? db.from('funcionario').select('id_funcionario,nome').in('id_funcionario', mecanicosIds)
@@ -141,6 +149,7 @@ async function carregarLista(db: SupabaseClient, idAgendamento?: number) {
       motoId: item.id_moto,
       moto: moto?.modelo ?? 'Motocicleta removida',
       placa: moto?.placa ?? '',
+      motoFoto: moto?.foto ?? null,
       mecanicoId: item.id_mecanico,
       mecanico: mecanico?.nome ?? '',
       servico: item.servico_solicitado,
@@ -331,7 +340,9 @@ export function rotasAgendamentos(
         p_actor: res.locals.adminUserId,
       });
       if (error?.code === '23503')
-        return res.status(409).json({ message: 'Este agendamento está ligado a uma ordem de serviço.' });
+        return res
+          .status(409)
+          .json({ message: 'Este agendamento está ligado a uma ordem de serviço.' });
       if (error) throw error;
       if (!removido) return res.status(404).json({ message: 'Agendamento não encontrado.' });
       return res.status(204).end();

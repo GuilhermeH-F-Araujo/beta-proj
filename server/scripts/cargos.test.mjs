@@ -76,56 +76,31 @@ test('notification types are scoped to the modules the role can view', () => {
   assert.equal(tiposAvisos(consulta).includes('nova_os'), true);
   assert.equal(tiposAvisos(consulta).includes('novo_cliente'), false);
 });
-const simulado = (valorAtual, elementoAtual) => ({
-  from(instanteAtual) {
-    return {
-      select() {
-        return this;
-      },
-      eq() {
-        return this;
-      },
-      async maybeSingle() {
-        return {
-          data: instanteAtual === 'cargo_vinculo' ? valorAtual : elementoAtual,
-          error: null,
-        };
-      },
-    };
-  },
-});
-const perfil = {
-  id_funcionario: 1,
-  cargo: 'Mecânico',
-  perfil_acesso: 'Mecânico',
-};
-test('missing explicit assignment and inactive roles cannot acquire access', async () => {
-  assert.equal(await lerAcesso(simulado(null, null), perfil), null);
-  assert.equal(await lerAcesso(simulado({ id_cargo: 'a' }, { ativo: false }), perfil), null);
-  const primeiroElemento = await lerAcesso(
-    simulado({ id_cargo: 'a' }, { ativo: true, nome: 'Consulta', permissoes: consulta.permissoes }),
-    perfil,
+test('cargos fixos recebem somente as permissoes previstas', async () => {
+  const acesso = await lerAcesso(
+    {},
+    { id_funcionario: 1, cargo: 'Mecânico', perfil_acesso: 'Mecânico' },
   );
-  assert.equal(primeiroElemento.cargo, 'Consulta');
-  assert.equal(primeiroElemento.administrador, false);
+  assert.equal(acesso.administrador, false);
+  assert.equal(permitirRequisicao(acesso, 'PATCH', '/api/orders/2/status'), true);
+  assert.equal(permitirRequisicao(acesso, 'DELETE', '/api/orders/2'), false);
+  assert.equal(
+    await lerAcesso({}, { cargo: 'Desconhecido', perfil_acesso: 'Administrador' }),
+    null,
+  );
 });
-test('permission database failures fail closed', async () => {
-  const db = {
-    from() {
-      return {
-        select() {
-          return this;
-        },
-        eq() {
-          return this;
-        },
-        async maybeSingle() {
-          return { data: null, error: new Error('offline') };
-        },
-      };
-    },
+test('falha ou ausencia de nivel administrativo nao concede acesso', async () => {
+  const perfil = {
+    id_funcionario: 1,
+    cargo: 'Administrador',
+    perfil_acesso: 'Administrador',
+    auth_user_id: 'admin-teste',
   };
-  await assert.rejects(() => lerAcesso(db, perfil), /offline/);
+  await assert.rejects(
+    () => lerAcesso({ rpc: async () => ({ error: new Error('offline') }) }, perfil),
+    /offline/,
+  );
+  assert.equal(await lerAcesso({ rpc: async () => ({ data: null }) }, perfil), null);
 });
 
 test('creating a customer does not grant creation of employee or administrator accounts', () => {
@@ -156,4 +131,18 @@ test('creating a customer does not grant creation of employee or administrator a
     false,
   );
   assert.equal(permitirRequisicao(primeiroElemento, 'POST', '/api/admin/users', null), false);
+});
+
+test('permissao de abrir ordem nao da acesso ao cadastro de servicos', () => {
+  const acesso = {
+    administrador: false,
+    cargo: 'Atendimento',
+    permissoes: { ordens: { visualizar: true, criar: true } },
+  };
+  assert.equal(permitirRequisicao(acesso, 'POST', '/api/orders/services'), false);
+  const catalogo = {
+    ...acesso,
+    permissoes: { servicos: { visualizar: true, criar: true } },
+  };
+  assert.equal(permitirRequisicao(catalogo, 'POST', '/api/orders/services'), true);
 });

@@ -39,7 +39,7 @@ Os atalhos dev, build e start continuam disponiveis para ferramentas e hospedage
 
 Com o projeto iniciado, abra http://localhost:5173/documentacao/ ou http://localhost:3001/documentacao/. O titulo da interface e **Documentação**. O contrato fica em server/openapi.json e pode ser baixado em /documentacao/openapi.json.
 
-No Render, o mesmo caminho fica disponivel depois do deploy deste codigo. Preparar o arquivo nao publica automaticamente uma alteracao no servico hospedado.
+No Render (producao) a documentacao fica oculta por seguranca. Para publica-la, defina DOCUMENTACAO_PUBLICA=true no ambiente do servico.
 
 O Swagger permite testar consultas. Escritas ficam descritas, mas nao sao executadas pela interface, para evitar cadastros e exclusoes acidentais no banco real. As consultas protegidas precisam da sessao administrativa do mesmo dominio.
 
@@ -49,8 +49,15 @@ O Swagger permite testar consultas. Escritas ficam descritas, mas nao sao execut
 - CONFIGURACAO.md: ambiente, integracoes e compatibilidade.
 - MANUTENCAO.md: como alterar, testar e documentar sem quebrar contratos.
 - DEPLOY-RENDER.md: configuracao da hospedagem.
-- supabase/TABELAS.md: estrutura e responsabilidade dos dados.
+- TABELAS.md: estrutura e responsabilidade dos dados.
+- SEGURANCA.md: limites, confirmacoes, sessao e ajustes do Supabase.
+- MINIATURAS.md: IA de miniaturas, Cloudflare, busca de referencias e pintura.
+- PERSONALIZACAO.md: encaixes, atalhos e organizacao do painel.
+- BACKUP-GITHUB.md: backup criptografado do banco pelo GitHub Actions.
+- HISTORICO.md: rodadas antigas de revisao e verificacao, para entender o motivo de uma regra.
 - AGENTS.md: regras para manter este padrao nas proximas alteracoes.
+
+Primeiro contato com o codigo: leia ARQUITETURA.md (tabela de pastas e mapa da IA), depois MANUTENCAO.md.
 
 O projeto nao inclui credenciais, node_modules nem arquivos compilados. As pastas docs e motion-film foram removidas.
 

@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { permitir } from './cargos.js';
-import { conectarEventosCatalogo } from './catalogoEventos.js';
+import { avisarCatalogoAtualizado, conectarEventosCatalogo } from './catalogoEventos.js';
 const texto = (maximo: number) => z.string().max(maximo);
 const id = texto(100).min(1);
 const categoria = z
@@ -198,9 +198,16 @@ export function rotasDadosCompartilhados(
       });
       return;
     }
+    // A tela exige permissao de edicao para qualquer alteracao nas categorias.
+    const mudouCategorias =
+      acoesAlteradas(
+        { categorias: dadosAntes.categorias },
+        { categorias: validado.data.categorias },
+      ).length > 0;
     const modulo = 'servicos';
     if (
-      acoesAlteradas(dadosAntes, validado.data).some(
+      (mudouCategorias && !permitir(res.locals.acesso, modulo, 'editar')) ||
+      acoesAlteradas({ servicos: dadosAntes.servicos }, { servicos: validado.data.servicos }).some(
         (acao) => !permitir(res.locals.acesso, modulo, acao),
       )
     ) {
@@ -235,6 +242,8 @@ export function rotasDadosCompartilhados(
       });
       return;
     }
+    // Avisa as abas abertas mesmo se a assinatura Realtime do banco cair.
+    avisarCatalogoAtualizado();
     res.json({ dados: validado.data, versao: resultado.data });
   });
   return roteador;

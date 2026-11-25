@@ -1,3 +1,4 @@
+import { useFocoModal } from '../../hooks/useFocoModal';
 import { createPortal } from 'react-dom';
 import LogoEstacao from '../LogoEstacao';
 import { Icone } from '../MenuAdmin';
@@ -44,6 +45,7 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
     erro,
     escolherMarca,
     escolherModelo,
+    fixedClient,
     idCliente,
     item,
     marca,
@@ -71,6 +73,9 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
     selecionadoMarca,
     solicitacaoFechar,
   } = props;
+  const focoFormulario = useFocoModal<HTMLFormElement>(!confirmarDescarte && !pendenteSalvar);
+  const focoDescarte = useFocoModal<HTMLDivElement>(!!confirmarDescarte);
+  const focoSalvar = useFocoModal<HTMLDivElement>(!!pendenteSalvar);
   return createPortal(
     <div
       className="bike-edit-overlay"
@@ -80,6 +85,8 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
     >
       <form
         className="bike-edit-dialog"
+        ref={focoFormulario}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="bike-edit-title"
@@ -175,7 +182,7 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
                   aria-expanded={responsavelAberto}
                   aria-controls="bike-owner-options"
                   aria-autocomplete="list"
-                  disabled={ocupado || !!item?.orderCount}
+                  disabled={ocupado || !!item?.orderCount || fixedClient}
                   value={responsavelBusca}
                   placeholder="Digite o nome do cliente ou selecione"
                   onFocus={() => setResponsavelAberto(true)}
@@ -206,13 +213,13 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
                 <button
                   type="button"
                   aria-label="Mostrar clientes"
-                  disabled={ocupado || !!item?.orderCount}
+                  disabled={ocupado || !!item?.orderCount || fixedClient}
                   onClick={() => setResponsavelAberto((aberto) => !aberto)}
                 >
                   <Icone name="chevron" size={15} />
                 </button>
               </div>
-              {responsavelAberto && !item?.orderCount && (
+              {responsavelAberto && !item?.orderCount && !fixedClient && (
                 <div className="bike-edit-options" id="bike-owner-options" role="listbox">
                   {responsavelCorrespondencias.length ? (
                     responsavelCorrespondencias.map((cliente) => (
@@ -243,6 +250,11 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
               {!!item?.orderCount && (
                 <small className="bike-edit-field-hint">
                   A moto já possui OS; o proprietário não pode ser alterado.
+                </small>
+              )}
+              {fixedClient && (
+                <small className="bike-edit-field-hint">
+                  Esta motocicleta será vinculada ao cliente selecionado na ordem de serviço.
                 </small>
               )}
             </div>
@@ -590,6 +602,8 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
           <div className="bike-edit-confirm-cover">
             <div
               className="bike-edit-confirm"
+              ref={focoDescarte}
+              tabIndex={-1}
               role="alertdialog"
               aria-modal="true"
               aria-labelledby="bike-edit-confirm-title"
@@ -619,6 +633,8 @@ export default function FormularioEdicaoMotocicleta(props: Props) {
           >
             <div
               className="bike-edit-confirm bike-edit-save-confirm"
+              ref={focoSalvar}
+              tabIndex={-1}
               role="alertdialog"
               aria-modal="true"
               aria-labelledby="bike-save-confirm-title"

@@ -1,8 +1,8 @@
 export const fotoEspacos = [
-  'Foto frontal',
-  'Lateral esquerda',
-  'Lateral direita',
-  'Painel / odômetro',
+  'Frente',
+  'Lado esquerdo',
+  'Traseira',
+  'Lado direito',
 ];
 
 export const digitos = (valor: string) => valor.replace(/\D/g, '');

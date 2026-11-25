@@ -2855,7 +2855,7 @@ html[data-app-reading] body .canvas-editor-bar .canvas-editor-mode.is-browsing {
 }
 
 html[data-app-reading] body .canvas-editor-bar .canvas-editor-mode.is-browsing > svg {
-  color: var(--theme-text-muted, #687b93);
+  color: #687b93;
 }
 
 html[data-app-reading] body .canvas-editor-bar .canvas-editor-history button:hover:not(:disabled),
@@ -2890,7 +2890,7 @@ html[data-app-reading] body .canvas-editor-bar button.canvas-editor-finish:disab
   border-color: color-mix(in srgb, var(--theme-border, #dce4ee) 88%, transparent);
   background: color-mix(in srgb, var(--theme-canvas, #f3f6fb) 82%, var(--theme-surface, #fff));
   box-shadow: none;
-  color: var(--theme-text-muted, #77869a);
+  color: #77869a;
   opacity: 1;
 }
 
@@ -2914,7 +2914,7 @@ html[data-app-theme='escuro'][data-app-reading]
   .canvas-editor-bar
   .canvas-editor-mode.is-browsing
   > svg {
-  color: var(--theme-text-muted, #9aaac0);
+  color: #9aaac0;
 }
 
 @media (prefers-reduced-motion: reduce) {

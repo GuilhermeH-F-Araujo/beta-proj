@@ -42,6 +42,8 @@ O teste de documentacao compara as rotas registradas com o OpenAPI e verifica a 
 
 ## Banco e publicacao
 
+Antes de criar ou aplicar uma migracao, compare supabase/migrations com o historico do banco (supabase_migrations.schema_migrations). Um arquivo que existe no projeto pode nunca ter sido aplicado, e uma funcao no banco pode estar mais nova que o arquivo. Recrie somente o que falta.
+
 Nao renomeie tabelas, colunas, funcoes SQL ou arquivos de migracoes ja aplicadas apenas para reorganizar o codigo. Confira o historico do banco antes de executar SQL. Mantenha credenciais fora do repositorio e dos exemplos.
 
 As migrations `20261121211628_logs_unificados_e_limpeza.sql`, `20261121212045_catalogo_servicos_agendamento.sql`, `20261121212220_indices_agendamento_logs.sql` e `20261121213441_acesso_api_agendamentos.sql` foram aplicadas ao Supabase conectado em 21/11/2026. O banco ativo agora usa `logs`, `servicos`, `categorias_servico` e a tabela existente `agendamento`; `oficina_painel` foi removida depois da validacao e migracao dos dados.

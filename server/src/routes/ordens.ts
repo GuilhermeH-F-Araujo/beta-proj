@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { autorizarAcessoBanco } from '../auth/autorizacao.js';
 import { permitir } from '../cargos.js';
+import { avisarCatalogoAtualizado } from '../catalogoEventos.js';
 import { enfileirarModelo } from '../filaMiniaturas.js';
 import { formatarNomeModeloMoto } from '../pesquisaModelo.js';
 import { carregarOrdens, ORDENS_POR_PAGINA } from '../services/consultaOrdens.js';
@@ -13,6 +14,38 @@ import {
   criarOrdemSchema,
 } from '../validators/atendimento.js';
 
+type BancoOrdens = NonNullable<Awaited<ReturnType<typeof autorizarAcessoBanco>>>;
+
+export async function carregarFotosEntrada(db: BancoOrdens, id: number) {
+  const consultar = (colunas: string) =>
+    db
+      .from('foto_os')
+      .select(colunas)
+      .eq('id_os', id)
+      .eq('tipo', 'entrada')
+      .order('data_registro', { ascending: true });
+  const resultado = await consultar('id_foto,tipo,url,data_registro,posicao');
+  const erro = resultado.error;
+  if (
+    !erro ||
+    !['42703', 'PGRST204', '42501'].includes(erro.code) ||
+    (erro.code !== '42501' && !/\bposicao\b/i.test(erro.message))
+  ) {
+    return { data: resultado.data as FotoEntrada[] | null, error: erro };
+  }
+  const legado = await consultar('id_foto,tipo,url,data_registro');
+  return {
+    data:
+      (legado.data as Omit<FotoEntrada, 'posicao'>[] | null)?.map((foto) => ({
+        ...foto,
+        posicao: null,
+      })) ?? null,
+    error: legado.error,
+  };
+}
+
+type FotoEntrada = { id_foto: number; url: string; data_registro: string; posicao: string | null };
+
 export function registrarRotasOrdens(app: express.Express) {
   app.get('/api/orders/create-options', async (req, res) => {
     const db = await autorizarAcessoBanco(req, res);
@@ -22,6 +55,8 @@ export function registrarRotasOrdens(app: express.Express) {
         { data: clientes, error: clienteErro },
         { data: motocicletas, error: motoErro },
         { data: mecanicos, error: mecanicoErro },
+        { data: servicos, error: servicoErro },
+        { data: categorias, error: categoriaErro },
       ] = await Promise.all([
         db
           .from('cliente')
@@ -35,8 +70,16 @@ export function registrarRotasOrdens(app: express.Express) {
           .order('id_moto', { ascending: false })
           .limit(5000),
         db.from('mecanico').select('id_funcionario').limit(500),
+        db
+          .from('servicos')
+          .select('id,nome,categoria_id,duracao,preco')
+          .eq('ativo', true)
+          .order('nome')
+          .limit(1000),
+        db.from('categorias_servico').select('id,nome').order('nome').limit(500),
       ]);
-      if (clienteErro || motoErro || mecanicoErro) throw clienteErro || motoErro || mecanicoErro;
+      if (clienteErro || motoErro || mecanicoErro || servicoErro || categoriaErro)
+        throw clienteErro || motoErro || mecanicoErro || servicoErro || categoriaErro;
       const mecanicoIds = (mecanicos ?? []).map((item) => item.id_funcionario);
       const { data: equipe, error: equipeErro } = mecanicoIds.length
         ? await db
@@ -68,12 +111,130 @@ export function registrarRotasOrdens(app: express.Express) {
         mechanics: permitir(res.locals.acesso, 'ordens', 'visualizar')
           ? (equipe ?? []).map((mesAtual) => ({ id: mesAtual.id_funcionario, name: mesAtual.nome }))
           : [],
+        services: (servicos ?? []).map((item) => ({
+          id: item.id,
+          name: item.nome,
+          categoryId: item.categoria_id,
+          duration: item.duracao,
+          price: Number(item.preco),
+        })),
+        serviceCategories: (categorias ?? []).map((item) => ({ id: item.id, name: item.nome })),
       });
     } catch (erro) {
       console.error('[orders/create-options]', erro);
       return res
         .status(500)
         .json({ message: 'Não foi possível carregar clientes e motos para a nova OS.' });
+    }
+  });
+
+  app.post('/api/orders/services', async (req, res) => {
+    const db = await autorizarAcessoBanco(req, res);
+    if (!db) return;
+    if (!permitir(res.locals.acesso, 'servicos', 'criar'))
+      return res.status(403).json({ message: 'Seu acesso não permite cadastrar serviços.' });
+    const entrada = z
+      .object({
+        name: z.string().trim().min(2).max(150),
+        categoryId: z.string().trim().min(1).max(100),
+        duration: z.string().trim().min(1).max(100),
+        price: z.number().finite().nonnegative().max(1_000_000),
+      })
+      .strict()
+      .safeParse(req.body);
+    if (!entrada.success)
+      return res.status(400).json({ message: 'Informe nome, categoria, duração e preço válidos.' });
+    const horasDuracao = Number(entrada.data.duration.match(/(\d+)\s*(?:h|hora)/i)?.[1] ?? 0);
+    const minutosDuracao = Number(entrada.data.duration.match(/(\d+)\s*(?:min|minuto)/i)?.[1] ?? 0);
+    const duracaoMinutos = horasDuracao * 60 + minutosDuracao;
+    if (duracaoMinutos < 1 || duracaoMinutos > 48 * 60 + 59)
+      return res
+        .status(400)
+        .json({ message: 'Informe uma duração entre 1 minuto e 48 horas e 59 minutos.' });
+    try {
+      const [categorias, servicos, versao] = await Promise.all([
+        db.from('categorias_servico').select('id,nome,descricao,cor,icone'),
+        db
+          .from('servicos')
+          .select('id,nome,categoria_id,descricao,preco,custo,duracao,ativo,icone,adicional'),
+        db.from('servicos_catalogo_versao').select('versao').eq('id', true).maybeSingle(),
+      ]);
+      const consultaErro = categorias.error || servicos.error || versao.error;
+      if (consultaErro) throw consultaErro;
+      let categoriasAtuais = categorias.data ?? [];
+      let categoriaId = entrada.data.categoryId;
+      if (!categoriasAtuais.length && categoriaId === 'geral') {
+        if (!permitir(res.locals.acesso, 'servicos', 'editar'))
+          return res.status(403).json({ message: 'Seu acesso não permite criar categorias.' });
+        categoriaId = randomUUID();
+        categoriasAtuais = [
+          {
+            id: categoriaId,
+            nome: 'Geral',
+            descricao: '',
+            cor: '#d92743',
+            icone: 'wrench',
+          },
+        ];
+      }
+      if (!categoriasAtuais.some((item) => item.id === categoriaId))
+        return res.status(400).json({ message: 'Selecione uma categoria disponível.' });
+      if (
+        (servicos.data ?? []).some(
+          (item) =>
+            item.nome.trim().toLocaleLowerCase('pt-BR') ===
+            entrada.data.name.toLocaleLowerCase('pt-BR'),
+        )
+      )
+        return res.status(409).json({ message: 'Já existe um serviço com esse nome no catálogo.' });
+      const novo = {
+        id: randomUUID(),
+        nome: entrada.data.name,
+        categoria_id: categoriaId,
+        descricao: '',
+        preco: entrada.data.price,
+        custo: 0,
+        duracao: entrada.data.duration,
+        ativo: true,
+        icone: 'wrench',
+        adicional: '',
+      };
+      const resultado = await db.rpc('substituir_catalogo_servicos', {
+        p_versao: versao.data?.versao ?? 0,
+        p_categorias: categoriasAtuais,
+        p_servicos: [...(servicos.data ?? []), novo].map((item) => ({
+          id: item.id,
+          nome: item.nome,
+          categoria_id: 'categoria_id' in item ? item.categoria_id : '',
+          descricao: item.descricao,
+          preco: Number(item.preco),
+          custo: Number(item.custo),
+          duracao: item.duracao,
+          ativo: item.ativo,
+          icone: item.icone,
+          adicional: item.adicional,
+        })),
+        p_actor: res.locals.adminUserId,
+      });
+      if (resultado.error || typeof resultado.data !== 'number') {
+        const conflito = resultado.error?.code === '40001' || resultado.error?.code === '23505';
+        return res.status(conflito ? 409 : 503).json({
+          message: conflito
+            ? 'O catálogo foi atualizado por outra pessoa. Atualize os serviços e tente novamente.'
+            : 'Não foi possível salvar o serviço no catálogo.',
+        });
+      }
+      avisarCatalogoAtualizado();
+      return res.status(201).json({
+        id: novo.id,
+        name: novo.nome,
+        categoryId: novo.categoria_id,
+        duration: novo.duracao,
+        price: novo.preco,
+      });
+    } catch (erro) {
+      console.error('[orders/services]', erro);
+      return res.status(503).json({ message: 'Não foi possível salvar o serviço no catálogo.' });
     }
   });
 
@@ -88,7 +249,7 @@ export function registrarRotasOrdens(app: express.Express) {
     const entrada = validado.data;
     const enviado: string[] = [];
     try {
-      const fotos: { url: string }[] = [];
+      const fotos: { url: string; position: string | null }[] = [];
       const rascunho = randomUUID();
       const validoFotos = entrada.photos.map((fotoLocal) => {
         const correspondencia = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
@@ -104,22 +265,49 @@ export function registrarRotasOrdens(app: express.Express) {
           bytes[2] !== 0xff
         )
           throw new Error('Foto inválida ou maior que 550 KB.');
-        return bytes;
+        return { position: fotoLocal.position, bytes };
       });
-      for (const [indice, bytes] of validoFotos.entries()) {
-        const caminho = `orders/${rascunho}/entrada-${indice + 1}.jpg`;
+      for (const [indice, foto] of validoFotos.entries()) {
+        const sufixo = foto.position
+          ? foto.position === 'extra'
+            ? `extra-${indice - 3}`
+            : foto.position
+          : `foto-${indice + 1}`;
+        const caminho = `orders/${rascunho}/entrada-${sufixo}.jpg`;
         const { error: enviarArquivoErro } = await db.storage
           .from('fotos-os')
-          .upload(caminho, bytes, { contentType: 'image/jpeg', upsert: false });
+          .upload(caminho, foto.bytes, { contentType: 'image/jpeg', upsert: false });
         if (enviarArquivoErro) throw enviarArquivoErro;
         enviado.push(caminho);
-        fotos.push({ url: db.storage.from('fotos-os').getPublicUrl(caminho).data.publicUrl });
+        fotos.push({
+          url: db.storage.from('fotos-os').getPublicUrl(caminho).data.publicUrl,
+          position: foto.position ?? null,
+        });
       }
+      const servicosSolicitados = entrada.services ?? [];
+      const idsServicos = [...new Set(servicosSolicitados)];
+      if (idsServicos.length !== servicosSolicitados.length)
+        throw new Error('Remova serviços repetidos antes de abrir a OS.');
+      const { data: catalogoSelecionado, error: catalogoErro } = idsServicos.length
+        ? await db
+            .from('servicos')
+            .select('id,nome,preco,duracao')
+            .in('id', idsServicos)
+            .eq('ativo', true)
+        : { data: [], error: null };
+      if (catalogoErro) throw catalogoErro;
+      if ((catalogoSelecionado ?? []).length !== idsServicos.length)
+        throw new Error('Um serviço selecionado não está mais ativo. Atualize o catálogo.');
       const { data: dados, error: erro } = await db.rpc('admin_create_order', {
         p_payload: {
           ...entrada,
           model: entrada.motorcycleId ? entrada.model : formatarNomeModeloMoto(entrada.model),
           photos: fotos,
+          photoCaptureVersion: entrada.photoCaptureVersion,
+          services: (catalogoSelecionado ?? []).map((item) => ({
+            name: item.nome,
+            price: Number(item.preco),
+          })),
           clientCpf: entrada.clientCpf,
           year: entrada.year,
           mileage: entrada.mileage,
@@ -130,42 +318,54 @@ export function registrarRotasOrdens(app: express.Express) {
       const idCliente = Number(dados?.clientId);
       const idMoto = Number(dados?.motorcycleId);
       const eventos = [
-        registrarAtividade(db, {
-          id_usuario: res.locals.adminUserId,
-          evento: 'ordem_criada',
-          categoria: 'atividade',
-          entidade: 'ordem_servico',
-          entidade_id: String(idOs),
-          id_os: idOs,
-          resumo: 'Ordem de serviço criada',
-        }, req),
+        registrarAtividade(
+          db,
+          {
+            id_usuario: res.locals.adminUserId,
+            evento: 'ordem_criada',
+            categoria: 'atividade',
+            entidade: 'ordem_servico',
+            entidade_id: String(idOs),
+            id_os: idOs,
+            resumo: 'Ordem de serviço criada',
+          },
+          req,
+        ),
         ...(entrada.clientId
           ? []
           : [
-              registrarAtividade(db, {
-                id_usuario: res.locals.adminUserId,
-                evento: 'cliente_criado',
-                categoria: 'atividade',
-                entidade: 'cliente',
-                entidade_id: String(idCliente),
-                id_cliente: idCliente,
-                nome: entrada.clientName,
-                acao: 'criar',
-                resumo: 'Cliente adicionado ao cadastrar uma ordem de serviço',
-              }, req),
+              registrarAtividade(
+                db,
+                {
+                  id_usuario: res.locals.adminUserId,
+                  evento: 'cliente_criado',
+                  categoria: 'atividade',
+                  entidade: 'cliente',
+                  entidade_id: String(idCliente),
+                  id_cliente: idCliente,
+                  nome: entrada.clientName,
+                  acao: 'criar',
+                  resumo: 'Cliente adicionado ao cadastrar uma ordem de serviço',
+                },
+                req,
+              ),
             ]),
         ...(entrada.motorcycleId
           ? []
           : [
-              registrarAtividade(db, {
-                id_usuario: res.locals.adminUserId,
-                evento: 'motocicleta_criada',
-                categoria: 'atividade',
-                entidade: 'motocicleta',
-                entidade_id: String(idMoto),
-                dados: { modelo: entrada.model, placa: entrada.plate.toUpperCase() },
-                resumo: 'Motocicleta adicionada ao cadastrar uma ordem de serviço',
-              }, req),
+              registrarAtividade(
+                db,
+                {
+                  id_usuario: res.locals.adminUserId,
+                  evento: 'motocicleta_criada',
+                  categoria: 'atividade',
+                  entidade: 'motocicleta',
+                  entidade_id: String(idMoto),
+                  dados: { modelo: entrada.model, placa: entrada.plate.toUpperCase() },
+                  resumo: 'Motocicleta adicionada ao cadastrar uma ordem de serviço',
+                },
+                req,
+              ),
             ]),
       ];
       await Promise.all(eventos);
@@ -178,7 +378,10 @@ export function registrarRotasOrdens(app: express.Express) {
         .status(
           mensagem.includes('duplicate key')
             ? 409
-            : mensagem.startsWith('Foto') || mensagem.startsWith('As fotos')
+            : mensagem.startsWith('Foto') ||
+                mensagem.startsWith('As fotos') ||
+                mensagem.startsWith('Remova serviços') ||
+                mensagem.startsWith('Um serviço')
               ? 400
               : 500,
         )
@@ -187,7 +390,10 @@ export function registrarRotasOrdens(app: express.Express) {
             ? 'Esta placa já está cadastrada. Selecione a moto existente.'
             : mensagem.includes('não pertence') || mensagem.includes('não encontrado')
               ? mensagem
-              : mensagem.startsWith('Foto') || mensagem.startsWith('As fotos')
+              : mensagem.startsWith('Foto') ||
+                  mensagem.startsWith('As fotos') ||
+                  mensagem.startsWith('Remova serviços') ||
+                  mensagem.startsWith('Um serviço')
                 ? mensagem
                 : 'Não foi possível cadastrar a OS. Confira os dados e tente novamente.',
         });
@@ -456,10 +662,7 @@ export function registrarRotasOrdens(app: express.Express) {
   app.delete('/api/orders/:id', async (req, res) => {
     const db = await autorizarAcessoBanco(req, res);
     if (!db) return;
-    if (
-      res.locals.acesso?.nivel !== 'superadministrador' &&
-      res.locals.acesso?.nivel !== 'dono'
-    )
+    if (res.locals.acesso?.nivel !== 'superadministrador' && res.locals.acesso?.nivel !== 'dono')
       return res.status(403).json({
         message: 'Somente a dona ou um superadministrador pode excluir uma OS permanentemente.',
         code: 'PERMISSION_DENIED',
@@ -706,12 +909,7 @@ export function registrarRotasOrdens(app: express.Express) {
           : Promise.resolve({ data: null, error: null }),
         db.from('os_servico').select('descricao,preco').eq('id_os', id.data),
         db.from('os_peca').select('nome_peca,quantidade,preco_unitario').eq('id_os', id.data),
-        db
-          .from('foto_os')
-          .select('id_foto,tipo,url,data_registro')
-          .eq('id_os', id.data)
-          .eq('tipo', 'entrada')
-          .order('data_registro', { ascending: true }),
+        carregarFotosEntrada(db, id.data),
         db.from('pagamento_os').select('status').eq('id_os', id.data).maybeSingle(),
         db
           .from('logs')
@@ -732,17 +930,20 @@ export function registrarRotasOrdens(app: express.Express) {
           .order('id', { ascending: false })
           .limit(200),
       ]);
-      if (
-        motoErro ||
-        mecanicoErro ||
-        servicosErro ||
-        pecasErro ||
-        fotosErro ||
-        pagamentoErro ||
-        situacaoErro ||
-        auditErro
-      )
+      const falhas = Object.entries({
+        moto: motoErro,
+        funcionario: mecanicoErro,
+        os_servico: servicosErro,
+        os_peca: pecasErro,
+        foto_os: fotosErro,
+        pagamento_os: pagamentoErro,
+        logs_status: situacaoErro,
+        logs_edicao: auditErro,
+      }).flatMap(([consulta, erro]) => (erro ? [{ consulta, codigo: erro.code }] : []));
+      if (falhas.length) {
+        console.error('[orders/dados] Consultas relacionadas', { os: id.data, falhas });
         throw new Error('Falha ao carregar dados relacionados à OS.');
+      }
       const { data: cliente, error: clienteErro } = moto
         ? await db
             .from('cliente')
@@ -797,6 +998,21 @@ export function registrarRotasOrdens(app: express.Express) {
         (soma, item) => soma + Number(item.quantidade) * Number(item.preco_unitario ?? 0),
         0,
       );
+      const ordemPosicaoFoto: Record<string, number> = {
+        front: 0,
+        left: 1,
+        rear: 2,
+        right: 3,
+        extra: 4,
+      };
+      const fotosOrdenadas = [...(fotos ?? [])].sort((primeira, segunda) => {
+        const posicaoPrimeira = ordemPosicaoFoto[primeira.posicao ?? ''] ?? 5;
+        const posicaoSegunda = ordemPosicaoFoto[segunda.posicao ?? ''] ?? 5;
+        return (
+          posicaoPrimeira - posicaoSegunda ||
+          Date.parse(primeira.data_registro) - Date.parse(segunda.data_registro)
+        );
+      });
       return res.json({
         id: ordem.id_os,
         status: ordem.status,
@@ -838,9 +1054,10 @@ export function registrarRotasOrdens(app: express.Express) {
           quantity: item.quantidade,
           unitPrice: Number(item.preco_unitario),
         })),
-        photos: (fotos ?? []).map((item) => ({
+        photos: fotosOrdenadas.map((item) => ({
           id: item.id_foto,
           url: item.url,
+          position: item.posicao,
           recordedAt: item.data_registro,
         })),
         serviceTotal: servicoTotal,

@@ -28,7 +28,9 @@
     "verificar:codigo": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test scripts/*.test.mjs",
-    "worker:miniaturas": "node dist/miniaturas/worker.js"
+    "worker:miniaturas": "node dist/miniaturas/worker.js",
+    "test:referencias-reais": "node --import tsx scripts/medir-referencias-miniaturas.mjs",
+    "testar:ia-real": "node --import tsx scripts/testar-ia-real.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",
@@ -42,6 +44,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.6.0",
     "@types/cookie-parser": "1.4.10",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",

@@ -1,3 +1,4 @@
+import { limitarRequisicoes } from './auth/limiteRequisicoes.js';
 import { registrarConfirmacao } from './auth/confirmacao.js';
 import { registrarGestaoAdministradores } from './routes/administradores.js';
 import { rotasPesquisaGeral } from './pesquisaGeral.js';
@@ -29,6 +30,16 @@ import { registrarRotasPagamentos } from './routes/pagamentos.js';
 import { registrarRotasPerfil } from './routes/perfil.js';
 import { registrarRotasUsuarios } from './routes/usuarios.js';
 
+const LIMITE_JSON_PADRAO = '1mb';
+const LIMITE_JSON_COM_ARQUIVOS = '10mb';
+const ROTAS_COM_ARQUIVOS = [
+  '/api/orders',
+  '/api/clients',
+  '/api/employees',
+  '/api/admin/profile/photo',
+  '/api/admin/preferences',
+];
+
 // Criar a aplicacao nao abre portas nem inicia tarefas em segundo plano.
 export function createApp() {
   const app = express();
@@ -36,8 +47,6 @@ export function createApp() {
   app.disable('x-powered-by');
 
   app.set('trust proxy', 1);
-
-  app.use(express.json({ limit: '4mb' }));
 
   app.use(cookieParser());
 
@@ -67,7 +76,7 @@ export function createApp() {
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Authorization'],
-      exposedHeaders: ['X-Preview-Origin'],
+      exposedHeaders: ['X-Preview-Origin', 'X-Preview-Paint-Mask'],
     }),
   );
 
@@ -82,12 +91,16 @@ export function createApp() {
   app.use((req, res, next) => {
     if (!req.path.startsWith('/api/')) return next();
     const requestId = randomUUID();
+    const inicio = performance.now();
     (req as typeof req & { requestId: string }).requestId = requestId;
     res.setHeader('X-Request-ID', requestId);
     res.once('finish', () => {
-      if (res.statusCode >= 400)
+      const duracaoMs = Math.round(performance.now() - inicio);
+      // Streams ficam abertos de proposito e nao entram no aviso de lentidao.
+      const lenta = duracaoMs >= 1_000 && !req.path.endsWith('/stream');
+      if (res.statusCode >= 400 || lenta)
         console.info(
-          `[api] ${req.method} ${req.path} · HTTP ${res.statusCode} · referência ${requestId}`,
+          `[api] ${req.method} · HTTP ${res.statusCode} · ${duracaoMs} ms · referência ${requestId}`,
         );
     });
     next();
@@ -98,6 +111,13 @@ export function createApp() {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader(
+      'Content-Security-Policy',
+      "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+    );
+    if (process.env.NODE_ENV === 'production' && req.secure)
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000');
     res.setHeader(
       'Permissions-Policy',
       req.path === '/enviar-referencia'
@@ -107,7 +127,20 @@ export function createApp() {
     next();
   });
 
-  registrarDocumentacao(app);
+  // Aplicar os limites antes de ler o corpo da requisicao.
+  app.use('/api', limitarRequisicoes(600, 60_000));
+  app.use('/api/auth/login', limitarRequisicoes(30, 60_000));
+  app.use('/api/auth/forgot-password', limitarRequisicoes(10, 15 * 60_000));
+  app.use('/api/auth/reset-password', limitarRequisicoes(10, 15 * 60_000));
+  app.use('/api/admin/security/confirm', limitarRequisicoes(30, 15 * 60_000));
+  // Corpos grandes (fotos e sons em base64) so nas rotas que os recebem; o restante,
+  // inclusive o login sem autenticacao, aceita no maximo 1 MB.
+  app.use(ROTAS_COM_ARQUIVOS, express.json({ limit: LIMITE_JSON_COM_ARQUIVOS }));
+  app.use(express.json({ limit: LIMITE_JSON_PADRAO }));
+
+  // Em producao o mapa completo da API so fica publico se for pedido explicitamente.
+  if (process.env.NODE_ENV !== 'production' || process.env.DOCUMENTACAO_PUBLICA === 'true')
+    registrarDocumentacao(app);
   registrarRotasAutenticacao(app);
   registrarRotasPerfil(app);
   registrarConfirmacao(app, autorizarAcessoBanco);
@@ -144,6 +177,17 @@ export function createApp() {
   );
 
   if (process.env.NODE_ENV === 'production' && existsSync(entradaClienteCompilado)) {
+    app.use(
+      '/assets',
+      express.static(fileURLToPath(new URL('../../client/dist/assets/', import.meta.url)), {
+        index: false,
+        setHeaders(res, caminho) {
+          // So os pacotes com hash podem ficar em cache por um ano.
+          if (/[-][A-Za-z0-9_-]{8}\.(?:js|css)$/.test(caminho))
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        },
+      }),
+    );
     app.use(express.static(pastaClienteCompilado, { index: false }));
     app.use((req, res, next) => {
       if (

@@ -11,7 +11,7 @@ import {
   REPOSITORIO_PREVIAS_MODELOS,
   REPOSITORIO_PREVIAS_GRATUITAS,
   aprovadoPreviaCaminho,
-} from '../src/previaModelo.ts';
+} from '../src/ia/previaModelo.ts';
 
 const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(120)]);
 function armazenamentoSimulacao() {

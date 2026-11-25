@@ -75,6 +75,7 @@ async function requisitarGithub(caminho: string, metodo = 'GET', corpo?: unknown
     throw new Error('BACKUP_GITHUB_NAO_CONFIGURADO');
   const resposta = await fetch(`https://api.github.com/repos/${repositorio}${caminho}`, {
     method: metodo,
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,

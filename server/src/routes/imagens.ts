@@ -71,6 +71,8 @@ export function registrarRotasImagens(app: express.Express) {
           .json({ code: 'IMAGE_QUEUED', message: 'Miniatura em processamento.' });
       }
       res.setHeader('X-Preview-Origin', imagem.origin);
+      if ('mascara' in imagem && imagem.mascara)
+        res.setHeader('X-Preview-Paint-Mask', String(imagem.mascara));
       res.setHeader('Content-Type', imagem.mime);
       return res.send(imagem.bytes);
     } catch (erroLocal) {
@@ -94,7 +96,11 @@ export function registrarRotasImagens(app: express.Express) {
       const imagem = await imagemMotocicletaArmazenada(db, modeloLocal.data);
       if (!imagem) return res.status(404).end();
       res.setHeader('X-Preview-Origin', imagem.origin);
+      if ('mascara' in imagem && imagem.mascara)
+        res.setHeader('X-Preview-Paint-Mask', String(imagem.mascara));
       res.setHeader('X-Preview-Origin', imagem.origin);
+      if ('mascara' in imagem && imagem.mascara)
+        res.setHeader('X-Preview-Paint-Mask', String(imagem.mascara));
       res.setHeader('Content-Type', imagem.mime);
       return res.send(imagem.bytes);
     } catch (erroLocal) {
@@ -133,6 +139,8 @@ export function registrarRotasImagens(app: express.Express) {
       );
       if (imagem) {
         res.setHeader('X-Preview-Origin', imagem.origin);
+        if ('mascara' in imagem && imagem.mascara)
+          res.setHeader('X-Preview-Paint-Mask', String(imagem.mascara));
         res.setHeader('Content-Type', imagem.mime);
         return res.send(imagem.bytes);
       }

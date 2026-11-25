@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { ItemMotocicleta, SituacaoMotocicleta } from '../services/apiAutenticacao';
@@ -98,6 +99,7 @@ export default function ModalVerMotocicleta({
 }) {
   const miniatura = useMiniaturaModeloMotocicleta(item.model, item.color, revisao);
   const fecharReferencia = useRef<HTMLButtonElement>(null);
+  const focoVisualizacao = useFocoModal<HTMLElement>();
   useEffect(() => {
     const anteriorOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -126,6 +128,8 @@ export default function ModalVerMotocicleta({
     >
       <section
         className="moto-view-dialog"
+        ref={focoVisualizacao}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="moto-view-title"

@@ -1,3 +1,6 @@
+import { lookup } from 'node:dns/promises';
+import { get } from 'node:https';
+import { BlockList } from 'node:net';
 import { load } from 'cheerio';
 import { normalizarModelo } from './identidade.js';
 import type { FontePesquisa } from './pesquisa.js';
@@ -15,6 +18,7 @@ const dominios = new Set([
   'stgmkpeus.blob.core.windows.net',
   'global.yamaha-motor.com',
   'www.triumphmotorcycles.com.br',
+  'www.triumphmotorcycles.com',
   'www.kawasaki.com.br',
   'www.ducati.com',
   'www.suzukimotos.com.br',
@@ -335,39 +339,114 @@ export async function pesquisarCatalogos(
   ].slice(0, 8);
 }
 
+const redesPrivadas = new BlockList();
+for (const [rede, prefixo] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 3],
+] as const)
+  redesPrivadas.addSubnet(rede, prefixo, 'ipv4');
+
+// A conexao usa o IP validado, inclusive em cada redirecionamento.
+export async function baixarReferenciaWeb(
+  endereco: string,
+  saltos = 0,
+): Promise<{ bytes: Buffer; tipo: string; url: string }> {
+  const url = new URL(endereco);
+  if (url.protocol !== 'https:' || url.port || url.username || url.password || saltos > 3)
+    throw new Error('Use um link HTTPS publico, sem porta ou credenciais.');
+  const ips = await lookup(url.hostname, { all: true, family: 4 });
+  if (!ips.length || ips.some(({ address }) => redesPrivadas.check(address, 'ipv4')))
+    throw new Error('O link precisa apontar para um site publico.');
+  const resposta = await new Promise<{ bytes: Buffer; tipo: string; destino?: string }>(
+    (resolve, reject) => {
+      const requisicao = get(
+        url,
+        {
+          headers: { 'User-Agent': agente, Accept: 'image/*,text/html' },
+          lookup: (_host, opcoes, callback) =>
+            opcoes.all
+              ? callback(
+                  null,
+                  ips.map(({ address }) => ({ address, family: 4 })),
+                )
+              : callback(null, ips[0].address, 4),
+        },
+        (res) => {
+          if ([301, 302, 303, 307, 308].includes(res.statusCode || 0)) {
+            res.resume();
+            resolve({
+              bytes: Buffer.alloc(0),
+              tipo: '',
+              destino: new URL(res.headers.location || '', url).href,
+            });
+            return;
+          }
+          if (res.statusCode !== 200) {
+            res.resume();
+            reject(new Error('O site nao permitiu baixar esta referencia.'));
+            return;
+          }
+          const tipo = String(res.headers['content-type'] || '').split(';')[0];
+          if (!/^(image\/(jpeg|png|webp)|text\/html)$/.test(tipo)) {
+            res.resume();
+            reject(new Error('O link deve conter uma foto JPEG, PNG, WebP ou uma pagina HTML.'));
+            return;
+          }
+          const partes: Buffer[] = [];
+          let tamanho = 0;
+          res.on('data', (parte: Buffer) => {
+            tamanho += parte.length;
+            if (tamanho > (tipo === 'text/html' ? 2_000_000 : 10 * 1024 * 1024)) {
+              requisicao.destroy(new Error('A referencia excede o tamanho permitido.'));
+            } else partes.push(parte);
+          });
+          res.on('end', () => resolve({ bytes: Buffer.concat(partes), tipo }));
+          res.on('error', reject);
+        },
+      );
+      const prazo = setTimeout(
+        () => requisicao.destroy(new Error('Tempo limite ao baixar a referencia.')),
+        15000,
+      );
+      requisicao.on('close', () => clearTimeout(prazo));
+      requisicao.on('error', reject);
+    },
+  );
+  if (resposta.destino) return baixarReferenciaWeb(resposta.destino, saltos + 1);
+  return { ...resposta, url: url.href };
+}
 export async function importarFotoFabricante(endereco: string) {
-  const pagina = urlFontePermitida(endereco);
-  if (['bikez.com', 'www.motorcyclespecs.co.za'].includes(pagina.hostname))
-    throw new Error(
-      'Esse catalogo e usado somente para identificacao. Envie uma foto autorizada ou um link do fabricante.',
-    );
-  const $ = load(await consultarPaginaPublica(pagina.href));
+  const pagina = await baixarReferenciaWeb(endereco);
+  if (pagina.tipo.startsWith('image/')) return { bytes: pagina.bytes, url: pagina.url };
+  const $ = load(pagina.bytes.toString());
   const candidatos = [
     $('meta[property="og:image"]').attr('content'),
+    $('meta[name="twitter:image"]').attr('content'),
     ...$('img')
       .toArray()
       .filter((img) => /moto|motorcycle|bike/i.test($(img).attr('alt') || ''))
-      .map((img) => $(img).attr('src')),
+      .map((img) => $(img).attr('src') || $(img).attr('data-src')),
   ].filter((valor): valor is string => !!valor);
-  for (const candidato of candidatos.slice(0, 5)) {
-    let imagem: URL;
+  for (const candidato of [...new Set(candidatos)].slice(0, 8)) {
     try {
-      imagem = urlFontePermitida(new URL(candidato, pagina).href);
+      const imagem = await baixarReferenciaWeb(new URL(candidato, pagina.url).href);
+      if (imagem.tipo.startsWith('image/')) return { bytes: imagem.bytes, url: pagina.url };
     } catch {
-      continue;
+      /* Tenta outra foto da mesma pagina. */
     }
-    if (/logo|favicon|icon|placeholder/i.test(imagem.pathname)) continue;
-    await consultarRobots(imagem);
-    const resposta = await fetch(imagem, {
-      headers: { 'User-Agent': agente },
-      redirect: 'error',
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!resposta.ok || !/^image\/(jpeg|png|webp)/.test(resposta.headers.get('content-type') || ''))
-      continue;
-    return { bytes: await lerResposta(resposta, 10 * 1024 * 1024), url: pagina.href };
   }
   throw new Error(
-    'Nao foi encontrada uma foto importavel neste link. Baixe a foto autorizada e envie pelo computador ou celular.',
+    'Nao foi possivel importar uma foto. Cole o link direto da imagem ou envie o arquivo.',
   );
 }

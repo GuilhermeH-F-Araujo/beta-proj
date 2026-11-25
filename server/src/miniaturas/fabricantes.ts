@@ -13,12 +13,22 @@ const indices: Record<string, string[]> = {
   bmw: ['https://www.bmw-motorrad.com.br/pt/models.html'],
   kawasaki: ['https://www.kawasaki.com.br'],
   suzuki: ['https://www.suzukimotos.com.br'],
-  triumph: ['https://www.triumphmotorcycles.com.br'],
+  triumph: [
+    'https://www.triumphmotorcycles.com.br',
+    'https://www.triumphmotorcycles.com/motorcycles',
+  ],
   ducati: ['https://www.ducati.com/br/pt/motos'],
   ktm: ['https://www.ktm.com/pt-br.html'],
   'royal enfield': ['https://www.royalenfield.com/br/pt/motorcycles/'],
   'harley davidson': ['https://www.harley-davidson.com/br/pt/motorcycles.html'],
 };
+function decodificarEndereco(valor: string) {
+  try {
+    return decodeURIComponent(valor);
+  } catch {
+    return valor;
+  }
+}
 const palavras = (texto: string) => normalizarModelo(texto).match(/[a-z]+|\d+/g) || [];
 export function correspondeFabricante(
   modelo: string,
@@ -43,16 +53,28 @@ export function extrairReferenciaFabricante(
   marca: string,
   ano: number | null,
 ): FontePesquisa | null {
+  return extrairReferenciasFabricante(html, pagina, modelo, marca, ano)[0] ?? null;
+}
+// Uma pagina de produto costuma ter varias fotos uteis (cores, lado, og:image). Ate 3
+// viram referencias separadas, para o modelo ter mais de um angulo do fabricante.
+const FOTOS_POR_PAGINA = 3;
+export function extrairReferenciasFabricante(
+  html: string,
+  pagina: string,
+  modelo: string,
+  marca: string,
+  ano: number | null,
+): FontePesquisa[] {
   const $ = load(html);
   const titulo = $('title').text().trim() || $('h1').first().text().trim();
-  if (!correspondeFabricante(modelo, titulo, marca, ano)) return null;
+  if (!correspondeFabricante(modelo, titulo, marca, ano)) return [];
   const fotos: { imagem: string; pontos: number }[] = [];
   $('main img, article img, .main-container img, picture img').each((_i, elemento) => {
     const img = $(elemento);
     if (img.parents('nav, header, footer').length) return;
     const origem = img.attr('src') || img.attr('data-src');
     if (!origem) return;
-    const descricao = `${img.attr('alt') || ''} ${decodeURIComponent(origem).replace(/[_/-]/g, ' ')}`;
+    const descricao = `${img.attr('alt') || ''} ${decodificarEndereco(origem).replace(/[_/-]/g, ' ')}`;
     if (/logo|favicon|icon|\/styles\/product_112|placeholder|condicao/i.test(origem)) return;
     // Nome do arquivo e alt precisam apontar ao produto, nao a um banner generico.
     if (!correspondeFabricante(modelo, descricao, marca, null)) return;
@@ -67,18 +89,28 @@ export function extrairReferenciaFabricante(
       /* CDNs nao cadastradas nao sao acessadas. */
     }
   });
-  const foto = fotos.sort((a, b) => b.pontos - a.pontos)[0];
+  // A imagem de compartilhamento da pagina e quase sempre a foto principal do produto.
+  const destaque = $('meta[property="og:image"]').attr('content');
+  if (destaque && !/logo|favicon|icon|placeholder/i.test(destaque)) {
+    try {
+      fotos.push({ imagem: urlFontePermitida(new URL(destaque, pagina).href).href, pontos: 4 });
+    } catch {
+      /* CDN fora da lista autorizada. */
+    }
+  }
+  const melhores = [...new Map(fotos.sort((a, b) => b.pontos - a.pontos).map((f) => [f.imagem, f])).values()]
+    .slice(0, FOTOS_POR_PAGINA);
   const resumo =
     $('meta[name="description"]').attr('content') || $('main h1').first().text() || titulo;
-  return {
+  const base = {
     titulo,
     url: pagina,
     resumo: `${titulo}. ${resumo.slice(0, 400)}`,
-    imagem: foto?.imagem,
     autor: marca,
     licenca: 'Referencia do fabricante; direitos reservados. Original nao redistribuido.',
-    correspondencia: 'exata',
+    correspondencia: 'exata' as const,
   };
+  return melhores.length ? melhores.map((foto) => ({ ...base, imagem: foto.imagem })) : [base];
 }
 export async function pesquisarFabricantes(
   modelo: string,
@@ -88,6 +120,7 @@ export async function pesquisarFabricantes(
   const nome = normalizarModelo(modelo).replace(/-/g, ' ');
   const marca = Object.keys(indices).find((marca) => nome.startsWith(marca + ' '));
   if (!marca) return [];
+  const fontes: FontePesquisa[] = [];
   for (const base of indices[marca]) {
     try {
       const html = await consultarPaginaPublica(base);
@@ -96,7 +129,7 @@ export async function pesquisarFabricantes(
       const procurados = new Set([...palavras(modeloBusca), ...palavras(marca)]);
       $('a[href]').each((_i, elemento) => {
         const href = $(elemento).attr('href')!;
-        const descricao = `${$(elemento).text()} ${decodeURIComponent(href).replace(/[-_/]/g, ' ')}`;
+        const descricao = `${$(elemento).text()} ${decodificarEndereco(href).replace(/[-_/]/g, ' ')}`;
         if (!correspondeFabricante(modeloBusca, descricao, marca, null)) return;
         try {
           const url = urlFontePermitida(new URL(href, base).href);
@@ -114,20 +147,17 @@ export async function pesquisarFabricantes(
       });
       // No maximo duas paginas; a fila de 100 modelos reutiliza o cache do indice.
       for (const [link] of [...links].sort((a, b) => a[1] - b[1]).slice(0, 2)) {
-        const fonte = extrairReferenciaFabricante(
-          await consultarPaginaPublica(link),
-          link,
-          modelo,
-          marca,
-          ano,
-        );
-        if (fonte) return [fonte];
+        const pagina = await consultarPaginaPublica(link).catch(() => null);
+        if (!pagina) continue;
+        const encontradas = extrairReferenciasFabricante(pagina, link, modelo, marca, ano);
+        if (encontradas.some((fonte) => fonte.imagem)) return encontradas;
+        fontes.push(...encontradas);
       }
     } catch {
       /* As outras fontes continuam independentes. */
     }
   }
-  return [];
+  return fontes.slice(0, 2);
 }
 export async function baixarFotoFabricante(endereco: string) {
   const url = urlFontePermitida(endereco);

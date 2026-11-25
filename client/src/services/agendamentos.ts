@@ -7,6 +7,7 @@ export type ItemAgendamento = {
   telefone: string;
   motoId: number;
   moto: string;
+  motoFoto?: string | null;
   placa: string;
   mecanicoId: number | null;
   mecanico: string;
@@ -36,7 +37,8 @@ export type EntradaAgendamento = {
 };
 
 export async function buscarAgendamentos() {
-  return (await request<{ itens: ItemAgendamento[] }>('/api/agendamentos', { method: 'GET' })).itens;
+  return (await request<{ itens: ItemAgendamento[] }>('/api/agendamentos', { method: 'GET' }))
+    .itens;
 }
 
 export function buscarOpcoesAgendamento(sinal?: AbortSignal) {

@@ -91,12 +91,17 @@ export async function salvarReferencia(
 export function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
+export async function cancelarEnvios(db: SupabaseClient, pedidoId: string) {
+  const { error } = await db
+    .from('miniatura_envios')
+    .update({ cancelado: true, expira_em: new Date().toISOString() })
+    .eq('pedido_id', pedidoId);
+  conferirErro(error);
+}
 export async function criarEnvio(db: SupabaseClient, pedidoId: string) {
   const token = randomBytes(32).toString('base64url');
   const expira = new Date(Date.now() + 20 * 60_000).toISOString();
-  conferirErro(
-    (await db.from('miniatura_envios').update({ cancelado: true }).eq('pedido_id', pedidoId)).error,
-  );
+  await cancelarEnvios(db, pedidoId);
   conferirErro(
     (
       await db
@@ -127,4 +132,10 @@ export async function publicacaoAtual(db: SupabaseClient, catalogo: { publicada?
     .maybeSingle();
   conferirErro(error);
   return data;
+}
+
+// A revisao mostra a moto completa neutra; o original publicado guarda os vazios.
+export async function urlPrevia(db: SupabaseClient, caminho?: string | null) {
+  if (!caminho) return null;
+  return (await urlArquivo(db, caminho.replace('original.png', 'previa.png')).catch(() => null)) || urlArquivo(db, caminho);
 }

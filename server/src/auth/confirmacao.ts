@@ -12,6 +12,7 @@ import {
   contextoConfirmacao,
   exigeConfirmacao,
   podeGerenciarAdministrador,
+  rotaNormalizada,
 } from './politicaAdministrativa.js';
 import { registrarAtividade } from '../services/logs.js';
 
@@ -61,7 +62,8 @@ export async function protegerOperacao(
   db: SupabaseClient,
 ) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return true;
-  const rotaAdmin = /^\/api\/admin\/security\/admins(?:\/|$)/.test(req.originalUrl);
+  const rota = rotaNormalizada(req.originalUrl);
+  const rotaAdmin = /^\/api\/admin\/security\/admins(?:\/|$)/.test(rota);
   if (rotaAdmin && !['dono', 'superadministrador'].includes(res.locals.acesso.nivel ?? '')) {
     res.status(403).json({
       code: 'ADMIN_PROTECTED',
@@ -82,7 +84,7 @@ export async function protegerOperacao(
     return false;
   }
   if (
-    /^\/api\/admin\/security\/employee-requests\/[^/]+$/.test(req.originalUrl) &&
+    /^\/api\/admin\/security\/employee-requests\/[^/]+$/.test(rota) &&
     !['dono', 'superadministrador'].includes(res.locals.acesso.nivel ?? '')
   ) {
     res.status(403).json({
@@ -91,10 +93,10 @@ export async function protegerOperacao(
     });
     return false;
   }
-  let sensivel = exigeConfirmacao(req.method, req.originalUrl, req.body);
+  let sensivel = exigeConfirmacao(req.method, rota, req.body);
   const decisaoFuncionario =
     req.method === 'PATCH' &&
-    /^\/api\/admin\/security\/employee-requests\/[^/]+(?:\?|$)/.test(req.originalUrl);
+    /^\/api\/admin\/security\/employee-requests\/[^/]+(?:\?|$)/.test(rota);
   if (decisaoFuncionario) {
     const sessaoAtual = res.locals.adminSessionId;
     if (sessaoAtual) {
@@ -108,14 +110,14 @@ export async function protegerOperacao(
     res.status(428).json({
       code: 'REAUTH_REQUIRED',
       operation: {
-        ...contextoConfirmacao(req.originalUrl, req.method),
+        ...contextoConfirmacao(rota, req.method),
         requireAuthenticator: true,
       },
       message: 'Confirme sua senha e o código do Google Authenticator para decidir este cadastro.',
     });
     return false;
   }
-  const alvo = /^\/api\/employees\/(\d+)(?:\/|$)/.exec(req.originalUrl);
+  const alvo = /^\/api\/employees\/(\d+)(?:\/|$)/.exec(rota);
   if (alvo) {
     const { data: funcionario, error } = await db
       .from('funcionario')
@@ -145,7 +147,7 @@ export async function protegerOperacao(
   if (!sensivel) return true;
   const promovendoSuperadministrador =
     req.method === 'PATCH' &&
-    /^\/api\/admin\/security\/admins\/[^/]+(?:\?|$)/.test(req.originalUrl) &&
+    /^\/api\/admin\/security\/admins\/[^/]+(?:\?|$)/.test(rota) &&
     req.body?.nivel === 'superadministrador';
   const sessao = res.locals.adminSessionId;
   const prova = req.cookies['admin-confirmacao'];
@@ -166,7 +168,7 @@ export async function protegerOperacao(
           'Confirme sua senha e o código do Google Authenticator antes de promover esta pessoa a superadministrador.',
         requireAuthenticator: true,
       }
-    : contextoConfirmacao(req.originalUrl, req.method);
+    : contextoConfirmacao(rota, req.method);
   res.status(428).json({
     code: 'REAUTH_REQUIRED',
     operation: operacao,

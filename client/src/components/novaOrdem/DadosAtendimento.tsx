@@ -8,8 +8,6 @@ type Props = Pick<
   | 'setMecanicoAberto'
   | 'setMecanicoId'
   | 'setObservacoes'
-  | 'setPrevisaoConfirmada'
-  | 'setDataPrevisao'
   | 'setProblema'
   | 'setDataEntrada'
   | 'mecanicoAberto'
@@ -17,8 +15,6 @@ type Props = Pick<
   | 'mecanicoReferencia'
   | 'observacoes'
   | 'opcoes'
-  | 'previsaoConfirmada'
-  | 'dataPrevisao'
   | 'problema'
   | 'dataEntrada'
   | 'servicoSecao'
@@ -32,8 +28,6 @@ export default function DadosAtendimento(props: Props) {
     setMecanicoAberto,
     setMecanicoId,
     setObservacoes,
-    setPrevisaoConfirmada,
-    setDataPrevisao,
     setProblema,
     setDataEntrada,
     mecanicoAberto,
@@ -41,8 +35,6 @@ export default function DadosAtendimento(props: Props) {
     mecanicoReferencia,
     observacoes,
     opcoes,
-    previsaoConfirmada,
-    dataPrevisao,
     problema,
     dataEntrada,
     servicoSecao,
@@ -57,39 +49,16 @@ export default function DadosAtendimento(props: Props) {
         </div>
         {concluido[2] && <Icone name="check" size={18} />}
       </div>
-      <div className="os-create-row">
-        <label className="os-create-field">
-          <span>
-            Entrada <b>*</b>
-          </span>
-          <input
-            type="datetime-local"
-            value={dataEntrada}
-            onChange={(eventoRecebido) => setDataEntrada(eventoRecebido.target.value)}
-          />
-        </label>
-        <label className="os-create-field">
-          <span>Previsão de entrega</span>
-          <input
-            type="datetime-local"
-            value={dataPrevisao}
-            onChange={(eventoRecebido) => {
-              setDataPrevisao(eventoRecebido.target.value);
-              setPrevisaoConfirmada(false);
-            }}
-          />
-        </label>
-      </div>
-      {!dataPrevisao && (
-        <label className="os-create-forecast-note">
-          <input
-            type="checkbox"
-            checked={previsaoConfirmada}
-            onChange={(eventoRecebido) => setPrevisaoConfirmada(eventoRecebido.target.checked)}
-          />
-          <span>Sem previsão por enquanto. Eu aviso o cliente depois.</span>
-        </label>
-      )}
+      <label className="os-create-field">
+        <span>
+          Entrada <b>*</b>
+        </span>
+        <input
+          type="datetime-local"
+          value={dataEntrada}
+          onChange={(eventoRecebido) => setDataEntrada(eventoRecebido.target.value)}
+        />
+      </label>
       <div className="os-create-field os-create-mechanic" ref={mecanicoReferencia}>
         <span>Mecânico responsável</span>
         <button

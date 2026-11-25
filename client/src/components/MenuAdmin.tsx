@@ -10,6 +10,7 @@ import { NavLink } from 'react-router-dom';
 import LogoEstacao from './LogoEstacao';
 import { moduloPagina, pode, useAcessoConta } from '../services/acessoConta';
 import './menu-admin.css';
+import { usePendenciasMiniaturas } from '../hooks/usePendenciasMiniaturas';
 
 type Item = { label: string; icon: string; path: string };
 const itens: Item[] = [
@@ -20,6 +21,7 @@ const itens: Item[] = [
   { label: 'Ordens de Serviço', icon: 'clipboard', path: '/ordens-de-servico' },
   { label: 'Agendamentos', icon: 'calendar', path: '/agendamentos' },
   { label: 'Serviços', icon: 'wrench', path: '/servicos' },
+  { label: 'Miniaturas', icon: 'bike', path: '/miniaturas' },
   { label: 'Configurações', icon: 'settings', path: '/configuracoes' },
 ];
 
@@ -187,6 +189,7 @@ export function Icone({ name: nome, size: tamanho = 14 }: { name: string; size?:
         <path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm-9 5 9 5 9-5m-9 5v10m-5-18 10 6" />
       </>
     ),
+    'check-simple': <path d="m5 12 4 4L19 6" strokeWidth={3} />,
     check: (
       <>
         <circle cx="12" cy="12" r="9" />
@@ -350,7 +353,13 @@ export function Icone({ name: nome, size: tamanho = 14 }: { name: string; size?:
     ),
   };
   if (nome === 'settings')
-    return <span className="admin-menu-settings-icon" style={{ width: tamanho, height: tamanho }} aria-hidden="true" />;
+    return (
+      <span
+        className="admin-menu-settings-icon"
+        style={{ width: tamanho, height: tamanho }}
+        aria-hidden="true"
+      />
+    );
   return (
     <svg
       width={tamanho}
@@ -379,7 +388,10 @@ export default function MenuAdministrador({
   onUnavailable?: (rotulo: string) => void;
   onLogout: () => void | Promise<void>;
 }) {
-  useAcessoConta();
+  const acesso = useAcessoConta();
+  const pendencias = usePendenciasMiniaturas(
+    !aguardandoAcesso && acesso.administrador && pode('motocicletas'),
+  );
   const organizacao = useOrganizacaoInterface(lerOrganizacaoInterface);
   const arraste = useArrasteInterface();
   return (
@@ -408,9 +420,16 @@ export default function MenuAdministrador({
       <nav aria-label="Menu principal">
         {[...itens]
           .sort(
-            (a, b) => organizacao.ordemMenu.indexOf(a.path) - organizacao.ordemMenu.indexOf(b.path),
+            (a, b) =>
+              (organizacao.ordemMenu.includes(a.path)
+                ? organizacao.ordemMenu.indexOf(a.path)
+                : itens.findIndex((item) => item.path === a.path)) -
+              (organizacao.ordemMenu.includes(b.path)
+                ? organizacao.ordemMenu.indexOf(b.path)
+                : itens.findIndex((item) => item.path === b.path)),
           )
           .filter((item) => {
+            if (item.path === '/miniaturas' && !pendencias.visivel) return false;
             const modulo = moduloPagina(item.path);
             return aguardandoAcesso || !modulo || pode(modulo);
           })
@@ -424,13 +443,14 @@ export default function MenuAdministrador({
               '/agendamentos',
               '/servicos',
               '/configuracoes',
+              '/miniaturas',
             ].includes(item.path) ? (
               <NavLink
                 key={item.path}
                 data-personalizar-id={`menu-${item.path}`}
                 data-editor-menu-item={item.path}
                 to={item.path}
-                draggable={arraste}
+                draggable={arraste && item.path !== '/miniaturas'}
                 onDragStart={(evento) => {
                   evento.stopPropagation();
                   evento.dataTransfer.setData('application/x-estacao-menu-item', item.path);
@@ -438,12 +458,14 @@ export default function MenuAdministrador({
                 onDragOver={(evento) => {
                   if (
                     arraste &&
+                    item.path !== '/miniaturas' &&
                     evento.dataTransfer.types.includes('application/x-estacao-menu-item')
                   )
                     evento.preventDefault();
                 }}
                 onDrop={(evento) => {
                   evento.preventDefault();
+                  if (item.path === '/miniaturas') return;
                   const de = organizacao.ordemMenu.indexOf(
                     evento.dataTransfer.getData('application/x-estacao-menu-item'),
                   );
@@ -467,6 +489,14 @@ export default function MenuAdministrador({
               >
                 <Icone name={item.icon} size={17} />
                 <span>{item.label}</span>
+                {item.path === '/miniaturas' && pendencias.quantidade > 0 && (
+                  <small
+                    className="admin-menu-count"
+                    aria-label={`${pendencias.quantidade} miniaturas pendentes`}
+                  >
+                    {pendencias.quantidade}
+                  </small>
+                )}
               </NavLink>
             ) : (
               <button

@@ -1,7 +1,7 @@
 .bike-edit-overlay {
   position: fixed;
   inset: 0;
-  z-index: 110;
+  z-index: 1150;
   display: grid;
   place-items: center;
   padding: 20px;

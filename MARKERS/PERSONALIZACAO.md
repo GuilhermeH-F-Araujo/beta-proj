@@ -7,8 +7,8 @@ O menu conserva os modulos disponiveis para a conta, com ordem e posicao editave
 
 ## Uso
 
-Abra Editar tela no menu principal ou Personalizar no cabecalho. A propria tela
-recebe um efeito de elevacao e uma barra identifica o modo de edicao. Todos os
+Em Configuracoes, abra Acessibilidade e clique em Editar minha tela. A propria
+tela recebe um efeito de elevacao e uma barra identifica o modo de edicao. Todos os
 botoes e textos passam a ser objetos selecionaveis; suas acoes ficam suspensas.
 Clique no elemento real para abrir ferramentas junto dele: tamanho, texto,
 troca por atalho conhecido, ordenacao e restauracao. Concluir edicao devolve o
@@ -33,7 +33,7 @@ ficam centralizados em colunas laterais simetricas, com a logo a esquerda.
 O modo recolhido preserva alvos de toque de pelo menos 44px e usa destaque
 vermelho suave sem comprimir o fundo ativo na largura do icone. Desfazer e Refazer mantem ate 30 etapas
 na sessao. Restaurar disposicao e elementos preserva os ajustes gerais de leitura.
-A entrada permanente Editar tela e o perfil sao protegidos contra substituicao.
+O perfil e protegido contra substituicao.
 
 As alteracoes sao imediatas e usam a fila de salvamento da conta. O indicador
 mostra a sincronizacao; nenhuma preferencia muda o padrao das outras contas.

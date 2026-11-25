@@ -46,7 +46,7 @@ O perfil e a edicao de clientes precisam de SELECT e UPDATE em
 cliente.complemento para service_role. A migracao permitir_complemento_cliente_painel
 concede apenas essas permissoes de coluna, sem ampliar o acesso de anon ou
 authenticated e sem alterar RLS. O ajuste tambem esta no consolidado
-ATUALIZAR-BANCO.sql; em bancos existentes, prefira aplicar somente a migracao
+supabase/ATUALIZAR-BANCO.sql; em bancos existentes, prefira aplicar somente a migracao
 pendente depois de conferir o historico.
 
 As chaves locais da aplicacao passam a ter nomes estaveis. A inicializacao migra chaves antigas do armazenamento do navegador e preserva dados mais recentes no destino. O leitor de rascunhos tambem reconhece chaves antigas no IndexedDB.
@@ -102,7 +102,7 @@ apagadas ou migradas para receber a correcao.
 
 ## Organizacao da area de trabalho
 
-Editar tela, no menu principal, ativa a edicao dos proprios elementos da pagina.
+Em Configuracoes, abra Acessibilidade e clique em Editar minha tela para editar os elementos da pagina.
 Clique em um elemento para ajustar tamanho ou trocar seu atalho. Os botoes nao
 executam acoes durante a edicao. Os sinais + criam barras e inserem atalhos no
 local; alcas e setas organizam os menus. Concluir edicao retoma o uso normal.

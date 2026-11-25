@@ -14,7 +14,7 @@
 - Toda rota protegida deve verificar identidade e permissao no servidor.
 - Atualize server/openapi.json quando o contrato da API mudar.
 - O Swagger usa o titulo Documentação e o caminho /documentacao/.
-- Mantenha os guias na raiz; nao recrie docs ou motion-film.
+- Mantenha os guias em MARKERS; nao recrie docs ou motion-film.
 - Rode os testes necessarios e a compilacao antes de entregar.
 
 - Mantenha noUnusedLocals e noUnusedParameters ativos nos dois projetos.

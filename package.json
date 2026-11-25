@@ -22,6 +22,7 @@
     "diagnosticar": "npm --prefix server run doctor",
     "testar:interface": "node --import ./client/scripts/test-loader.mjs --import ./server/node_modules/tsx/dist/loader.mjs --test ./client/scripts/usabilidade.test.mjs",
     "testar:servidor": "npm --prefix server run testar",
+    "testar:ia-real": "npm --prefix server run testar:ia-real --",
     "testar": "npm run compilar && npm run testar:servidor && npm run testar:interface",
     "formatar": "prettier --write \"client/src/**/*.{ts,tsx,css}\" \"server/src/**/*.ts\" \"{scripts,client/scripts,server/scripts}/**/*.{mjs,mts}\" \"*.{json,md,yaml}\"",
     "verificar:formato": "prettier --check \"client/src/**/*.{ts,tsx,css}\" \"server/src/**/*.ts\" \"{scripts,client/scripts,server/scripts}/**/*.{mjs,mts}\" \"*.{json,md,yaml}\"",

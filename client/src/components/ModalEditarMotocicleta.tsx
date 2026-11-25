@@ -16,73 +16,54 @@ import './modal-editar-motocicleta.css';
 
 type Props = {
   item: ItemMotocicleta | null;
+  initialClientId?: number;
+  fixedClient?: boolean;
   clients: { id: number; name: string }[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (id?: number) => void;
   onImage: (item: ItemMotocicleta) => void;
 };
 
 // Estado e acoes ficam juntos; a composicao visual fica no componente de formulario.
 export function useEdicaoMotocicleta({
   item,
+  initialClientId,
+  fixedClient = false,
   clients: clientes,
   onClose: aoFechar,
   onSaved: aoSalvar,
   onImage: aoImagem,
 }: Props) {
   const inicial = splitModelo(item?.model ?? '');
+  const escopoRascunho = item ? `moto-${item.id}` : `moto-nova-${initialClientId ?? 'sem-cliente'}`;
   const [idCliente, setClienteId] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
+    escopoRascunho,
     'clientId',
-    item?.clientId ?? 0,
+    item?.clientId ?? initialClientId ?? 0,
   );
-  const [marca, setMarca] = useEstadoRascunho(`moto-${item?.id ?? 'nova'}`, 'brand', inicial.brand);
-  const [modelo, setModelo] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
-    'model',
-    inicial.model,
-  );
-  const [placa, setPlaca] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
-    'plate',
-    item?.plate ?? '',
-  );
-  const [ano, setAno] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
-    'year',
-    item?.year?.toString() ?? '',
-  );
+  const [marca, setMarca] = useEstadoRascunho(escopoRascunho, 'brand', inicial.brand);
+  const [modelo, setModelo] = useEstadoRascunho(escopoRascunho, 'model', inicial.model);
+  const [placa, setPlaca] = useEstadoRascunho(escopoRascunho, 'plate', item?.plate ?? '');
+  const [ano, setAno] = useEstadoRascunho(escopoRascunho, 'year', item?.year?.toString() ?? '');
   const [modeloAno, setModeloAno] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
+    escopoRascunho,
     'modelYear',
     item?.modelYear?.toString() ?? '',
   );
-  const [cor, setCor] = useEstadoRascunho(`moto-${item?.id ?? 'nova'}`, 'color', item?.color ?? '');
+  const [cor, setCor] = useEstadoRascunho(escopoRascunho, 'color', item?.color ?? '');
   const [quilometragem, setQuilometragem] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
+    escopoRascunho,
     'mileage',
     item?.mileage?.toString() ?? '',
   );
-  const [chassis, setChassis] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
-    'chassis',
-    item?.chassis ?? '',
-  );
-  const [renavam, setRenavam] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
-    'renavam',
-    item?.renavam ?? '',
-  );
+  const [chassis, setChassis] = useEstadoRascunho(escopoRascunho, 'chassis', item?.chassis ?? '');
+  const [renavam, setRenavam] = useEstadoRascunho(escopoRascunho, 'renavam', item?.renavam ?? '');
   const [observacoes, setObservacoes] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
+    escopoRascunho,
     'notes',
     item?.notes ?? '',
   );
-  const [ativo, setAtivo] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
-    'active',
-    item?.active ?? true,
-  );
+  const [ativo, setAtivo] = useEstadoRascunho(escopoRascunho, 'active', item?.active ?? true);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState('');
   const [alterado, setAlterado] = useState(false);
@@ -92,12 +73,14 @@ export function useEdicaoMotocicleta({
   const [modeloAberto, setModeloAberto] = useState(false);
   const [responsavelAberto, setResponsavelAberto] = useState(false);
   const [responsavelBusca, setResponsavelBusca] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
+    escopoRascunho,
     'ownerSearch',
-    clientes.find((cliente) => cliente.id === item?.clientId)?.name ?? item?.client ?? '',
+    clientes.find((cliente) => cliente.id === (item?.clientId ?? initialClientId))?.name ??
+      item?.client ??
+      '',
   );
   const [additionalAberto, setAdditionalAberto] = useEstadoRascunho(
-    `moto-${item?.id ?? 'nova'}`,
+    escopoRascunho,
     'additionalOpen',
     !!(item?.chassis || item?.renavam || item?.notes || item?.active === false),
   );
@@ -179,11 +162,12 @@ export function useEdicaoMotocicleta({
     setOcupado(true);
     setErro('');
     try {
+      let motocicletaCriadaId: number | undefined;
       if (item) await atualizarMotocicleta(item.id, conteudoEnviado);
-      else await criarMotocicleta(conteudoEnviado);
-      limparRascunho(`moto-${item?.id ?? 'nova'}`);
+      else motocicletaCriadaId = (await criarMotocicleta(conteudoEnviado)).id;
+      limparRascunho(escopoRascunho);
       setPendenteSalvar(null);
-      aoSalvar();
+      aoSalvar(motocicletaCriadaId);
     } catch (causa) {
       setPendenteSalvar(null);
       setErro(causa instanceof Error ? causa.message : 'Não foi possível salvar a moto.');
@@ -260,6 +244,7 @@ export function useEdicaoMotocicleta({
     escolherModelo,
     idCliente,
     item,
+    fixedClient,
     marca,
     marcaAberto,
     marcaCorrespondencias,

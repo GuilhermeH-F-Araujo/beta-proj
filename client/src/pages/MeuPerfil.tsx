@@ -1,3 +1,5 @@
+import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
+import { limparRascunho } from '../services/rascunhos';
 import CampoSenha, { RequisitosSenha } from '../components/CampoSenha';
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -68,11 +70,31 @@ export default function MeuPerfil() {
   const [secao, setSecao] = useState<'dados' | 'seguranca'>('dados');
   const [nomeSalvo, setNomeSalvo] = useState(usuario?.nome ?? '');
   const [campos, setCampos] = useState<PerfilFuncionario>({
-    name: usuario?.nome ?? '', email: usuario?.email ?? '', phone: usuario?.telefone ?? '', cpf: '',
-    birthDate: '', address: '', zipCode: '', contractType: '', contractDuration: '', specialty: '',
-    professionalNotes: '', department: '', admissionDate: '', secondaryPhone: '', emergencyContact: '',
-    emergencyRelationship: '', emergencyPhone: '',
+    name: usuario?.nome ?? '',
+    email: usuario?.email ?? '',
+    phone: usuario?.telefone ?? '',
+    cpf: '',
+    birthDate: '',
+    address: '',
+    zipCode: '',
+    contractType: '',
+    contractDuration: '',
+    specialty: '',
+    professionalNotes: '',
+    department: '',
+    admissionDate: '',
+    secondaryPhone: '',
+    emergencyContact: '',
+    emergencyRelationship: '',
+    emergencyPhone: '',
   });
+  const escopoRascunho = `meu-perfil-${usuario?.id ?? 'sem-conta'}`;
+  const [rascunho, setRascunho] = useEstadoRascunho<Partial<PerfilFuncionario>>(
+    escopoRascunho,
+    'dados-pessoais',
+    {},
+  );
+  const dadosEditados = { ...campos, ...rascunho };
   const [pronto, setPronto] = useState(false);
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
@@ -105,7 +127,7 @@ export default function MeuPerfil() {
     return () => controller.abort();
   }, [usuario?.id]);
   function atualizarCampo(campo: keyof PerfilFuncionario, valor: string) {
-    setCampos((atual) => ({ ...atual, [campo]: valor }));
+    setRascunho((atual) => ({ ...atual, [campo]: valor }));
   }
   async function salvarDetalhes(evento: FormEvent) {
     evento.preventDefault();
@@ -114,13 +136,18 @@ export default function MeuPerfil() {
     setOcupado(true);
     try {
       const resultado = await atualizarMeuPerfil({
-        ...campos,
-        name: campos.name.trim(),
-        phone: campos.phone.trim(),
+        ...dadosEditados,
+        name: dadosEditados.name.trim(),
+        phone: dadosEditados.phone.trim(),
       });
-      setCampos((atual) => ({ ...atual, name: resultado.user.nome }));
       setNomeSalvo(resultado.user.nome);
-      setCampos((atual) => ({ ...atual, name: resultado.user.nome, phone: resultado.user.telefone ?? '' }));
+      setCampos({
+        ...dadosEditados,
+        name: resultado.user.nome,
+        phone: resultado.user.telefone ?? '',
+      });
+      setRascunho({});
+      limparRascunho(escopoRascunho);
       setAviso('Dados pessoais atualizados.');
     } catch (erroCapturado) {
       setErro(erroCapturado instanceof Error ? erroCapturado.message : 'Não foi possível salvar.');
@@ -310,7 +337,7 @@ export default function MeuPerfil() {
                             Nome completo
                             <input
                               autoComplete="name"
-                              value={campos.name}
+                              value={dadosEditados.name}
                               maxLength={100}
                               required
                               onChange={(evento) => atualizarCampo('name', evento.target.value)}
@@ -321,7 +348,7 @@ export default function MeuPerfil() {
                               E-mail de acesso
                               <input
                                 type="email"
-                                value={campos.email}
+                                value={dadosEditados.email}
                                 readOnly
                                 aria-describedby="email-hint"
                               />
@@ -334,7 +361,7 @@ export default function MeuPerfil() {
                               <input
                                 type="tel"
                                 autoComplete="tel"
-                                value={campos.phone}
+                                value={dadosEditados.phone}
                                 maxLength={20}
                                 placeholder="(11) 99999-9999"
                                 onChange={(evento) => atualizarCampo('phone', evento.target.value)}
@@ -342,64 +369,174 @@ export default function MeuPerfil() {
                             </label>
                           </div>
                           <div className="my-profile-field-pair">
-                            <label className="my-profile-field">CPF
-                              <input value={campos.cpf} inputMode="numeric" maxLength={14} placeholder="000.000.000-00" onChange={(evento) => atualizarCampo('cpf', evento.target.value)} />
+                            <label className="my-profile-field">
+                              CPF
+                              <input
+                                value={dadosEditados.cpf}
+                                inputMode="numeric"
+                                maxLength={14}
+                                placeholder="000.000.000-00"
+                                onChange={(evento) => atualizarCampo('cpf', evento.target.value)}
+                              />
                             </label>
-                            <label className="my-profile-field">Data de nascimento
-                              <input type="date" value={campos.birthDate} onChange={(evento) => atualizarCampo('birthDate', evento.target.value)} />
-                            </label>
-                          </div>
-                          <div className="my-profile-field-pair">
-                            <label className="my-profile-field">CEP
-                              <input value={campos.zipCode} inputMode="numeric" maxLength={9} placeholder="00000-000" onChange={(evento) => atualizarCampo('zipCode', evento.target.value)} />
-                            </label>
-                            <label className="my-profile-field">Endereço
-                              <input autoComplete="street-address" value={campos.address} maxLength={240} onChange={(evento) => atualizarCampo('address', evento.target.value)} />
-                            </label>
-                          </div>
-                          <div className="my-profile-field-pair">
-                            <label className="my-profile-field">Cargo
-                              <input value={usuario?.acesso.cargo || usuario?.perfil || ''} readOnly />
-                            </label>
-                            <label className="my-profile-field">Setor
-                              <input value={campos.department} maxLength={100} onChange={(evento) => atualizarCampo('department', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Data de nascimento
+                              <input
+                                type="date"
+                                value={dadosEditados.birthDate}
+                                onChange={(evento) =>
+                                  atualizarCampo('birthDate', evento.target.value)
+                                }
+                              />
                             </label>
                           </div>
                           <div className="my-profile-field-pair">
-                            <label className="my-profile-field">Tipo de contrato
-                              <input value={campos.contractType} maxLength={40} placeholder="CLT, PJ, temporário…" onChange={(evento) => atualizarCampo('contractType', evento.target.value)} />
+                            <label className="my-profile-field">
+                              CEP
+                              <input
+                                value={dadosEditados.zipCode}
+                                inputMode="numeric"
+                                maxLength={9}
+                                placeholder="00000-000"
+                                onChange={(evento) =>
+                                  atualizarCampo('zipCode', evento.target.value)
+                                }
+                              />
                             </label>
-                            {campos.contractType.toLocaleLowerCase('pt-BR').includes('tempor') && (
-                              <label className="my-profile-field">Duração do contrato (meses)
-                                <input type="number" min="1" max="120" value={campos.contractDuration} onChange={(evento) => atualizarCampo('contractDuration', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Endereço
+                              <input
+                                autoComplete="street-address"
+                                value={dadosEditados.address}
+                                maxLength={240}
+                                onChange={(evento) =>
+                                  atualizarCampo('address', evento.target.value)
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="my-profile-field-pair">
+                            <label className="my-profile-field">
+                              Cargo
+                              <input
+                                value={usuario?.acesso.cargo || usuario?.perfil || ''}
+                                readOnly
+                              />
+                            </label>
+                            <label className="my-profile-field">
+                              Setor
+                              <input
+                                value={dadosEditados.department}
+                                maxLength={100}
+                                onChange={(evento) =>
+                                  atualizarCampo('department', evento.target.value)
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="my-profile-field-pair">
+                            <label className="my-profile-field">
+                              Tipo de contrato
+                              <input
+                                value={dadosEditados.contractType}
+                                maxLength={40}
+                                placeholder="CLT, PJ, temporário…"
+                                onChange={(evento) =>
+                                  atualizarCampo('contractType', evento.target.value)
+                                }
+                              />
+                            </label>
+                            {dadosEditados.contractType.toLocaleLowerCase('pt-BR').includes('tempor') && (
+                              <label className="my-profile-field">
+                                Duração do contrato (meses)
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="120"
+                                  value={dadosEditados.contractDuration}
+                                  onChange={(evento) =>
+                                    atualizarCampo('contractDuration', evento.target.value)
+                                  }
+                                />
                               </label>
                             )}
                           </div>
                           <div className="my-profile-field-pair">
-                            <label className="my-profile-field">Especialidade
-                              <input value={campos.specialty} maxLength={120} onChange={(evento) => atualizarCampo('specialty', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Especialidade
+                              <input
+                                value={dadosEditados.specialty}
+                                maxLength={120}
+                                onChange={(evento) =>
+                                  atualizarCampo('specialty', evento.target.value)
+                                }
+                              />
                             </label>
-                            <label className="my-profile-field">Data de admissão
-                              <input type="date" value={campos.admissionDate} onChange={(evento) => atualizarCampo('admissionDate', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Data de admissão
+                              <input
+                                type="date"
+                                value={dadosEditados.admissionDate}
+                                onChange={(evento) =>
+                                  atualizarCampo('admissionDate', evento.target.value)
+                                }
+                              />
                             </label>
                           </div>
-                          <label className="my-profile-field">Observações profissionais
-                            <input value={campos.professionalNotes} maxLength={2000} onChange={(evento) => atualizarCampo('professionalNotes', evento.target.value)} />
+                          <label className="my-profile-field">
+                            Observações profissionais
+                            <input
+                              value={dadosEditados.professionalNotes}
+                              maxLength={2000}
+                              onChange={(evento) =>
+                                atualizarCampo('professionalNotes', evento.target.value)
+                              }
+                            />
                           </label>
                           <div className="my-profile-field-pair">
-                            <label className="my-profile-field">Telefone secundário
-                              <input type="tel" value={campos.secondaryPhone} maxLength={20} onChange={(evento) => atualizarCampo('secondaryPhone', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Telefone secundário
+                              <input
+                                type="tel"
+                                value={dadosEditados.secondaryPhone}
+                                maxLength={20}
+                                onChange={(evento) =>
+                                  atualizarCampo('secondaryPhone', evento.target.value)
+                                }
+                              />
                             </label>
-                            <label className="my-profile-field">Contato de emergência
-                              <input value={campos.emergencyContact} maxLength={100} onChange={(evento) => atualizarCampo('emergencyContact', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Contato de emergência
+                              <input
+                                value={dadosEditados.emergencyContact}
+                                maxLength={100}
+                                onChange={(evento) =>
+                                  atualizarCampo('emergencyContact', evento.target.value)
+                                }
+                              />
                             </label>
                           </div>
                           <div className="my-profile-field-pair">
-                            <label className="my-profile-field">Parentesco do contato
-                              <input value={campos.emergencyRelationship} maxLength={60} onChange={(evento) => atualizarCampo('emergencyRelationship', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Parentesco do contato
+                              <input
+                                value={dadosEditados.emergencyRelationship}
+                                maxLength={60}
+                                onChange={(evento) =>
+                                  atualizarCampo('emergencyRelationship', evento.target.value)
+                                }
+                              />
                             </label>
-                            <label className="my-profile-field">Telefone de emergência
-                              <input type="tel" value={campos.emergencyPhone} maxLength={20} onChange={(evento) => atualizarCampo('emergencyPhone', evento.target.value)} />
+                            <label className="my-profile-field">
+                              Telefone de emergência
+                              <input
+                                type="tel"
+                                value={dadosEditados.emergencyPhone}
+                                maxLength={20}
+                                onChange={(evento) =>
+                                  atualizarCampo('emergencyPhone', evento.target.value)
+                                }
+                              />
                             </label>
                           </div>
                         </div>

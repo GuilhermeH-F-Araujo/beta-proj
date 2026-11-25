@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import CartaoIndicador from '../components/CartaoIndicador';
 import { useCargaInicial } from '../hooks/useCargaInicial';
 import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
@@ -144,6 +145,7 @@ export default function Motocicletas() {
   const [imagemEditar, setImagemEditar] = useState<ItemMotocicleta | null>(null);
   const [visualizando, setVisualizando] = useState<ItemMotocicleta | null>(null);
   const [excluindo, setExcluindo] = useState<ItemMotocicleta | null>(null);
+  const focoExclusao = useFocoModal<HTMLElement>(!!excluindo);
   const [revisaoImagem, setImagemRevisao] = useState(0);
 
   async function recarregar() {
@@ -658,6 +660,8 @@ export default function Motocicletas() {
         >
           <section
             className="bikes-delete"
+            ref={focoExclusao}
+            tabIndex={-1}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="bike-delete-title"

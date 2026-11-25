@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ConteudoCarregando from '../components/ConteudoCarregando';
@@ -48,6 +49,7 @@ export default function DetalhesOrdem() {
   const [avisoTemporario, setAvisoTemporario] = useState('');
   const [editando, setEditando] = useState(false);
   const [historicoAberto, setHistoricoAberto] = useState(false);
+  const focoHistorico = useFocoModal<HTMLElement>(historicoAberto);
   const [historicoCarregando, setHistoricoCarregando] = useState(false);
   const [historicoErro, setHistoricoErro] = useState('');
   const [observacaoHistorico, setObservacaoHistorico] = useState<RegistroHistoricoObservacao[]>([]);
@@ -502,13 +504,24 @@ export default function DetalhesOrdem() {
                             href={foto.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`Abrir foto ${indiceLocal + 1} da OS #${dados.id}`}
+                            aria-label={`Abrir foto ${foto.position ? { front: 'frente', left: 'lado esquerdo', rear: 'traseira', right: 'lado direito', extra: `extra ${indiceLocal - 3}` }[foto.position] : `de entrada ${indiceLocal + 1}`} da OS #${dados.id}`}
                           >
                             <img
                               src={foto.url}
-                              alt={`Foto de entrada ${indiceLocal + 1} da OS #${dados.id}`}
+                              alt={`Foto ${foto.position ? { front: 'da frente', left: 'do lado esquerdo', rear: 'da traseira', right: 'do lado direito', extra: 'extra' }[foto.position] : `de entrada ${indiceLocal + 1}`} da OS #${dados.id}`}
                               loading="lazy"
                             />
+                            <span className="entry-photo-caption">
+                              {foto.position
+                                ? {
+                                    front: 'Frente',
+                                    left: 'Lado esquerdo',
+                                    rear: 'Traseira',
+                                    right: 'Lado direito',
+                                    extra: `Extra ${indiceLocal - 3}`,
+                                  }[foto.position]
+                                : `Foto ${indiceLocal + 1}`}
+                            </span>
                           </a>
                         ))}
                       </div>
@@ -561,6 +574,8 @@ export default function DetalhesOrdem() {
         >
           <section
             className="observation-history-dialog"
+            ref={focoHistorico}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="observation-history-title"

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 const root = new URL('../../client/src/', import.meta.url);
 const tema = readFileSync(new URL('styles/tema.css', root), 'utf8');
 const contraste = (a, b) => {
@@ -50,6 +51,6 @@ test('todos os tokens de cor usados pelas telas estao definidos no tema comparti
       }
     }
   }
-  ler(root.pathname);
+  ler(fileURLToPath(root));
   assert.ok(telas >= 39);
 });

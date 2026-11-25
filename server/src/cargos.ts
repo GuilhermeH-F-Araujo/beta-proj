@@ -1,3 +1,4 @@
+import { rotaNormalizada } from './auth/politicaAdministrativa.js';
 import { eventosNotificacao, gruposNotificacao } from './shared/catalogoNotificacoes.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 const operacoes = ['visualizar', 'criar', 'editar', 'excluir'] as const;
@@ -84,7 +85,7 @@ export function permitirRequisicao(
   corpo?: unknown,
 ) {
   if (primeiroElemento.administrador) return true;
-  const registroAtual = caminho.split('?')[0].replace(/\/+$/, '');
+  const registroAtual = rotaNormalizada(caminho);
   if (metodo === 'HEAD') metodo = 'GET';
   if (metodo === 'GET' && /^\/api\/postal-code\/\d{8}$/.test(registroAtual))
     return ['clientes', 'funcionarios', 'configuracoes'].some((modulo) =>
@@ -98,10 +99,7 @@ export function permitirRequisicao(
       )
     );
   if (/^\/api\/shared\/catalogo$/.test(registroAtual))
-    return (
-      ['GET', 'PUT'].includes(metodo) &&
-      permitir(primeiroElemento, 'servicos', 'visualizar')
-    );
+    return ['GET', 'PUT'].includes(metodo) && permitir(primeiroElemento, 'servicos', 'visualizar');
   if (metodo === 'GET' && registroAtual === '/api/employees/options')
     return (
       permitir(primeiroElemento, 'agendamentos', 'visualizar') ||
@@ -112,14 +110,23 @@ export function permitirRequisicao(
     return (
       segundoElemento?.position === 'Cliente' &&
       segundoElemento.profile === 'Cliente' &&
-      permitir(primeiroElemento, 'clientes', 'criar')
+      (permitir(primeiroElemento, 'clientes', 'criar') ||
+        permitir(primeiroElemento, 'ordens', 'criar'))
     );
   }
+  if (metodo === 'POST' && registroAtual === '/api/motorcycles')
+    return (
+      permitir(primeiroElemento, 'motocicletas', 'criar') ||
+      permitir(primeiroElemento, 'ordens', 'criar')
+    );
   if (metodo === 'GET' && registroAtual === '/api/orders/create-options')
     return (
       permitir(primeiroElemento, 'ordens', 'visualizar') ||
+      permitir(primeiroElemento, 'ordens', 'criar') ||
       permitir(primeiroElemento, 'motocicletas', 'visualizar')
     );
+  if (metodo === 'POST' && registroAtual === '/api/orders/services')
+    return permitir(primeiroElemento, 'servicos', 'criar');
   if (/^\/api\/admin\/security\/(confirm|lock|session)$/.test(registroAtual)) return true;
   if (metodo === 'GET' && registroAtual === '/api/admin/search') return true;
   if (/^\/api\/admin\/(profile(?:\/|$)|preferences(?:\/|$))/.test(registroAtual)) return true;
@@ -134,9 +141,9 @@ export function permitirRequisicao(
           ? 'funcionarios'
           : /^\/api\/agendamentos(?:\/|$)/.test(registroAtual)
             ? 'agendamentos'
-          : registroAtual === '/api/admin/dashboard'
-            ? 'dashboard'
-            : '';
+            : registroAtual === '/api/admin/dashboard'
+              ? 'dashboard'
+              : '';
   if (/^\/api\/motorcycle-(brands|models|thumbnails)(?:\/|$)/.test(registroAtual))
     return (
       metodo === 'GET' &&
@@ -151,9 +158,9 @@ export function permitirRequisicao(
       : metodo === 'DELETE'
         ? 'excluir'
         : metodo === 'POST' &&
-        ['/api/orders', '/api/clients', '/api/motorcycles', '/api/agendamentos'].includes(
-          registroAtual,
-        )
+            ['/api/orders', '/api/clients', '/api/motorcycles', '/api/agendamentos'].includes(
+              registroAtual,
+            )
           ? 'criar'
           : 'editar';
   return permitir(primeiroElemento, modulo, acao);

@@ -9,3 +9,5 @@ server/dist
 .env.*
 !.env.example
 *.tsbuildinfo
+.teste-ia/
+supabase/.temp/

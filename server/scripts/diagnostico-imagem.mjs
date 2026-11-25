@@ -7,7 +7,7 @@ import {
   modeloIncluidoNoProjeto,
   modeloImagemProvedor,
   imagemModeloConfigurada,
-} from '../src/previaModelo.ts';
+} from '../src/ia/previaModelo.ts';
 import { enfileirarModelo } from '../src/filaMiniaturas.ts';
 
 config({ path: fileURLToPath(new URL('../.env', import.meta.url)), quiet: true });

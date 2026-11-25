@@ -183,6 +183,8 @@ export function registrarRotasAutenticacao(app: express.Express) {
       });
     }
 
+    // Reserva o intervalo antes de consultar o banco ou enviar email.
+    registrarEsperaRecuperacao(req, email);
     const recuperavel = await emailAdministradorPodeRecuperar(email);
 
     if (recuperavel === null) {
@@ -194,7 +196,6 @@ export function registrarRotasAutenticacao(app: express.Express) {
     }
 
     if (recuperavel === false) {
-      registrarEsperaRecuperacao(req, email);
       return res.json({
         message:
           'Se os dados informados estiverem vinculados a uma conta administrativa válida, as instruções serão enviadas em instantes.',
@@ -209,8 +210,6 @@ export function registrarRotasAutenticacao(app: express.Express) {
     const { error: erro } = await autenticacaoCliente.auth.resetPasswordForEmail(email, {
       redirectTo: redirecionarPara,
     });
-
-    registrarEsperaRecuperacao(req, email);
 
     if (erro) {
       console.error('[forgot-password]', erro.message);

@@ -1,3 +1,6 @@
+import { useFocoModal } from '../hooks/useFocoModal';
+import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
+import { limparRascunho } from '../services/rascunhos';
 import CartaoIndicador from '../components/CartaoIndicador';
 import { useCargaInicial } from '../hooks/useCargaInicial';
 import { usePesquisaPagina } from '../hooks/usePesquisaPagina';
@@ -193,7 +196,9 @@ export default function Clientes() {
   const [excluindoCliente, setExcluindoCliente] = useState<ItemCliente | null>(null);
   const [excluindoOcupado, setExcluindoOcupado] = useState(false);
   const [excluindoErro, setExcluindoErro] = useState('');
-  const [excluindoMotivo, setExcluindoMotivo] = useState('');
+  const focoExclusao = useFocoModal<HTMLElement>(!!excluindoCliente);
+  const escopoExclusao = `exclusao-cliente-${excluindoCliente?.id ?? 'nenhum'}`;
+  const [excluindoMotivo, setExcluindoMotivo] = useEstadoRascunho(escopoExclusao, 'motivo', '');
 
   useEffect(() => {
     if (!autorizado) return;
@@ -385,7 +390,7 @@ export default function Clientes() {
       setDados(await buscarClientes());
       setPagina(1);
       setExcluindoCliente(null);
-      setExcluindoMotivo('');
+      limparRascunho(escopoExclusao);
       setAvisoTemporario('Cliente removido da lista. Motos e histórico de OS foram preservados.');
     } catch (erroCapturado) {
       setExcluindoErro(
@@ -724,7 +729,6 @@ export default function Clientes() {
               className="clients-menu-delete"
               onClick={() => {
                 setExcluindoErro('');
-                setExcluindoMotivo('');
                 setExcluindoCliente(dados.items.find((cliente) => cliente.id === acao)!);
                 setAcao(null);
               }}
@@ -757,6 +761,8 @@ export default function Clientes() {
         >
           <section
             className="clients-delete-dialog"
+            ref={focoExclusao}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="clients-delete-title"

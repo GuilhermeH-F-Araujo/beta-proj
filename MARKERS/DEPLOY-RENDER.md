@@ -26,4 +26,4 @@ Depois do deploy:
 
 No Supabase, configure Site URL com a origem publica do painel e inclua a URL completa do painel terminada em /redefinir-senha em Redirect URLs. Nao execute tarefas de publicacao de emails ou alteracoes de banco sem revisar suas configuracoes.
 
-Nao envie node_modules, dist ou arquivos .env preenchidos. Para um banco novo ou desatualizado, consulte CONFIGURACAO.md e ATUALIZAR-BANCO.sql antes do deploy.
+Nao envie node_modules, dist ou arquivos .env preenchidos. Para um banco novo ou desatualizado, consulte CONFIGURACAO.md e supabase/ATUALIZAR-BANCO.sql antes do deploy.

@@ -38,6 +38,15 @@ function bancoSimulacao(dados = {}, falhar = []) {
         limit() {
           return Promise.resolve(resultado);
         },
+        neq() {
+          return consulta;
+        },
+        or() {
+          return consulta;
+        },
+        range() {
+          return Promise.resolve(resultado);
+        },
         gte() {
           return consulta;
         },
@@ -93,24 +102,23 @@ test('activity rejects unbounded periods and invalid categories', async () => {
 });
 test('activity merges histories in chronological order and resolves known authors', async () => {
   const db = bancoSimulacao({
-    os_historico: [
+    logs: [
+      {
+        id: 2,
+        entidade: 'cliente',
+        id_cliente: 4,
+        tipo: 'arquivar',
+        criado_em: '2026-11-07T13:00:00Z',
+      },
       {
         id: 1,
+        entidade: 'ordem_servico',
         id_os: 21,
         tipo: 'status',
         id_usuario: 'user-1',
         criado_em: '2026-11-07T12:00:00Z',
         anterior: 'aguardando',
         novo: 'em andamento',
-      },
-    ],
-    cliente_historico: [
-      {
-        id: 2,
-        id_cliente: 4,
-        acao: 'arquivar',
-        id_usuario: null,
-        criado_em: '2026-11-07T13:00:00Z',
       },
     ],
     funcionario: [{ auth_user_id: 'user-1', nome: 'Administrador' }],
@@ -123,11 +131,11 @@ test('activity merges histories in chronological order and resolves known author
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.items[0].kind, 'clients');
   assert.equal(res.body.items[1].actor, 'Administrador');
-  assert.equal(res.body.items[1].detail, 'aguardando → em andamento');
-  assert.equal(res.body.items[0].actor, 'Autor não registrado');
+  assert.equal(res.body.items[1].detail, 'De aguardando para em andamento.');
+  assert.equal(res.body.items[0].actor, 'Sistema');
 });
 test('activity handles database failure without returning partial history as complete', async () => {
-  const db = bancoSimulacao({}, ['os_historico']);
+  const db = bancoSimulacao({}, ['logs']);
   const res = response();
   await tratarAcao(
     rotasConfiguracoes(async () => db),

@@ -1,13 +1,20 @@
+import PopupErroMiniatura from './PopupErroMiniatura';
 import { useEffect, useState } from 'react';
 import { useEstadoRascunho } from '../../hooks/useEstadoRascunho';
-import { requisitarMiniaturas, type PedidoMiniatura } from '../../services/centralMiniaturas';
+import {
+  candidataPublicavel,
+  requisitarMiniaturas,
+  type PedidoMiniatura,
+} from '../../services/centralMiniaturas';
 import { Icone } from '../MenuAdmin';
 export default function LoteMiniaturas({
   pedidos,
   atualizar,
+  aoEditar,
 }: {
   pedidos: PedidoMiniatura[];
   atualizar: () => Promise<void>;
+  aoEditar?: (pedido: PedidoMiniatura) => void;
 }) {
   const [modelos, setModelos] = useEstadoRascunho('lote-miniaturas', 'modelos', '');
   const [ocupado, setOcupado] = useState(false);
@@ -25,7 +32,12 @@ export default function LoteMiniaturas({
   const prontas = pedidos
     .filter((pedido) => pedido.status === 'revisao' && pedido.imagem)
     .slice(0, 12);
-  const candidatas = prontas.map((pedido) => `${pedido.id}:${pedido.candidato || ''}`).join('|');
+  const candidatas = prontas
+    .map(
+      (pedido) =>
+        `${pedido.id}:${pedido.candidato || ''}:${pedido.catalogo.revisao}:${candidataPublicavel(pedido)}`,
+    )
+    .join('|');
   useEffect(() => {
     setSelecionados([]);
   }, [candidatas]);
@@ -104,13 +116,16 @@ export default function LoteMiniaturas({
                 setErro('');
                 let aprovadas = 0;
                 try {
-                  for (const pedido of prontas.filter((item) => selecionados.includes(item.id))) {
+                  for (const pedido of prontas.filter(
+                    (item) => selecionados.includes(item.id) && candidataPublicavel(item),
+                  )) {
                     try {
                       await requisitarMiniaturas(
                         `/api/admin/miniaturas/${pedido.id}/aprovar`,
                         'POST',
                         {
                           revisao: pedido.catalogo.revisao,
+                          candidato: pedido.candidato,
                           confirmouIdentidade: true,
                           confirmouDireita: true,
                           confirmouInteira: true,
@@ -142,28 +157,46 @@ export default function LoteMiniaturas({
           </header>
           <div className="mini-ready-grid">
             {prontas.map((pedido) => (
-              <label
+              <article
                 key={pedido.id}
                 className={`mini-ready ${selecionados.includes(pedido.id) ? 'selected' : ''}`}
               >
-                <input
-                  type="checkbox"
-                  checked={selecionados.includes(pedido.id)}
-                  disabled={ocupado}
-                  onChange={(e) =>
-                    setSelecionados((atual) =>
-                      e.target.checked
-                        ? [...atual, pedido.id]
-                        : atual.filter((id) => id !== pedido.id),
-                    )
-                  }
-                />
+                <label className="mini-ready-check">
+                  <span className="mini-sr">Selecionar {pedido.catalogo.modelo}</span>
+                  <input
+                    type="checkbox"
+                    checked={selecionados.includes(pedido.id)}
+                    disabled={ocupado || !candidataPublicavel(pedido)}
+                    onChange={(e) =>
+                      setSelecionados((atual) =>
+                        e.target.checked
+                          ? [...atual, pedido.id]
+                          : atual.filter((id) => id !== pedido.id),
+                      )
+                    }
+                  />
+                </label>
+                {aoEditar && (
+                  <button
+                    className="mini-ready-edit"
+                    type="button"
+                    disabled={ocupado}
+                    aria-label={`Corrigir miniatura de ${pedido.catalogo.modelo}`}
+                    title="Corrigir ou conferir no estúdio"
+                    onClick={() => aoEditar(pedido)}
+                  >
+                    <Icone name="pencil" size={17} />
+                  </button>
+                )}
                 <img src={pedido.imagem || ''} alt={`Prévia de ${pedido.catalogo.modelo}`} />
                 <strong>
                   {pedido.catalogo.modelo} {pedido.catalogo.variante}
                 </strong>
                 <small>{pedido.catalogo.ano || 'Padrão do modelo'}</small>
-              </label>
+                {!candidataPublicavel(pedido) && (
+                  <small className="mini-ready-warning">Precisa de correção</small>
+                )}
+              </article>
             ))}
           </div>
           <p className="mini-help">
@@ -177,11 +210,7 @@ export default function LoteMiniaturas({
           {aviso}
         </p>
       )}
-      {erro && (
-        <p role="alert" className="mini-feedback error">
-          {erro}
-        </p>
-      )}
+      {erro && <PopupErroMiniatura mensagem={erro} aoFechar={() => setErro('')} />}
     </div>
   );
 }

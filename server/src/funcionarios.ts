@@ -1,3 +1,4 @@
+import { esquecerBloqueio } from './auth/sessao.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -544,6 +545,7 @@ export function rotasFuncionarios(
         },
       );
       if (atualizarErro) throw atualizarErro;
+      esquecerBloqueio(registroAtual.auth_user_id);
       const bloqueadoLocal = estaBloqueado(
         atualizado.user as typeof atualizado.user & { banned_until?: string | null },
       );

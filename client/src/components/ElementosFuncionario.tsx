@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import CartaoIndicador from './CartaoIndicador';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -258,36 +259,18 @@ export function DialogoFuncionario({
   children: ReactNode;
   className?: string;
 }) {
-  const referencia = useRef<HTMLDivElement>(null);
+  const referencia = useFocoModal<HTMLDivElement>();
   const fechar = useRef(aoFechar);
   fechar.current = aoFechar;
   useEffect(() => {
-    const anterior = document.activeElement as HTMLElement | null;
-    referencia.current?.querySelector<HTMLElement>('button,input,textarea')?.focus();
-    const chave = (eventoRecebido: KeyboardEvent) => {
-      if (eventoRecebido.key === 'Escape') fechar.current();
-      if (eventoRecebido.key === 'Tab') {
-        const elementos = referencia.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-        );
-        if (!elementos?.length) return;
-        const primeiro = elementos[0];
-        const ultimo = elementos[elementos.length - 1];
-        if (eventoRecebido.shiftKey && document.activeElement === primeiro) {
-          eventoRecebido.preventDefault();
-          ultimo.focus();
-        } else if (!eventoRecebido.shiftKey && document.activeElement === ultimo) {
-          eventoRecebido.preventDefault();
-          primeiro.focus();
-        }
-      }
-    };
-    window.addEventListener('keydown', chave);
-    return () => {
-      window.removeEventListener('keydown', chave);
-      anterior?.focus();
-    };
-  }, []);
+    function tratarEscape(evento: KeyboardEvent) {
+      const dialogo = referencia.current;
+      if (evento.key === 'Escape' && dialogo?.contains(document.activeElement))
+        fechar.current();
+    }
+    window.addEventListener('keydown', tratarEscape);
+    return () => window.removeEventListener('keydown', tratarEscape);
+  }, [referencia]);
   return createPortal(
     <div
       className="staff-dialog-overlay"
@@ -297,6 +280,7 @@ export function DialogoFuncionario({
     >
       <div
         ref={referencia}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="staff-dialog-title"

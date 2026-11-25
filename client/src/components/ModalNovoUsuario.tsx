@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
@@ -8,7 +9,7 @@ import LogoEstacao from './LogoEstacao';
 import { Icone } from './MenuAdmin';
 import './modais-administrativos.css';
 import ModalAdicionarFuncionario from './ModalAdicionarFuncionario';
-import ModalSucessoUsuario from './ModalSucessoUsuario';
+import ModalSucessoUsuario, { compartilharAcesso } from './ModalSucessoUsuario';
 
 function mascaraCpf(valor: string) {
   const dadosAtual = valor.replace(/\D/g, '').slice(0, 11);
@@ -52,6 +53,7 @@ export default function ModalNovoUsuario({
   onClose: aoFechar,
   onCreated: aoCriar,
   initialRole: inicialCargo,
+  fixedRole,
   replaceBackground = false,
 }: {
   onClose: () => void;
@@ -64,6 +66,7 @@ export default function ModalNovoUsuario({
     role: Cargo;
   }) => void;
   initialRole?: Cargo;
+  fixedRole?: Cargo;
   replaceBackground?: boolean;
 }) {
   const acesso = useAcessoConta();
@@ -80,6 +83,7 @@ export default function ModalNovoUsuario({
     'role',
     inicialCargo ?? 'Administrador',
   );
+  const cargoEfetivo = fixedRole ?? cargoLocal;
   const [senhaLocal, setSenha] = useState('');
   const [confirmar, setConfirmar] = useState('');
   const [visivel, setVisivel] = useState(false);
@@ -90,19 +94,17 @@ export default function ModalNovoUsuario({
   const [criadoSenha, setCriadoSenha] = useState('');
   const [aprovacaoPendente, setAprovacaoPendente] = useState(false);
   const [funcionarioDetalhesAberto, setFuncionarioDetalhesAberto] = useState(false);
-  const whatsappNumero = `55${telefoneLocal.replace(/\D/g, '')}`;
+  const focoCadastro = useFocoModal<HTMLFormElement>(!criado && !funcionarioDetalhesAberto);
   function abertoFuncionarioDetalhes() {
     setErro('');
     setFuncionarioDetalhesAberto(true);
   }
   function enviarCredenciais() {
-    if (!criadoSenha)
-      return setErro('A senha não está mais disponível. Redefina-a antes de compartilhar.');
-    const texto = `Olá, ${nomeLocal.trim().split(/\s+/)[0]}! Seu acesso à Estação Motos está pronto.\n\nE-mail: ${email.trim().toLowerCase()}\nSenha: ${criadoSenha}\n\nGuarde estes dados e altere sua senha depois do primeiro acesso.`;
-    window.open(
-      `https://wa.me/${whatsappNumero}?text=${encodeURIComponent(texto)}`,
-      '_blank',
-      'noopener,noreferrer',
+    setErro(
+      compartilharAcesso(
+        { nome: nomeLocal, email: email.trim(), telefone: telefoneLocal },
+        criadoSenha,
+      ),
     );
   }
   const verificacoes = [
@@ -133,7 +135,7 @@ export default function ModalNovoUsuario({
     if (senhaLocal !== confirmar) return setErro('As senhas não coincidem.');
     setOcupado(true);
     try {
-      if (cargoLocal === 'Mecânico') {
+      if (cargoEfetivo === 'Mecânico') {
         setFuncionarioDetalhesAberto(true);
         setOcupado(false);
         return;
@@ -143,12 +145,12 @@ export default function ModalNovoUsuario({
           email: email.trim().toLowerCase(),
           phone: telefoneLocal.trim(),
           cpf: cpf.replace(/\D/g, ''),
-          position: cargoLocal,
-          profile: cargoLocal,
+          position: cargoEfetivo,
+          profile: cargoEfetivo,
           password: senhaLocal,
         });
         setAprovacaoPendente(usuarioCriado.approvalPending === true);
-        setCriadoSenha(senhaLocal);
+        setCriadoSenha(usuarioCriado.approvalPending ? '' : senhaLocal);
         setSenha('');
         setConfirmar('');
         limparRascunho(`usuario-${inicialCargo ?? 'geral'}`);
@@ -160,7 +162,7 @@ export default function ModalNovoUsuario({
           email: email.trim().toLowerCase(),
           phone: telefoneLocal.trim(),
           cpf: cpf.replace(/\D/g, ''),
-          role: cargoLocal,
+          role: cargoEfetivo,
         });
       }
     } catch (erroCapturado) {
@@ -185,8 +187,8 @@ export default function ModalNovoUsuario({
     return (
       <ModalSucessoUsuario
         nome={nomeLocal}
-        cargo={cargoLocal}
-        telefone={telefoneLocal}
+        cargo={cargoEfetivo}
+        email={email.trim()}
         aprovacaoPendente={aprovacaoPendente}
         erro={erro}
         replaceBackground={replaceBackground}
@@ -234,6 +236,8 @@ export default function ModalNovoUsuario({
       <form
         className="nam-dialog nam-user nam-reworked"
         role="dialog"
+        ref={focoCadastro}
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="nam-user-title"
         onSubmit={(evento) => void salvar(evento)}
@@ -341,32 +345,34 @@ export default function ModalNovoUsuario({
                 </div>
               </div>
               <div className="nam-role-list" role="radiogroup" aria-label="Tipo de usuário">
-                {cargos.map((item) => (
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={cargoLocal === item.id}
-                    className={`nam-role${cargoLocal === item.id ? ' active' : ''}`}
-                    key={item.id}
-                    onClick={() => {
-                      setCargo(item.id);
-                      if (item.id === 'Mecânico') abertoFuncionarioDetalhes();
-                    }}
-                  >
-                    <span className="nam-role-icon">
-                      <Icone name={item.icon} size={18} />
-                    </span>
-                    <span>
-                      <b>{item.id}</b>
-                      <small>
-                        {item.id === 'Administrador' && acesso.nivel !== 'dono'
-                          ? 'Acesso liberado após aprovação do dono'
-                          : item.description}
-                      </small>
-                    </span>
-                    <i aria-hidden="true" />
-                  </button>
-                ))}
+                {(fixedRole ? cargos.filter((item) => item.id === fixedRole) : cargos).map(
+                  (item) => (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={cargoEfetivo === item.id}
+                      className={`nam-role${cargoEfetivo === item.id ? ' active' : ''}`}
+                      key={item.id}
+                      onClick={() => {
+                        setCargo(item.id);
+                        if (item.id === 'Mecânico') abertoFuncionarioDetalhes();
+                      }}
+                    >
+                      <span className="nam-role-icon">
+                        <Icone name={item.icon} size={18} />
+                      </span>
+                      <span>
+                        <b>{item.id}</b>
+                        <small>
+                          {item.id === 'Administrador' && acesso.nivel !== 'dono'
+                            ? 'Acesso liberado após aprovação do dono'
+                            : item.description}
+                        </small>
+                      </span>
+                      <i aria-hidden="true" />
+                    </button>
+                  ),
+                )}
               </div>
             </section>
             <section className="nam-panel">
@@ -472,7 +478,7 @@ export default function ModalNovoUsuario({
             <Icone name="plus" size={15} />
             {ocupado
               ? 'Criando acesso…'
-              : cargoLocal === 'Mecânico'
+              : cargoEfetivo === 'Mecânico'
                 ? 'Preencher dados do mecânico'
                 : 'Criar usuário'}
           </button>

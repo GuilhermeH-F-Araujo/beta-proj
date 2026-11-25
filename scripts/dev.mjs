@@ -1,7 +1,11 @@
 import { spawn, spawnSync } from 'node:child_process';
 
 const sistemaEhWindows = process.platform === 'win32';
-const npm = sistemaEhWindows ? 'npm.cmd' : 'npm';
+const npmCli = process.env.npm_execpath;
+const usarCliNpm = !!npmCli && /npm-cli\.js$/i.test(npmCli);
+const npm = usarCliNpm ? process.execPath : sistemaEhWindows ? 'npm.cmd' : 'npm';
+const argumentosNpm = usarCliNpm ? [npmCli] : [];
+const usarShellNpm = sistemaEhWindows && !usarCliNpm;
 
 // Verifica se as dependencias podem ser importadas.
 // Caso estejam ausentes ou incompletas, restaura pelo package-lock.json.
@@ -34,10 +38,14 @@ for (const [rotulo, prefixo, modulos] of [
 
   console.log(`${rotulo}: dependências ausentes ou incompletas. Restaurando com npm ci...`);
 
-  const instalado = spawnSync(npm, ['--prefix', prefixo, 'ci', '--no-audit', '--no-fund'], {
-    stdio: 'inherit',
-    shell: sistemaEhWindows,
-  });
+  const instalado = spawnSync(
+    npm,
+    [...argumentosNpm, '--prefix', prefixo, 'ci', '--no-audit', '--no-fund'],
+    {
+      stdio: 'inherit',
+      shell: usarShellNpm,
+    },
+  );
 
   if (instalado.error) {
     console.error(`${rotulo}: erro ao executar npm ci: ${instalado.error.message}`);
@@ -105,9 +113,9 @@ for (const [rotulo, prefixo] of [
   let filho;
 
   try {
-    filho = spawn(npm, ['--prefix', prefixo, 'run', 'dev'], {
+    filho = spawn(npm, [...argumentosNpm, '--prefix', prefixo, 'run', 'dev'], {
       stdio: 'inherit',
-      shell: sistemaEhWindows,
+      shell: usarShellNpm,
       detached: !sistemaEhWindows,
     });
   } catch (erro) {

@@ -9,7 +9,7 @@ export default function ComparadorMiniaturas({
   const [zoom, setZoom] = useState(100);
   const paineis = useRef<(HTMLDivElement | null)[]>([]);
   return (
-    <details className="mini-comparison">
+    <details className="mini-comparison" data-zoom={zoom}>
       <summary>Comparar detalhes com a referência</summary>
       <label>
         Ampliação compartilhada <output>{zoom}%</output>
@@ -27,6 +27,7 @@ export default function ComparadorMiniaturas({
           <figure key={i}>
             <figcaption>{i === 0 ? 'Referência original' : 'Candidata'}</figcaption>
             <div
+              className="mini-comparison-viewport"
               ref={(elemento) => {
                 paineis.current[i] = elemento;
               }}
@@ -45,7 +46,11 @@ export default function ComparadorMiniaturas({
               <img
                 src={imagem}
                 alt={i === 0 ? 'Detalhes da referência' : 'Detalhes da candidata'}
-                style={{ width: `${zoom}%`, maxWidth: 'none' }}
+                style={
+                  zoom === 100
+                    ? { width: '100%', height: '100%', objectFit: 'contain' }
+                    : { width: `${zoom}%`, height: 'auto', maxWidth: 'none', maxHeight: 'none' }
+                }
               />
             </div>
           </figure>

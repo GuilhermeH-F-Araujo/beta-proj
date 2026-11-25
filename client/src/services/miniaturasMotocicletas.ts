@@ -63,7 +63,7 @@ function pintarPara(cor: string | null): Pintura | null {
   if (/amarel/.test(valor)) return { rgb: [246, 179, 28] };
   if (/laranj/.test(valor)) return { rgb: [236, 106, 25] };
   // Cores especificas cadastradas como #8844cc, rgb(...), hsl(...) ou nomes CSS.
-  if (typeof document !== 'undefined' && CSS.supports('color', valor)) {
+  if (typeof document !== 'undefined' && globalThis.CSS?.supports('color', valor)) {
     const amostraCor = document.createElement('canvas');
     amostraCor.width = amostraCor.height = 1;
     const contexto = amostraCor.getContext('2d');
@@ -255,6 +255,78 @@ async function miniaturaColorida(
   );
 }
 
+// Cinza que reproduz exatamente a base neutra gerada no servidor (luz * 200).
+const CINZA_NEUTRO = { rgb: [200, 200, 200] };
+export function aplicarMascaraPintura(
+  pixels: Uint8ClampedArray,
+  mascara: Uint8ClampedArray,
+  cor: string | null,
+) {
+  const pintura = pintarPara(cor);
+  const destino = pintura || CINZA_NEUTRO;
+  if (pixels.length !== mascara.length) return;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (!mascara[i + 3]) continue;
+    // Mascara de luz (azul zero): guarda a luz do painel. A tinta substitui o pixel,
+    // tanto na base neutra completa quanto na base vazada antiga (alfa zero ali).
+    if (mascara[i + 2] < 10) {
+      const luz = mascara[i] / 200;
+      for (let c = 0; c < 3; c++) pixels[i + c] = Math.round(Math.min(255, destino.rgb[c] * luz));
+      pixels[i + 3] = Math.max(pixels[i + 3], mascara[i + 3]);
+      continue;
+    }
+    // Mascara classica: sem cor escolhida, a base neutra ja e a imagem final.
+    if (!pintura || !pixels[i + 3]) continue;
+    const cobertura = Math.min(1, mascara[i + 3] / pixels[i + 3]);
+    const brilho = (pixels[i] * 0.2126 + pixels[i + 1] * 0.7152 + pixels[i + 2] * 0.0722) / 200;
+    for (let canal = 0; canal < 3; canal++) {
+      const pintado = Math.min(255, destino.rgb[canal] * brilho);
+      pixels[i + canal] = Math.round(pixels[i + canal] * (1 - cobertura) + pintado * cobertura);
+    }
+  }
+}
+async function pintarMiniaturaPublicada(
+  blob: Blob,
+  mascaraUrl: string | null | undefined,
+  cor: string | null | undefined,
+  signal: AbortSignal,
+): Promise<Blob> {
+  if (!mascaraUrl) return blob;
+  const resposta = await fetch(mascaraUrl, { signal }).catch(() => null);
+  if (!resposta?.ok) return blob;
+  const base = await createImageBitmap(blob);
+  let mascara: ImageBitmap | null = null;
+  try {
+    mascara = await createImageBitmap(await resposta.blob());
+    const canvas = document.createElement('canvas');
+    canvas.width = base.width;
+    canvas.height = base.height;
+    const contexto = canvas.getContext('2d', { willReadFrequently: true });
+    const telaMascara = document.createElement('canvas');
+    telaMascara.width = base.width;
+    telaMascara.height = base.height;
+    const contextoMascara = telaMascara.getContext('2d', { willReadFrequently: true });
+    if (!contexto || !contextoMascara) return blob;
+    contexto.drawImage(base, 0, 0);
+    contextoMascara.drawImage(mascara, 0, 0, base.width, base.height);
+    const imagem = contexto.getImageData(0, 0, base.width, base.height);
+    aplicarMascaraPintura(
+      imagem.data,
+      contextoMascara.getImageData(0, 0, base.width, base.height).data,
+      cor ?? null,
+    );
+    contexto.putImageData(imagem, 0, 0);
+    return await new Promise<Blob>((resolve) =>
+      canvas.toBlob((resultado) => resolve(resultado || blob), 'image/webp', 0.92),
+    );
+  } catch {
+    return blob;
+  } finally {
+    base.close();
+    mascara?.close();
+  }
+}
+
 export function useMiniaturaMotocicleta(
   idOrdem: number,
   modelo: string | undefined,
@@ -336,7 +408,12 @@ export function useMiniaturaMotocicleta(
       const arquivo = await response.blob();
       const miniatura =
         response.headers.get('x-preview-origin') === 'published'
-          ? arquivo
+          ? await pintarMiniaturaPublicada(
+              arquivo,
+              response.headers.get('x-preview-paint-mask'),
+              cor,
+              controlador.signal,
+            )
           : await miniaturaColorida(
               arquivo,
               origem === 'catalog' && !catalogo?.src.includes('urbana-160') ? 217 : 0,
@@ -384,11 +461,19 @@ export function useMiniaturaModeloMotocicleta(
         { credentials: 'include', cache: 'no-store', signal: controlador.signal },
       );
       if (respostaPublicada.ok) {
-        const publicada = (await respostaPublicada.json()) as { imagem: string | null };
+        const publicada = (await respostaPublicada.json()) as {
+          imagem: string | null;
+          mascara?: string | null;
+        };
         if (publicada.imagem) {
           const arquivo = await fetch(publicada.imagem, { signal: controlador.signal });
           if (arquivo.ok) {
-            const blob = await arquivo.blob();
+            const blob = await pintarMiniaturaPublicada(
+              await arquivo.blob(),
+              publicada.mascara,
+              cor,
+              controlador.signal,
+            );
             if (ativo) {
               url = URL.createObjectURL(blob);
               setImagem(url);
@@ -461,7 +546,12 @@ export function useMiniaturaExistente(modelo: string, cor: string | null) {
         const arquivo = await response.blob();
         const blob =
           response.headers.get('x-preview-origin') === 'published'
-            ? arquivo
+            ? await pintarMiniaturaPublicada(
+                arquivo,
+                response.headers.get('x-preview-paint-mask'),
+                cor,
+                controlador.signal,
+              )
             : await miniaturaColorida(arquivo, matizOrigem, cor, true);
         if (!ativo) return;
         urlObjeto = URL.createObjectURL(blob);

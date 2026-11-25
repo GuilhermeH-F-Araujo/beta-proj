@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { resumoFuncionario, rotasFuncionarios } from '../dist/funcionarios.js';
+process.env.URL_SUPABASE = 'https://exemplo.supabase.co';
+process.env.CHAVE_PUBLICA_SUPABASE = 'chave-publica-teste';
+process.env.CHAVE_PRIVADA_SUPABASE = 'chave-privada-teste';
+const { resumoFuncionario, rotasFuncionarios } = await import('../dist/funcionarios.js');
 test('indicadores separam peças e canceladas, respeitam o mês e preservam totais históricos', () => {
   const situacoes = [
     'pronto',

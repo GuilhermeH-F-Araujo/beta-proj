@@ -5,7 +5,7 @@ export const identidadeSchema = z.object({
   modelo: z
     .string()
     .trim()
-    .min(3)
+    .min(2)
     .max(100)
     .refine((valor) => !/[<>\r\n]/.test(valor)),
   ano: z
@@ -53,6 +53,23 @@ export type Referencia = {
 export type Verificacao = {
   direcao: 'direita' | 'esquerda' | 'incerta';
   inteira: boolean;
+  vistaLateral?: boolean;
   problemas: string[];
   automatica: boolean;
+  pontuacaoFidelidade?: number;
+  fidelidade?: 'compativel' | 'divergente' | 'inconclusiva';
 };
+
+export type FundoChaveMiniatura = 'magenta' | 'verde';
+
+export const fundosChaveMiniatura = {
+  magenta: { nome: 'magenta', hex: '#FF00FF' },
+  verde: { nome: 'green', hex: '#00FF00' },
+} as const;
+
+export function escolherFundoChave(tentativa: number, corInformada: string): FundoChaveMiniatura {
+  const texto = normalizarModelo(corInformada);
+  if (/\b(?:magenta|fucsia|rosa|pink|fuchsia)\b/.test(texto)) return 'verde';
+  if (/\b(?:verde|green)\b/.test(texto)) return 'magenta';
+  return tentativa % 2 === 0 ? 'verde' : 'magenta';
+}

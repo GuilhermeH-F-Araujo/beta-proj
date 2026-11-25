@@ -13,7 +13,7 @@ import {
   modeloIncluidoNoProjeto,
   obterPreviaModeloEmMemoria,
   previaEhJpeg,
-} from '../previaModelo.js';
+} from '../ia/previaModelo.js';
 
 export async function imagemMotocicletaArmazenada(
   db: ReturnType<typeof createSupabaseClient>,

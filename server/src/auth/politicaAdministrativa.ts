@@ -10,9 +10,23 @@ export function podeGerenciarAdministrador(autor: NivelAdministrativo, alvo: Niv
 }
 
 type DadosAcao = { position?: string; cargo?: string; status?: string };
+
+// O Express casa rotas sem diferenciar maiusculas e aceita barras extras; as regras
+// de seguranca precisam comparar a mesma forma, senao "/api/Employees/1/access"
+// passaria pela rota sem pedir a confirmacao de senha.
+export function rotaNormalizada(caminho: string) {
+  const semConsulta = caminho.split('?')[0].split('#')[0];
+  let decodificada = semConsulta;
+  try {
+    decodificada = decodeURIComponent(semConsulta);
+  } catch {
+    /* Uma sequencia invalida segue como veio e nao casa com rotas protegidas. */
+  }
+  return decodificada.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+}
 export function exigeConfirmacao(metodo: string, caminho: string, corpo?: unknown) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(metodo)) return false;
-  const rota = caminho.split('?')[0].replace(/\/+$/, '');
+  const rota = rotaNormalizada(caminho);
   const dados = corpo as DadosAcao | undefined;
   const status = (dados?.status ?? '')
     .normalize('NFD')

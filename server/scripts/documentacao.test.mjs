@@ -21,6 +21,7 @@ function rotasRegistradas(pilha, prefixo = '') {
     '/api/admin/preferences',
     '/api/postal-code',
     '/api/shared',
+    '/api/agendamentos',
   ];
   let proximoPrefixo = 0;
   for (const camada of pilha) {
@@ -42,7 +43,13 @@ testar('cada operacao registrada possui contrato OpenAPI e nao ha operacoes inex
     .map(([metodo, caminho]) => metodo + ' ' + caminho)
     .sort();
   const documentadas = Object.entries(especificacao.paths)
-    .flatMap(([caminho, metodos]) => Object.keys(metodos).map((metodo) => metodo + ' ' + caminho))
+    .flatMap(([caminho, metodos]) =>
+      Object.keys(metodos)
+        .filter((metodo) =>
+          ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'].includes(metodo),
+        )
+        .map((metodo) => metodo + ' ' + caminho),
+    )
     .sort();
   verificar.deepEqual(documentadas, reais);
 });

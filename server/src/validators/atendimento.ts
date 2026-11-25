@@ -57,11 +57,63 @@ export const criarOrdemSchema = z
     mechanicId: z.number().int().positive().nullable(),
     entryAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
     forecastAt: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/), z.literal('')]),
+    noForecastConfirmed: z.boolean().optional(),
+    photoCaptureVersion: z.literal(2).optional(),
     problem: z.string().trim().min(3).max(255),
     observations: z.string().trim().max(255),
-    photos: z.array(z.object({ data: z.string().max(750_000) })).max(4),
+    services: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+    photos: z
+      .array(
+        z.object({
+          position: z.enum(['front', 'left', 'rear', 'right', 'extra']).optional(),
+          data: z.string().max(750_000),
+        }),
+      )
+      .max(8),
   })
   .superRefine((entrada, contexto) => {
+    if (entrada.photoCaptureVersion === 2) {
+      if (!entrada.services?.length)
+        contexto.addIssue({
+          code: 'custom',
+          message: 'Selecione ao menos um serviço previsto para a ordem.',
+          path: ['services'],
+        });
+      if (!entrada.forecastAt && !entrada.noForecastConfirmed)
+        contexto.addIssue({
+          code: 'custom',
+          message: 'Informe uma previsão ou confirme que ela será comunicada depois.',
+          path: ['forecastAt'],
+        });
+      if (entrada.photos.length < 4)
+        contexto.addIssue({
+          code: 'custom',
+          message: 'Envie as quatro fotos obrigatórias da motocicleta.',
+          path: ['photos'],
+        });
+      const obrigatorias = ['front', 'left', 'rear', 'right'];
+      const informadas = entrada.photos.map((foto) => foto.position);
+      if (informadas.some((posicao) => !posicao))
+        contexto.addIssue({
+          code: 'custom',
+          message: 'Identifique a posição de cada foto da motocicleta.',
+          path: ['photos'],
+        });
+      for (const posicao of obrigatorias) {
+        if (informadas.filter((atual) => atual === posicao).length !== 1)
+          contexto.addIssue({
+            code: 'custom',
+            message: 'Envie uma foto obrigatória de cada lado da motocicleta.',
+            path: ['photos'],
+          });
+      }
+      if (entrada.photos.filter((foto) => foto.position === 'extra').length > 4)
+        contexto.addIssue({
+          code: 'custom',
+          message: 'A OS aceita no máximo quatro fotos extras.',
+          path: ['photos'],
+        });
+    }
     if (
       !entrada.clientId &&
       (entrada.clientName.length < 2 || entrada.clientPhone.replace(/\D/g, '').length < 10)

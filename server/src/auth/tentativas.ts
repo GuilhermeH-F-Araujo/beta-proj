@@ -136,5 +136,10 @@ export function obterEsperaRecuperacao(req: express.Request, email: string) {
 }
 
 export function registrarEsperaRecuperacao(req: express.Request, email: string) {
-  limitesRecuperacao.set(chaveLimiteRecuperacao(req, email), { lastRequestAt: Date.now() });
+  const agora = Date.now();
+  for (const [chave, registro] of limitesRecuperacao) {
+    if (agora - registro.lastRequestAt >= INTERVALO_RECUPERACAO_MILISSEGUNDOS)
+      limitesRecuperacao.delete(chave);
+  }
+  limitesRecuperacao.set(chaveLimiteRecuperacao(req, email), { lastRequestAt: agora });
 }

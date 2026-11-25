@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { criarConsultaCep, normalizarEndereco } from '../src/cep.ts';
-import { acoesAlteradas, dadosUnicos, schemasCompartilhados } from '../src/dadosCompartilhados.ts';
+import {
+  acoesAlteradas,
+  dadosUnicos,
+  rotasDadosCompartilhados,
+} from '../src/dadosCompartilhados.ts';
 const response = (dadosLocal, situacao = 200) =>
   new Response(JSON.stringify(dadosLocal), {
     status: situacao,
@@ -97,170 +101,150 @@ test('CEP: in-flight same-code requests coalesce and an unavailable provider can
 test('CEP: invalid provider response is rejected', () => {
   assert.throws(() => normalizarEndereco({ uf: 'XX' }, '01001000', 'viacep'));
 });
-test('shared data: separate creation, update and deletion permissions', () => {
-  const anterior = [
-    { id: 1, x: 'a' },
-    { id: 2, x: 'b' },
-  ];
-  assert.deepEqual(
-    acoesAlteradas(
-      anterior,
-      [
-        { id: 1, x: 'z' },
-        { id: 3, x: 'c' },
-      ],
-      'agenda',
-    ).sort(),
-    ['criar', 'editar', 'excluir'],
-  );
-  assert.deepEqual(acoesAlteradas(anterior, anterior, 'agenda'), []);
+test('catalogo identifica criacao, edicao e exclusao separadamente', () => {
+  const anterior = {
+    servicos: [
+      { id: 'a', nome: 'A' },
+      { id: 'b', nome: 'B' },
+    ],
+  };
+  const atual = {
+    servicos: [
+      { id: 'a', nome: 'Alterado' },
+      { id: 'c', nome: 'C' },
+    ],
+  };
+  assert.deepEqual(acoesAlteradas(anterior, atual).sort(), ['criar', 'editar', 'excluir']);
+  assert.deepEqual(acoesAlteradas(anterior, anterior), []);
 });
-test('shared data: rejects duplicate ids and orphaned service categories', () => {
-  assert.equal(dadosUnicos([{ id: 1 }, { id: 1 }], 'agenda'), false);
+test('catalogo rejeita identificadores duplicados e referencias sem categoria', () => {
+  assert.equal(dadosUnicos({ categorias: [{ id: 'a' }, { id: 'a' }] }, 'catalogo'), false);
   assert.equal(
     dadosUnicos(
-      { categorias: [{ id: 'a' }], servicos: [{ id: 'x', categoriaId: 'b' }] },
+      { categorias: [{ id: 'a' }], servicos: [{ id: 's', categoriaId: 'b' }] },
       'catalogo',
     ),
     false,
   );
 });
-test('agenda schema: rejects invalid date, time and injected properties', () => {
-  const entrada = {
-    id: 1,
-    cliente: 'Cliente',
-    telefone: '',
-    moto: 'Moto',
-    placa: 'ABC1234',
-    servico: 'Revisão',
-    status: 'Confirmado',
-    data: '2026-11-11',
-    hora: '09:30',
-    mecanico: 'Mecânico',
-    duracao: '1h',
-    observacoes: '',
-  };
-  assert.equal(schemasCompartilhados.agenda.safeParse([entrada]).success, true);
-  for (const adicional of [{ hora: '25:00' }, { data: '2026-02-30' }, { id_usuario: 'outro' }])
-    assert.equal(
-      schemasCompartilhados.agenda.safeParse([{ ...entrada, ...adicional }]).success,
-      false,
-    );
-});
-const { rotasDadosCompartilhados } = await import('../src/dadosCompartilhados.ts');
-function simuladoBanco(inicial, { race: concorrencia = false } = {}) {
-  let linha = inicial ? structuredClone(inicial) : null;
-  let operacoes = 0;
-  const db = {
-    from() {
-      let acao = 'read',
-        conteudoEnviado,
-        esperado;
-      const consulta = {
-        select() {
-          return consulta;
-        },
-        eq(chaveLocal, valor) {
-          if (chaveLocal === 'versao') esperado = valor;
-          return consulta;
-        },
-        update(dadosLocal) {
-          acao = 'update';
-          conteudoEnviado = dadosLocal;
-          return consulta;
-        },
-        insert(dadosLocal) {
-          acao = 'insert';
-          conteudoEnviado = dadosLocal;
-          return consulta;
-        },
-        async maybeSingle() {
-          if (acao === 'read') return { data: linha ? structuredClone(linha) : null, error: null };
-          operacoes++;
-          if (acao === 'update' && (concorrencia || linha?.versao !== esperado))
-            return { data: null, error: null };
-          if (acao === 'insert' && linha) return { data: null, error: { code: '23505' } };
-          linha = structuredClone(conteudoEnviado);
-          return { data: { versao: linha.versao }, error: null };
-        },
-      };
-      return consulta;
-    },
-  };
-  return { db: db, getRow: () => linha, operations: () => operacoes };
-}
-function simuladoResposta(acesso = { administrador: true }) {
+function resposta(acesso = { administrador: true }) {
   return {
-    locals: { acesso },
+    locals: { acesso, adminUserId: 'ator-teste' },
     statusCode: 200,
     body: null,
     status(codigo) {
       this.statusCode = codigo;
       return this;
     },
-    json(dadosLocal) {
-      this.body = dadosLocal;
+    json(dados) {
+      this.body = dados;
       return this;
     },
-    setHeader() {},
   };
 }
-async function callCompartilhado(metodo, db, entrada, acesso) {
-  const roteador = rotasDadosCompartilhados(async () => db);
-  const camada = roteador.stack.find((camada) => camada.route?.methods[metodo]);
-  const res = simuladoResposta(acesso);
-  await camada.route.stack[0].handle({ params: { chave: 'agenda' }, body: entrada }, res);
-  return res;
-}
-const agendamento = {
-  id: 123,
-  cliente: 'Cliente real',
-  telefone: '',
-  moto: 'Moto',
-  placa: 'ABC1234',
-  servico: 'Revisão',
-  status: 'Confirmado',
-  data: '2026-11-11',
-  hora: '09:00',
-  mecanico: 'Mecânico',
-  duracao: '1h',
-  observacoes: '',
-};
-test('shared route: confirmed save increments revision and preserves full records', async () => {
-  const estado = simuladoBanco({ dados: [agendamento], versao: 1 });
-  const res = await callCompartilhado('put', estado.db, {
-    versao: 1,
-    dados: [{ ...agendamento, hora: '10:00' }],
-  });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.versao, 2);
-  assert.equal(estado.getRow().dados[0].hora, '10:00');
-});
-test('shared route: stale revision and concurrent writes reject overwrite with 409', async () => {
-  for (const concorrencia of [false, true]) {
-    const estado = simuladoBanco({ dados: [agendamento], versao: 2 }, { race: concorrencia });
-    const res = await callCompartilhado('put', estado.db, {
-      versao: concorrencia ? 2 : 1,
-      dados: [{ ...agendamento, hora: '11:00' }],
-    });
-    assert.equal(res.statusCode, 409);
-    assert.equal(estado.getRow().dados[0].hora, '09:00');
+test('agendamento rejeita data invalida, horario invalido e propriedades extras antes do banco', async () => {
+  const { rotasAgendamentos } = await import('../src/agendamentos.ts');
+  const rota = rotasAgendamentos(async () => null).stack.find(
+    (camada) => camada.route?.methods.post,
+  );
+  const entrada = {
+    clienteId: 1,
+    motoId: 2,
+    mecanicoId: 3,
+    servico: 'Revisão',
+    status: 'Confirmado',
+    data: '2026-11-11',
+    hora: '09:30',
+    duracao: '1h',
+    observacoes: '',
+  };
+  for (const alteracao of [{ hora: '25:00' }, { data: '2026-02-30' }, { id_usuario: 'outro' }]) {
+    const res = resposta();
+    res.locals.agendamentosDb = {
+      from() {
+        assert.fail('Dados invalidos nao consultam o banco.');
+      },
+    };
+    await rota.route.stack[0].handle({ body: { ...entrada, ...alteracao } }, res, assert.fail);
+    assert.equal(res.statusCode, 400);
   }
 });
-test('shared route: read-only role cannot change records and unauthenticated request never reads', async () => {
-  const estado = simuladoBanco({ dados: [agendamento], versao: 1 });
-  const res = await callCompartilhado(
-    'put',
-    estado.db,
-    { versao: 1, dados: [] },
-    { administrador: false, permissoes: { agendamentos: { visualizar: true } } },
+const categoria = { id: 'a', nome: 'Geral', descricao: '', cor: '#123456', icone: 'wrench' };
+const servico = {
+  id: 's',
+  nome: 'Revisão',
+  categoria_id: 'a',
+  descricao: 'Teste',
+  preco: 10,
+  custo: 0,
+  duracao: '1h',
+  ativo: true,
+  icone: '',
+  adicional: '',
+};
+const { categoria_id: categoriaId, ...camposServico } = servico;
+const dados = { categorias: [categoria], servicos: [{ ...camposServico, categoriaId, preco: 20 }] };
+function bancoCatalogo(concorrencia = false) {
+  let chamadas = 0;
+  const linhas = { categorias_servico: [categoria], servicos: [servico] };
+  const db = {
+    from(tabela) {
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return this;
+        },
+        then(resolver) {
+          return Promise.resolve({ data: linhas[tabela], error: null }).then(resolver);
+        },
+        async maybeSingle() {
+          return { data: { versao: 2 }, error: null };
+        },
+      };
+    },
+    async rpc(nome, parametros) {
+      chamadas++;
+      assert.equal(nome, 'substituir_catalogo_servicos');
+      assert.equal(parametros.p_versao, 2);
+      assert.equal(parametros.p_actor, 'ator-teste');
+      assert.deepEqual(parametros.p_categorias, [categoria]);
+      assert.deepEqual(parametros.p_servicos, [{ ...servico, preco: 20 }]);
+      return concorrencia ? { error: { code: '40001' } } : { data: 3, error: null };
+    },
+  };
+  return { db, chamadas: () => chamadas };
+}
+async function salvarCatalogo(db, versao, acesso) {
+  const res = resposta(acesso);
+  const rota = rotasDadosCompartilhados(async () => db).stack.find(
+    (camada) => camada.route?.methods.put,
   );
+  await rota.route.stack[0].handle({ params: { chave: 'catalogo' }, body: { versao, dados } }, res);
+  return res;
+}
+test('catalogo grava dados completos e devolve nova revisao', async () => {
+  const estado = bancoCatalogo();
+  const res = await salvarCatalogo(estado.db, 2);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { dados, versao: 3 });
+  assert.equal(estado.chamadas(), 1);
+});
+test('catalogo rejeita revisao antiga ou conflito de gravacao', async () => {
+  const estado = bancoCatalogo(true);
+  assert.equal((await salvarCatalogo(estado.db, 1)).statusCode, 409);
+  assert.equal(estado.chamadas(), 0);
+  assert.equal((await salvarCatalogo(estado.db, 2)).statusCode, 409);
+  assert.equal(estado.chamadas(), 1);
+});
+test('catalogo impede gravacao sem permissao e encerra sem banco quando nao autorizado', async () => {
+  const estado = bancoCatalogo();
+  const res = await salvarCatalogo(estado.db, 2, {
+    administrador: false,
+    permissoes: { servicos: { visualizar: true } },
+  });
   assert.equal(res.statusCode, 403);
-  assert.equal(estado.operations(), 0);
-  const roteador = rotasDadosCompartilhados(async () => null);
-  const response = simuladoResposta();
-  await roteador.stack
-    .find((linhaAtual) => linhaAtual.route.methods.get)
-    .route.stack[0].handle({ params: { chave: 'agenda' } }, response);
-  assert.equal(response.body, null);
+  assert.equal(estado.chamadas(), 0);
+  assert.equal((await salvarCatalogo(null, 2)).body, null);
 });

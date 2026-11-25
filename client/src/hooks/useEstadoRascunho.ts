@@ -10,25 +10,25 @@ export function useEstadoRascunho<T>(
   const inicialLocal = () =>
     lerRascunho(escopo, campo, typeof inicial === 'function' ? (inicial as () => T)() : inicial);
   const [estado, setEstado] = useState(() => ({
-    scope: escopo,
-    field: campo,
-    value: inicialLocal(),
+    escopo: escopo,
+    campo: campo,
+    valor: inicialLocal(),
   }));
   let atual = estado;
-  if (estado.scope !== escopo || estado.field !== campo) {
-    atual = { scope: escopo, field: campo, value: inicialLocal() };
+  if (estado.escopo !== escopo || estado.campo !== campo) {
+    atual = { escopo: escopo, campo: campo, valor: inicialLocal() };
     setEstado(atual);
   }
   return [
-    atual.value,
+    atual.valor,
     (acao) =>
       setEstado((anterior) => {
         const base =
-          anterior.scope === escopo && anterior.field === campo ? anterior.value : inicialLocal();
+          anterior.escopo === escopo && anterior.campo === campo ? anterior.valor : inicialLocal();
         const continuar =
           typeof acao === 'function' ? (acao as (registroAtual: T) => T)(base) : acao;
         gravarRascunho(escopo, campo, continuar);
-        return { scope: escopo, field: campo, value: continuar };
+        return { escopo: escopo, campo: campo, valor: continuar };
       }),
   ];
 }

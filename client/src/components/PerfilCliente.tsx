@@ -1,5 +1,5 @@
 import CartaoIndicador from './CartaoIndicador';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   buscarFotoDiretorioCliente,
@@ -10,6 +10,9 @@ import { useMiniaturaMotocicleta } from '../services/miniaturasMotocicletas';
 import { Icone } from './MenuAdmin';
 import ModalEditarCliente from './ModalEditarCliente';
 import './perfil-cliente.css';
+import { pode } from '../services/acessoConta';
+
+const ModalNovaOrdem = lazy(() => import('./ModalNovaOrdem'));
 
 const situacaoNomes: Record<SituacaoOrdem, string> = {
   aguardando: 'Aberta',
@@ -80,6 +83,7 @@ export default function PerfilCliente({
   const navegar = useNavigate();
   const [showTodosMotos, setShowTodosMotos] = useState(false);
   const [showTodosOrdens, setShowTodosOrdens] = useState(false);
+  const [ordemAberta, setOrdemAberta] = useState(false);
   const [editarAberto, setEditarAberto] = useState(false);
   const concluido = perfil.orders.find((ordem) => ordem.status === 'entregue');
   const continuarServico = concluido
@@ -218,8 +222,9 @@ export default function PerfilCliente({
           </button>
           <button
             className="cp-new-order"
-            disabled
-            title="O cadastro de novas OS ainda não está disponível no painel"
+            type="button"
+            disabled={!pode('ordens', 'criar')}
+            onClick={() => setOrdemAberta(true)}
           >
             <Icone name="plus" size={13} />
             Nova OS
@@ -436,6 +441,19 @@ export default function PerfilCliente({
           </section>
         </div>
       </div>
+      {ordemAberta && pode('ordens', 'criar') && (
+        <Suspense fallback={<p role="status">Carregando nova ordem de serviço…</p>}>
+          <ModalNovaOrdem
+            key={perfil.id}
+            initialClient={{ id: perfil.id, name: perfil.name, hasMotorcycles: perfil.motorcycles.length > 0 }}
+            onClose={() => setOrdemAberta(false)}
+            onCreated={(id) => {
+              setOrdemAberta(false);
+              navegar(`/ordens-de-servico/${id}`);
+            }}
+          />
+        </Suspense>
+      )}
       {editarAberto && (
         <ModalEditarCliente
           client={perfil}

@@ -21,7 +21,7 @@ export async function iniciarRascunhos(id: string) {
   usuario = id;
   memoria.clear();
   try {
-    for (let indice = 0; indice < sessionStorage.length; indice++) {
+    for (let indice = sessionStorage.length - 1; indice >= 0; indice--) {
       const chaveLocal = sessionStorage.key(indice)!;
       if (chaveLocal.startsWith(prefixo + id + ':')) {
         const itemAtual = JSON.parse(sessionStorage.getItem(chaveLocal)!);
@@ -38,22 +38,23 @@ export async function iniciarRascunhos(id: string) {
     cursor.onsuccess = () => {
       const elementoAtual = cursor.result;
       if (!elementoAtual) return;
+      const registro = elementoAtual.value;
       const chaveOriginal = String(elementoAtual.key);
       const chaveLocal = normalizarChaveArmazenamento(chaveOriginal);
-      if (chaveLocal !== chaveOriginal && elementoAtual.value.ate > Date.now()) {
+      if (chaveLocal !== chaveOriginal && registro.ate > Date.now()) {
         const armazenamento = transacao.objectStore('campos');
         const existente = armazenamento.get(chaveLocal);
         existente.onsuccess = () => {
-          if (!existente.result || existente.result.ate < elementoAtual.value.ate)
-            armazenamento.put(elementoAtual.value, chaveLocal);
+          if (!existente.result || existente.result.ate < registro.ate)
+            armazenamento.put(registro, chaveLocal);
         };
         elementoAtual.delete();
       }
-      if (elementoAtual.value.ate <= Date.now()) elementoAtual.delete();
-      else if (chaveLocal.startsWith(prefixo + id + ':')) {
+      if (registro.ate <= Date.now()) elementoAtual.delete();
+      else if (usuario === id && chaveLocal.startsWith(prefixo + id + ':')) {
         const anterior = memoria.get(chaveLocal);
-        if (!anterior || anterior.ate < elementoAtual.value.ate)
-          memoria.set(chaveLocal, elementoAtual.value);
+        if (!anterior || anterior.ate < registro.ate)
+          memoria.set(chaveLocal, registro);
       }
       elementoAtual.continue();
     };
@@ -76,15 +77,15 @@ export function gravarRascunho(escopo: string, campo: string, valor: unknown) {
   const item = { valor, ate: Date.now() + TTL };
   memoria.set(chaveLocal, item);
   try {
-    const conteudoConteudoConteudoJson = JSON.stringify(item, (_, valorAtual) =>
+    const conteudoJson = JSON.stringify(item, (_, valorAtual) =>
       typeof valorAtual === 'number' && !Number.isFinite(valorAtual) ? null : valorAtual,
     );
     if (
-      conteudoConteudoConteudoJson.length < 120000 &&
-      !/"data:[^"]*base64/.test(conteudoConteudoConteudoJson) &&
+      conteudoJson.length < 120000 &&
+      !/"data:[^"]*base64/.test(conteudoJson) &&
       !(valor instanceof File)
     )
-      sessionStorage.setItem(chaveLocal, conteudoConteudoConteudoJson);
+      sessionStorage.setItem(chaveLocal, conteudoJson);
     else sessionStorage.removeItem(chaveLocal);
   } catch {}
   void banco().then((bancoLocal) => {

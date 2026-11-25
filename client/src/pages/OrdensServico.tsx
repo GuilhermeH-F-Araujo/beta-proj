@@ -1,8 +1,9 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import CartaoIndicador from '../components/CartaoIndicador';
 import { useCargaInicial } from '../hooks/useCargaInicial';
 import { usePesquisaPagina, useParametroPagina } from '../hooks/usePesquisaPagina';
 import { useCartoesPagina, useCartaoVisivel } from '../hooks/useCartoesPagina';
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ConteudoCarregando from '../components/ConteudoCarregando';
 import SkeletonLinhasTabela from '../components/SkeletonLinhasTabela';
@@ -10,6 +11,7 @@ import MenuAcoesOrdem from '../components/MenuAcoesOrdem';
 import { Icone } from '../components/MenuAdmin';
 import ModalAcoesOrdem from '../components/ModalAcoesOrdem';
 import ModalPagamento from '../components/ModalPagamento';
+import { useAcessoConta } from '../services/acessoConta';
 import { useUsuarioAdministrador } from '../components/RotaProtegida';
 import SeletorFiltro from '../components/SeletorFiltro';
 import SeletorPeriodo, { type DadosIntervalo } from '../components/SeletorPeriodo';
@@ -27,6 +29,8 @@ import {
   rotulosSituacaoOrdem as rotulos,
 } from '../services/statusOrdem';
 import './ordens-servico.css';
+
+const ModalNovaOrdem = lazy(() => import('../components/ModalNovaOrdem'));
 
 type Colunas = {
   phone: boolean;
@@ -88,7 +92,13 @@ export default function OrdensServico() {
   const cartoesVisiveis = useCartoesPagina('ordens', cards, (item) => item.status);
   const navegar = useNavigate();
   const usuario = useUsuarioAdministrador();
+  const acessoConta = useAcessoConta();
+  const podeCriarOrdem =
+    acessoConta.administrador ||
+    (acessoConta.permissoes.ordens?.visualizar === true &&
+      acessoConta.permissoes.ordens?.criar === true);
   const acesso = !!usuario;
+  const [novaOrdemAberta, setNovaOrdemAberta] = useState(false);
   const [busca, setBusca] = useState(
     () => new URLSearchParams(window.location.search).get('search') || '',
   );
@@ -126,6 +136,7 @@ export default function OrdensServico() {
   const primeiraCarga = useCargaInicial(carregandoLocal);
   const [erro, setErro] = useState('');
   const [personalizar, setPersonalizar] = useState(false);
+  const focoColunas = useFocoModal<HTMLElement>(personalizar);
   const [colunas, setColunas] = useState<Colunas>(() => {
     try {
       return { ...padraoColunas, ...JSON.parse(localStorage.getItem('orders-columns') || '{}') };
@@ -326,6 +337,15 @@ export default function OrdensServico() {
               <div className="list-title">
                 <h2>Lista de Ordens</h2>
                 <div>
+                  {podeCriarOrdem && (
+                    <button
+                      className="red-btn"
+                      type="button"
+                      onClick={() => setNovaOrdemAberta(true)}
+                    >
+                      <Icone name="plus" size={15} /> Nova OS
+                    </button>
+                  )}
                   <button className="white-btn" onClick={tratarExportacao}>
                     <Icone name="download" size={15} /> Exportar
                   </button>
@@ -570,6 +590,17 @@ export default function OrdensServico() {
           }}
         />
       )}
+      {novaOrdemAberta && (
+        <Suspense fallback={<p role="status">Carregando o novo formulário de OS…</p>}>
+          <ModalNovaOrdem
+            onClose={() => setNovaOrdemAberta(false)}
+            onCreated={(id) => {
+              setNovaOrdemAberta(false);
+              navegar(`/ordens-de-servico/${id}`);
+            }}
+          />
+        </Suspense>
+      )}
       {personalizar && (
         <div
           className="modal-backdrop"
@@ -579,6 +610,8 @@ export default function OrdensServico() {
         >
           <section
             className="orders-modal"
+            ref={focoColunas}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="columns-title"

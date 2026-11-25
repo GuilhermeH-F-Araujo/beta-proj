@@ -3,6 +3,8 @@ import { useEstadoRascunho } from '../../hooks/useEstadoRascunho';
 import { useDadosVivos } from '../../hooks/useDadosVivos';
 import {
   buscarPedidoMiniatura,
+  candidataPublicavel,
+  exigeConferenciaManualMiniatura,
   requisitarMiniaturas,
   type PedidoMiniatura,
 } from '../../services/centralMiniaturas';
@@ -23,9 +25,15 @@ export default function MiniaturaRapida({
 }: Props) {
   const escopo = `miniatura-rapida-${pedidoId || motoId || modeloInicial || 'nova'}`;
   const [modelo, setModelo] = useEstadoRascunho(escopo, 'modelo', modeloInicial);
+  const [ano, setAno] = useEstadoRascunho(escopo, 'ano', '');
+  const [variante, setVariante] = useEstadoRascunho(escopo, 'variante', '');
+  const anoMaximo = new Date().getFullYear() + 2;
+  const anoValido =
+    !ano || (/^\d{4}$/.test(ano) && Number(ano) >= 1900 && Number(ano) <= anoMaximo);
   const [idSalvo, setIdSalvo] = useEstadoRascunho<string | null>(escopo, 'pedido', null);
   const [pedido, setPedido] = useState<PedidoMiniatura | null>(null);
   const [erro, setErro] = useState('');
+  const [erroDispensado, setErroDispensado] = useState('');
   const [aviso, setAviso] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [ajustes, setAjustes] = useState(false);
@@ -55,18 +63,24 @@ export default function MiniaturaRapida({
       ativo = false;
     };
   }, [id]);
-  useDadosVivos(async (valido) => {
-    if (!id || document.visibilityState === 'hidden') return;
-    try {
-      const dados = await buscarPedidoMiniatura(id);
-      if (valido()) setPedido(dados);
-    } catch (falha) {
-      if (valido()) setErro(falha instanceof Error ? falha.message : 'Não foi possível atualizar.');
-    }
-  }, Boolean(id), id ?? '');
+  useDadosVivos(
+    async (valido) => {
+      if (!id || document.visibilityState === 'hidden') return;
+      try {
+        const dados = await buscarPedidoMiniatura(id);
+        if (valido()) setPedido(dados);
+      } catch (falha) {
+        if (valido())
+          setErro(falha instanceof Error ? falha.message : 'Não foi possível atualizar.');
+      }
+    },
+    Boolean(id),
+    id ?? '',
+  );
   const executar = async (acao: () => Promise<void>) => {
     setOcupado(true);
     setErro('');
+    setErroDispensado('');
     setAviso('');
     try {
       await acao();
@@ -77,9 +91,13 @@ export default function MiniaturaRapida({
     }
   };
   const salvar = async () => {
-    if (id) return id;
+    if (id && !['aprovada', 'descartada'].includes(pedido?.status || '')) return id;
+    if (id) setIgnorarInicial(true);
+    if (!anoValido) throw new Error(`Informe um ano entre 1900 e ${anoMaximo}.`);
     const resultado = await requisitarMiniaturas<{ id: string }>('/api/admin/miniaturas', 'POST', {
-      modelo,
+      modelo: modelo.trim(),
+      ano: ano ? Number(ano) : null,
+      variante: variante.trim(),
       modo: 'referencia',
     });
     setIdSalvo(resultado.id);
@@ -94,10 +112,10 @@ export default function MiniaturaRapida({
     });
   const emPreparo = pedido && ['pendente', 'processando'].includes(pedido.status);
   useEffect(() => {
-    if (pedido && !['pendente', 'processando'].includes(pedido.status)) setAviso('');
+    if (pedido && !['pendente', 'processando', 'aprovada'].includes(pedido.status)) setAviso('');
   }, [pedido?.status]);
   const podeGerar =
-    !pedido || ['rascunho', 'informacao', 'falhou', 'revisao'].includes(pedido.status);
+    !pedido || ['rascunho', 'informacao', 'falhou', 'revisao', 'aprovada', 'descartada'].includes(pedido.status);
   return (
     <div className="mini-quick">
       <section className="mini-card mini-quick-form">
@@ -119,6 +137,7 @@ export default function MiniaturaRapida({
                 setPedido(null);
                 setAjustes(false);
                 setErro('');
+    setErroDispensado('');
                 setAviso('');
               }
             }}
@@ -126,18 +145,44 @@ export default function MiniaturaRapida({
             maxLength={100}
             placeholder="Ex.: Honda CG 150 Titan"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && podeGerar && modelo.trim().length >= 3) void gerar();
+              if (e.key === 'Enter' && podeGerar && modelo.trim().length >= 2) void gerar();
             }}
           />
         </label>
+        <details>
+          <summary>Ano e edição (opcional)</summary>
+          <label>
+            Ano do modelo
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              value={pedido ? (pedido.catalogo.ano ?? '') : ano}
+              disabled={!!id || ocupado}
+              onChange={(e) => setAno(e.target.value)}
+              aria-invalid={!anoValido}
+              placeholder="Ex.: 2024"
+            />
+          </label>
+          <label>
+            Edição ou versão
+            <input
+              maxLength={80}
+              value={pedido?.catalogo.variante ?? variante}
+              disabled={!!id || ocupado}
+              onChange={(e) => setVariante(e.target.value)}
+              placeholder="Ex.: Adventure, ABS, Special Edition"
+            />
+          </label>
+        </details>
         <button
           type="button"
           className="mini-primary"
           disabled={
             ocupado ||
             !podeGerar ||
-            (!id && modelo.trim().length < 3) ||
-            (pedido?.tentativas || 0) >= 6
+            (!id && (modelo.trim().length < 2 || !anoValido)) ||
+            ((pedido?.tentativas || 0) >= 6 && !['aprovada', 'descartada'].includes(pedido?.status || ''))
           }
           onClick={() => void gerar()}
         >
@@ -157,6 +202,8 @@ export default function MiniaturaRapida({
               setIgnorarInicial(true);
               setPedido(null);
               setModelo('');
+              setAno('');
+              setVariante('');
               setAjustes(false);
             }}
           >
@@ -165,6 +212,14 @@ export default function MiniaturaRapida({
         )}
       </section>
       <section className="mini-card mini-quick-result">
+        {pedido?.imagem &&
+          pedido.status === 'revisao' &&
+          exigeConferenciaManualMiniatura(pedido.verificacao) && (
+            <p className="mini-help">
+              A comparação dos detalhes não foi conclusiva. Ao aprovar, você confirma manualmente o
+              modelo, a versão e os detalhes da moto.
+            </p>
+          )}
         {emPreparo ? (
           <div className="mini-quick-progress" role="status">
             <span className="mini-working" />
@@ -192,18 +247,29 @@ export default function MiniaturaRapida({
             />
             <div className="mini-inline">
               <h2>{pedido.status === 'aprovada' ? 'Miniatura aprovada' : 'É esta a moto?'}</h2>
-              <span className="mini-help">Frente para a direita →</span>
+              <span className="mini-help">
+                {pedido.verificacao?.direcao === 'direita'
+                  ? 'Frente para a direita →'
+                  : pedido.verificacao?.direcao === 'esquerda'
+                    ? '← Frente para a esquerda'
+                    : 'Direção não confirmada'}
+              </span>
             </div>
+            {pedido.erro && <p role="alert">{pedido.erro}</p>}
             {pedido.verificacao?.problemas?.length ? (
               <p className="mini-help">{pedido.verificacao.problemas.join(' ')}</p>
             ) : null}
             {pedido.status === 'revisao' && (
               <>
-                <p>Se a moto está correta, aprove para atualizar o modelo nos outros percursos.</p>
+                <p>
+                  {candidataPublicavel(pedido)
+                    ? 'Se a moto está correta, aprove para atualizar o modelo nos outros percursos.'
+                    : 'A publicação exige fundo transparente e confirmação automática da moto inteira com o farol à direita. Gere outra opção.'}
+                </p>
                 <button
                   type="button"
                   className="mini-primary mini-approve"
-                  disabled={ocupado}
+                  disabled={ocupado || !candidataPublicavel(pedido)}
                   onClick={() =>
                     executar(async () => {
                       await requisitarMiniaturas(`/api/admin/miniaturas/${id}/aprovar`, 'POST', {
@@ -223,10 +289,12 @@ export default function MiniaturaRapida({
                   <Icone name="check" size={20} />
                   Aprovar esta miniatura
                 </button>
-                <p className="mini-help">
-                  Ao aprovar, você confirma que o modelo está correto, inteiro e com a frente para a
-                  direita.
-                </p>
+                {candidataPublicavel(pedido) && (
+                  <p className="mini-help">
+                    Ao aprovar, você confirma que o modelo está correto, inteiro e com a frente para
+                    a direita.
+                  </p>
+                )}
               </>
             )}
           </>
@@ -236,7 +304,9 @@ export default function MiniaturaRapida({
             <h2>
               {pedido?.status === 'informacao'
                 ? 'Não foi possível confirmar o modelo'
-                : 'Sua miniatura vai aparecer aqui'}
+                : pedido?.status === 'falhou'
+                  ? 'A geração falhou'
+                  : 'Sua miniatura vai aparecer aqui'}
             </h2>
             <p>
               {pedido?.erro ||
@@ -245,12 +315,15 @@ export default function MiniaturaRapida({
           </div>
         )}
       </section>
+      {(erro || pedido?.erro) && (erro || pedido?.erro) !== erroDispensado && !ajustes && (
+        <div className="mini-error-overlay"><section role="alertdialog" aria-modal="true" aria-label="Problema na geração" className="mini-error-popup"><h2>Não foi possível concluir</h2><p>{erro || pedido?.erro}</p><button type="button" className="mini-primary" onClick={() => setErroDispensado(erro || pedido?.erro || '')}>Entendi</button></section></div>
+      )}
       {erro && (
         <p role="alert" className="mini-feedback error">
           {erro}
         </p>
       )}
-      {aviso && emPreparo && (
+      {aviso && (emPreparo || pedido?.status === 'aprovada') && (
         <p role="status" className="mini-feedback success">
           {aviso}
         </p>
@@ -259,7 +332,7 @@ export default function MiniaturaRapida({
         <button
           type="button"
           className="mini-link"
-          disabled={ocupado || (!id && modelo.trim().length < 3)}
+          disabled={ocupado || (!id && modelo.trim().length < 2)}
           aria-expanded={ajustes}
           onClick={() =>
             executar(async () => {

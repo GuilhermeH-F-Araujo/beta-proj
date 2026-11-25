@@ -3,8 +3,16 @@ import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import { chaveCatalogo, identidadeSchema } from '../src/miniaturas/identidade.ts';
-import { prepararReferencia, criarVariantes } from '../src/miniaturas/imagens.ts';
+import {
+  chaveCatalogo,
+  escolherFundoChave,
+  identidadeSchema,
+} from '../src/miniaturas/identidade.ts';
+import {
+  prepararReferencia,
+  criarVariantes,
+  recortarMiniatura,
+} from '../src/miniaturas/imagens.ts';
 import { correspondeModelo, baixarReferenciaPublica } from '../src/miniaturas/pesquisa.ts';
 import { montarInstrucao, modeloGeracao } from '../src/miniaturas/provedor.ts';
 process.env.URL_SUPABASE = 'https://exemplo.supabase.co';
@@ -17,6 +25,195 @@ const identidade = (modelo, ano = null, variante = '', motoId = null) => ({
   variante,
   motoId,
 });
+async function candidataDeTeste() {
+  return sharp({ create: { width: 1024, height: 768, channels: 3, background: '#ff00ff' } })
+    .composite([
+      {
+        input: { create: { width: 650, height: 400, channels: 3, background: '#161e27' } },
+        left: 165,
+        top: 184,
+      },
+      {
+        input: { create: { width: 200, height: 100, channels: 3, background: '#00b8ff' } },
+        left: 350,
+        top: 220,
+      },
+    ])
+    .png()
+    .toBuffer();
+}
+test('recorte tem alfa no original e nos tamanhos e rejeita candidato sem silhueta', async () => {
+  const original = await recortarMiniatura(await candidataDeTeste());
+  const variantes = await criarVariantes(original);
+  for (const bytes of Object.values(variantes)) {
+    const { data, info } = await sharp(bytes)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    assert.equal(data[3], 0);
+    assert.equal(
+      data[(Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * 4 + 3],
+      255,
+    );
+  }
+  const chapada = await sharp({
+    create: { width: 1024, height: 768, channels: 3, background: '#ff00ff' },
+  })
+    .png()
+    .toBuffer();
+  await assert.rejects(recortarMiniatura(chapada), /silhueta utilizavel/);
+});
+
+test('fundo verde preserva pintura rosa e alterna nas novas tentativas', async () => {
+  assert.equal(escolherFundoChave(1, 'pintura rosa'), 'verde');
+  assert.equal(escolherFundoChave(2, 'pintura verde'), 'magenta');
+  assert.equal(escolherFundoChave(2, ''), 'verde');
+  const bytes = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: '#00ff00' },
+  })
+    .composite([
+      {
+        input: { create: { width: 50, height: 50, channels: 3, background: '#ff00ff' } },
+        left: 25,
+        top: 25,
+      },
+    ])
+    .png()
+    .toBuffer();
+  const pixels = await sharp(await recortarMiniatura(bytes, 'verde'))
+    .raw()
+    .toBuffer();
+  assert.equal(pixels[3], 0);
+  const centro = (50 * 100 + 50) * 4;
+  assert.deepEqual([...pixels.subarray(centro, centro + 4)], [255, 0, 255, 255]);
+});
+
+test('recorte remove verde escuro em vazios e preserva detalhes neutros', async () => {
+  const bytes = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: '#00ff00' },
+  })
+    .composite([
+      {
+        input: { create: { width: 50, height: 50, channels: 3, background: '#242424' } },
+        left: 25,
+        top: 25,
+      },
+      {
+        input: { create: { width: 10, height: 10, channels: 3, background: '#124414' } },
+        left: 45,
+        top: 45,
+      },
+    ])
+    .png()
+    .toBuffer();
+  const pixels = await sharp(await recortarMiniatura(bytes, 'verde'))
+    .raw()
+    .toBuffer();
+  assert.equal(pixels[(50 * 100 + 50) * 4 + 3], 0);
+  assert.equal(pixels[(35 * 100 + 35) * 4 + 3], 255);
+});
+
+test('recorte preserva detalhe fino misturado ao verde, mesmo com brilho semelhante ao fundo', async () => {
+  const imagem = await sharp({
+    create: { width: 100, height: 100, channels: 3, background: '#00d400' },
+  })
+    .composite([
+      {
+        input: { create: { width: 30, height: 40, channels: 3, background: '#323232' } },
+        left: 20,
+        top: 30,
+      },
+      {
+        input: { create: { width: 1, height: 36, channels: 3, background: '#30c830' } },
+        left: 65,
+        top: 32,
+      },
+    ])
+    .png()
+    .toBuffer();
+  const pixels = await sharp(await recortarMiniatura(imagem, 'verde'))
+    .raw()
+    .toBuffer();
+  assert.equal(pixels[(50 * 100 + 64) * 4 + 3], 0);
+  assert.ok(pixels[(50 * 100 + 65) * 4 + 3] > 0);
+});
+
+for (const [fundo, cor] of [
+  ['magenta', '#ff00ff'],
+  ['verde', '#00ff00'],
+]) {
+  test(`recorte ${fundo} vaza aros e quadro preservando tanque branco em todas as variantes`, async () => {
+    const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768">
+      <rect width="1024" height="768" fill="${cor}"/>
+      <circle cx="280" cy="520" r="150" fill="#222"/>
+      <circle cx="280" cy="520" r="105" fill="${cor}"/>
+      <path d="M175 520H385M280 415V625" stroke="#ccc" stroke-width="12"/>
+      <rect x="490" y="260" width="330" height="330" fill="#333"/>
+      <rect x="530" y="370" width="230" height="100" fill="${cor}"/>
+      <rect x="530" y="280" width="230" height="60" fill="white"/>
+    </svg>`);
+    const variantes = await criarVariantes(
+      await recortarMiniatura(await sharp(svg).png().toBuffer(), fundo),
+    );
+    for (const [nome, bytes] of Object.entries(variantes)) {
+      const { data, info } = await sharp(bytes)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const pixel = (x, y) => {
+        const i =
+          (Math.floor((y * info.height) / 768) * info.width + Math.floor((x * info.width) / 1024)) *
+          4;
+        return [...data.subarray(i, i + 4)];
+      };
+      for (const [x, y] of [
+        [20, 20],
+        [240, 480],
+        [330, 570],
+        [600, 410],
+      ])
+        assert.equal(pixel(x, y)[3], 0, `${nome}: vao ${x},${y}`);
+      for (const [x, y] of [
+        [280, 520],
+        [280, 390],
+        [600, 310],
+        [510, 410],
+      ])
+        assert.equal(pixel(x, y)[3], 255, `${nome}: peca ${x},${y}`);
+      assert.ok(
+        pixel(600, 310)
+          .slice(0, 3)
+          .every((v) => v > 235),
+        `${nome}: pintura branca preservada`,
+      );
+      for (const background of ['#1639c2', '#f49812']) {
+        const { data: composed, info: dimensions } = await sharp(bytes)
+          .flatten({ background })
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        const at =
+          (Math.floor((410 * dimensions.height) / 768) * dimensions.width +
+            Math.floor((600 * dimensions.width) / 1024)) *
+          3;
+        const expected = background.match(/[0-9a-f]{2}/g).map((v) => parseInt(v, 16));
+        assert.deepEqual(
+          [...composed.subarray(at, at + 3)],
+          expected,
+          `${nome}: cor do sistema aparece no vao`,
+        );
+      }
+    }
+    const instrucao = montarInstrucao({
+      modelo: 'Honda CG',
+      modo: 'preservar',
+      pesquisa: '',
+      fundoChave: fundo,
+    });
+    assert.match(instrucao, /EVERY visible opening/);
+    assert.match(instrucao, /Preserve the geometry of the fuel tank/);
+  });
+}
+
 test('catalogo isola variantes, anos e veiculos sem duplicar grafias equivalentes', () => {
   const comum = chaveCatalogo(identidade('Honda CG 150'));
   assert.equal(comum, chaveCatalogo(identidade('  HONDA  CG 150 ')));
@@ -137,11 +334,7 @@ test('fila completa gera e verifica candidata sem publicar, usando referencias p
   const foto = await sharp({ create: { width: 800, height: 600, channels: 3, background: '#ddd' } })
     .jpeg()
     .toBuffer();
-  const imagem = await sharp({
-    create: { width: 1920, height: 1280, channels: 3, background: '#fff' },
-  })
-    .png()
-    .toBuffer();
+  const imagem = await candidataDeTeste();
   const atualizacoes = [];
   const arquivos = [];
   const chamadas = [];
@@ -205,6 +398,7 @@ test('fila completa gera e verifica candidata sem publicar, usando referencias p
     },
   };
   globalThis.fetch = async (url, opcoes) => {
+    if (!String(url).startsWith('https://api.cloudflare.com')) return Response.json({});
     chamadas.push(String(url));
     assert.match(String(url), /^https:\/\/api.cloudflare.com/);
     if (String(url).includes('vision-instruct'))
@@ -213,17 +407,39 @@ test('fila completa gera e verifica candidata sem publicar, usando referencias p
         result: { response: JSON.stringify({ direcao: 'direita', inteira: true, problemas: [] }) },
       });
     assert.ok(opcoes.body instanceof FormData);
-    assert.equal(opcoes.body.get('width'), '1920');
+    assert.equal(opcoes.body.get('width'), '1024');
     assert.ok(opcoes.body.get('input_image_0'));
     return Response.json({ success: true, result: { image: imagem.toString('base64') } });
   };
   try {
     assert.equal(await processarProximo(db), true);
     assert.equal(chamadas.length, 3);
-    assert.equal(arquivos.length, 3);
+    // original, card, tabela, pintura, previa (base neutra) e recorte vazado.
+    assert.equal(arquivos.length, 6);
     assert.equal(atualizacoes.at(-1).status, 'revisao');
     assert.equal(atualizacoes.at(-1).verificacao.direcao, 'direita');
+    assert.equal(atualizacoes.at(-1).verificacao.fundoTransparente, true);
     assert.ok(!atualizacoes.some((item) => item.status === 'aprovada'));
+
+    let chamadasRecusadas = 0;
+    globalThis.fetch = async (url) => {
+      if (!String(url).startsWith('https://api.cloudflare.com')) return Response.json({});
+      chamadasRecusadas++;
+      return Response.json(
+        {
+          success: false,
+          errors: [{ code: 3030, message: 'Your output has been flagged' }],
+        },
+        { status: 400 },
+      );
+    };
+    assert.equal(await processarProximo(db), true);
+    assert.equal(chamadasRecusadas, 1);
+    assert.equal(arquivos.length, 6);
+    assert.equal(atualizacoes.at(-1).status, 'informacao');
+    assert.equal(atualizacoes.at(-1).tentativas, 0);
+    assert.equal(atualizacoes.at(-1).executor, null);
+    assert.match(atualizacoes.at(-1).erro, /pedido foi salvo/);
   } finally {
     globalThis.fetch = anteriorFetch;
     if (envAnterior.id === undefined) delete process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -407,14 +623,19 @@ test('fila busca foto automaticamente e corrige candidata virada para esquerda s
   const anteriorToken = process.env.CLOUDFLARE_API_TOKEN;
   process.env.CLOUDFLARE_ACCOUNT_ID = 'teste';
   process.env.CLOUDFLARE_API_TOKEN = 'simulado';
-  const foto = await sharp({ create: { width: 800, height: 600, channels: 3, background: '#ddd' } })
+  const foto = await sharp({
+    create: { width: 1200, height: 800, channels: 3, background: '#fff' },
+  })
+    .composite([
+      {
+        input: { create: { width: 700, height: 400, channels: 3, background: '#222' } },
+        left: 250,
+        top: 200,
+      },
+    ])
     .jpeg()
     .toBuffer();
-  const imagem = await sharp({
-    create: { width: 1920, height: 1280, channels: 3, background: '#fff' },
-  })
-    .png()
-    .toBuffer();
+  const imagem = await candidataDeTeste();
   const tarefa = {
     id: 'automatico',
     catalogo: { modelo: 'BMW R1200GS', ano: null, variante: '', moto_id: null },
@@ -426,21 +647,21 @@ test('fila busca foto automaticamente e corrige candidata virada para esquerda s
     referencias: [],
     pesquisa: {
       consulta: 'BMW R1200GS',
-      fontes: [
-        {
-          titulo: 'BMW R1200GS',
-          imagem: 'https://upload.wikimedia.org/foto.jpg',
-          url: 'https://commons.wikimedia.org/wiki/File:Foto.jpg',
-          licenca: 'CC BY 4.0',
-          autor: 'Autor',
-        },
-      ],
+      fontes: [0, 1, 2, 3].map((indice) => ({
+        titulo: 'BMW R1200GS',
+        imagem: `https://upload.wikimedia.org/foto-${indice}.jpg`,
+        url: `https://commons.wikimedia.org/wiki/File:Foto-${indice}.jpg`,
+        licenca: 'CC BY 4.0',
+        autor: 'Autor',
+        correspondencia: 'exata',
+      })),
       avisos: [],
       feita_em: new Date().toISOString(),
     },
   };
   const alteracoes = [];
   let baixou = false;
+  let geracoes = 0;
   const db = {
     rpc: async () => ({ data: [{ id: tarefa.id }], error: null }),
     from() {
@@ -468,7 +689,8 @@ test('fila busca foto automaticamente e corrige candidata virada para esquerda s
       },
     },
   };
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = async (url, opcoes) => {
+    if (!/api.cloudflare.com|upload.wikimedia.org/.test(String(url))) return Response.json({});
     if (String(url).startsWith('https://upload.wikimedia.org/')) {
       baixou = true;
       return new Response(foto, { headers: { 'Content-Type': 'image/jpeg' } });
@@ -478,15 +700,20 @@ test('fila busca foto automaticamente e corrige candidata virada para esquerda s
         success: true,
         result: { response: JSON.stringify({ direcao: 'esquerda', inteira: true, problemas: [] }) },
       });
+    assert.ok(opcoes.body.has('input_image_3'), 'usa quatro fotos para orientar o padrao');
+    geracoes++;
     return Response.json({ success: true, result: { image: imagem.toString('base64') } });
   };
   try {
     await processarProximo(db);
     assert.equal(baixou, true);
+    assert.equal(alteracoes.find((a) => a.referencias)?.referencias.length, 4);
+    assert.equal(geracoes, 1, 'foto de estudio tambem passa pela geracao com fundo chave');
     assert.equal(alteracoes.at(-1).status, 'pendente');
     assert.match(alteracoes.at(-1).correcao, /Correcao automatica/);
     assert.equal(alteracoes.at(-1).pesquisa, undefined);
-    assert.equal(tarefa.pesquisa.usadas[0].autor, 'Autor');
+    assert.ok(alteracoes.some((a) => a.pesquisa?.usadas?.[0]?.autor === 'Autor'));
+    assert.equal(tarefa.pesquisa.usadas, undefined);
   } finally {
     globalThis.fetch = fetchAnterior;
     if (anteriorId === undefined) delete process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -505,11 +732,7 @@ test('fila gera por fonte textual confirmada quando nao existe foto sem inventar
   const foto = await sharp({ create: { width: 800, height: 600, channels: 3, background: '#ddd' } })
     .jpeg()
     .toBuffer();
-  const imagem = await sharp({
-    create: { width: 1920, height: 1280, channels: 3, background: '#fff' },
-  })
-    .png()
-    .toBuffer();
+  const imagem = await candidataDeTeste();
   const tarefa = {
     id: 'automatico',
     catalogo: { modelo: 'BMW R1200GS', ano: null, variante: '', moto_id: null },
@@ -535,6 +758,7 @@ test('fila gera por fonte textual confirmada quando nao existe foto sem inventar
   };
   const alteracoes = [];
   let baixou = false;
+  let prompt = '';
   const db = {
     rpc: async () => ({ data: [{ id: tarefa.id }], error: null }),
     from() {
@@ -562,7 +786,8 @@ test('fila gera por fonte textual confirmada quando nao existe foto sem inventar
       },
     },
   };
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = async (url, opcoes) => {
+    if (!/api.cloudflare.com|upload.wikimedia.org/.test(String(url))) return Response.json({});
     if (String(url).startsWith('https://upload.wikimedia.org/')) {
       baixou = true;
       return new Response(foto, { headers: { 'Content-Type': 'image/jpeg' } });
@@ -572,6 +797,9 @@ test('fila gera por fonte textual confirmada quando nao existe foto sem inventar
         success: true,
         result: { response: JSON.stringify({ direcao: 'direita', inteira: true, problemas: [] }) },
       });
+    prompt = opcoes.body.get('prompt');
+    assert.equal(opcoes.body.get('width'), '1024');
+    assert.equal(opcoes.body.get('height'), '1280');
     return Response.json({ success: true, result: { image: imagem.toString('base64') } });
   };
   try {
@@ -580,6 +808,15 @@ test('fila gera por fonte textual confirmada quando nao existe foto sem inventar
     assert.equal(alteracoes.at(-1).status, 'revisao');
     assert.equal(alteracoes.at(-1).pesquisa.semFoto, true);
     assert.match(alteracoes.at(-1).verificacao.problemas.join(' '), /sem foto de comparacao/);
+    assert.equal(alteracoes.at(-1).pesquisa.identidadeNaoConfirmada, false);
+
+    tarefa.catalogo.ano = 1994;
+    tarefa.catalogo.variante = 'Edição especial';
+    tarefa.pesquisa.fontes[0].correspondencia = 'familia';
+    await processarProximo(db);
+    // Sem foto e sem fonte confirmada, o sistema pede uma referencia em vez de inventar.
+    assert.equal(alteracoes.at(-1).status, 'informacao');
+    assert.match(alteracoes.at(-1).erro, /Envie uma foto/);
     assert.ok(!alteracoes.some((a) => a.status === 'aprovada'));
   } finally {
     globalThis.fetch = fetchAnterior;
@@ -630,7 +867,7 @@ test('erro 3030 preserva motivo e distingue moderacao sem expor token ou trocar 
       );
     await assert.rejects(
       executarCloudflare('@cf/black-forest-labs/flux-2-klein-9b', {}),
-      (erro) => erro.codigo === 'REQUISICAO' && /Unexpected inference failure/.test(erro.message),
+      (erro) => erro.codigo === 'TEMPORARIO' && /Unexpected inference failure/.test(erro.message),
     );
   } finally {
     globalThis.fetch = anterior;
@@ -674,6 +911,57 @@ test('cota diaria do Cloudflare pausa ate a proxima janela sem trocar de conta',
   }
 });
 
+test('Workers AI usa todas as contas antes de pausar por cota', async () => {
+  const { executarCloudflare, proximaLiberacaoCota } = await import(
+    '../src/miniaturas/provedor.ts'
+  );
+  const fetchAnterior = globalThis.fetch;
+  const ambiente = Object.fromEntries(
+    ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'MODEL_IMAGE_ACCOUNTS_JSON'].map((chave) => [
+      chave,
+      process.env[chave],
+    ]),
+  );
+  process.env.CLOUDFLARE_ACCOUNT_ID = 'rodizio-a';
+  process.env.CLOUDFLARE_API_TOKEN = 'simulado';
+  process.env.MODEL_IMAGE_ACCOUNTS_JSON = JSON.stringify(
+    ['rodizio-a', 'rodizio-b', 'rodizio-c'].map((accountId) => ({
+      name: accountId,
+      accountId,
+      apiToken: 'simulado',
+    })),
+  );
+  const chamadas = [];
+  let ultimaComCota = true;
+  globalThis.fetch = async (url) => {
+    const conta = new URL(url).pathname.split('/')[4];
+    chamadas.push(conta);
+    if (conta === 'rodizio-c' && ultimaComCota)
+      return Response.json({ success: true, result: { imagem: 'teste' } });
+    return Response.json(
+      { success: false, errors: [{ code: 4006, message: 'Daily free allocation exceeded' }] },
+      { status: 429 },
+    );
+  };
+  try {
+    const modelo = '@cf/black-forest-labs/flux-2-klein-9b';
+    assert.deepEqual(await executarCloudflare(modelo, new FormData()), { imagem: 'teste' });
+    assert.deepEqual(chamadas, ['rodizio-a', 'rodizio-b', 'rodizio-c']);
+    assert.equal(proximaLiberacaoCota(), 0);
+    ultimaComCota = false;
+    await assert.rejects(executarCloudflare(modelo, {}), { codigo: 'COTA' });
+    await assert.rejects(executarCloudflare(modelo, {}), { codigo: 'COTA' });
+    assert.deepEqual(chamadas, ['rodizio-a', 'rodizio-b', 'rodizio-c', 'rodizio-c']);
+    assert.ok(proximaLiberacaoCota() > Date.now());
+  } finally {
+    globalThis.fetch = fetchAnterior;
+    for (const [chave, valor] of Object.entries(ambiente)) {
+      if (valor === undefined) delete process.env[chave];
+      else process.env[chave] = valor;
+    }
+  }
+});
+
 test('pesquisa usa a foto aberta no dominio atual de miniaturas do Commons sem esperar Wikipedia', async () => {
   const { pesquisarReferencias } = await import('../src/miniaturas/pesquisa.ts');
   const anterior = globalThis.fetch;
@@ -713,7 +1001,7 @@ test('pesquisa usa a foto aberta no dominio atual de miniaturas do Commons sem e
     assert.equal(pesquisa.fontes.filter((f) => f.imagem).length, 1);
     assert.equal(pesquisa.fontes[0].autor, 'Fotografo');
     assert.equal(new URL(pesquisa.fontes[0].imagem).hostname, 'thumb.wikimedia.org');
-    assert.equal(wikipedia, 0);
+    assert.equal(wikipedia, 2);
   } finally {
     globalThis.fetch = anterior;
   }
@@ -755,3 +1043,280 @@ test('descoberta do fabricante prefere Classic 350 a variante Goan da mesma fami
     globalThis.fetch = anterior;
   }
 });
+
+test('pesquisa resolve uma foto CC BY-SA pela categoria do modelo quando a busca direta falha', async () => {
+  const { pesquisarReferencias, baixarFotoDaFonte } = await import('../src/miniaturas/pesquisa.ts');
+  const anterior = globalThis.fetch;
+  const miniatura = 'https://thumb.wikimedia.org/foto.jpg';
+  const original = 'https://upload.wikimedia.org/foto.jpg';
+  const arquivo = {
+    title: 'File:Ducati Monster 900 lateral.jpg',
+    imageinfo: [
+      {
+        thumburl: miniatura,
+        url: original,
+        extmetadata: {
+          LicenseShortName: { value: 'CC BY-SA 4.0' },
+          Artist: { value: 'Autora Teste' },
+          ImageDescription: { value: 'Ducati Monster 900, model year 1993' },
+        },
+      },
+    ],
+  };
+  globalThis.fetch = async (entrada) => {
+    const url = new URL(String(entrada));
+    if (url.href === miniatura) return new Response(null, { status: 429 });
+    if (url.href === original)
+      return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/jpeg' } });
+    if (url.hostname !== 'commons.wikimedia.org') return new Response('{}', { status: 503 });
+    if (url.searchParams.get('gsrnamespace') === '14')
+      return Response.json({ query: { pages: [{ title: 'Category:Ducati Monster 900' }] } });
+    if (url.searchParams.get('generator') === 'categorymembers')
+      return Response.json({ query: { pages: [arquivo] } });
+    return Response.json({ query: { pages: [] } });
+  };
+  try {
+    const pesquisa = await pesquisarReferencias('Ducati Monster 900', 1993);
+    const fonte = pesquisa.fontes.find((item) => item.imagem);
+    assert.equal(fonte?.correspondencia, 'exata');
+    assert.equal(fonte?.autor, 'Autora Teste');
+    assert.deepEqual(await baixarFotoDaFonte(fonte), Buffer.from([1, 2, 3]));
+    const outroAno = await pesquisarReferencias('Ducati Monster 900', 1998);
+    assert.equal(outroAno.fontes.find((item) => item.imagem)?.correspondencia, 'familia');
+  } finally {
+    globalThis.fetch = anterior;
+  }
+});
+
+test('identidade fotografica nao mistura cilindrada ou edicao mencionadas na mesma pagina', async () => {
+  const { aceitaReferenciaModelo, licencaFotoAberta } = await import(
+    '../src/miniaturas/buscaFotos.ts'
+  );
+  assert.ok(aceitaReferenciaModelo('Honda CG 125', 'Honda CG125 vista lateral'));
+  assert.equal(aceitaReferenciaModelo('Honda CG 150', 'Honda CG125 e Yamaha 150'), false);
+  assert.equal(aceitaReferenciaModelo('BMW R 1250 GS', 'BMW R1250GS Adventure'), false);
+  assert.equal(aceitaReferenciaModelo('Yamaha RD 350', 'Yamaha RD350LC'), false);
+  assert.ok(licencaFotoAberta('CC BY-SA 4.0'));
+  assert.equal(licencaFotoAberta('CC BY-NC 4.0'), false);
+});
+
+test('fidelidade exige correspondencia em todos os criterios', async () => {
+  const { calcularFidelidade } = await import('../src/miniaturas/imagens.ts');
+  const detalhes = {
+    rodas: 'igual',
+    freios: 'igual',
+    carenagem: 'igual',
+    iluminacao: 'igual',
+    motor: 'igual',
+    escape: 'igual',
+    pintura: 'igual',
+  };
+  assert.deepEqual(calcularFidelidade(detalhes), {
+    pontuacaoFidelidade: 100,
+    fidelidade: 'compativel',
+  });
+  assert.equal(
+    calcularFidelidade({ ...detalhes, escape: 'inconclusivo' }).fidelidade,
+    'inconclusiva',
+  );
+  assert.deepEqual(calcularFidelidade({ ...detalhes, escape: 'diferente', freios: 'diferente' }), {
+    pontuacaoFidelidade: 80,
+    fidelidade: 'divergente',
+  });
+  assert.deepEqual(calcularFidelidade({ ...detalhes, rodas: 'diferente' }), {
+    pontuacaoFidelidade: 80,
+    fidelidade: 'divergente',
+  });
+  assert.equal(
+    calcularFidelidade({ ...detalhes, rodas: 'parcial', pintura: 'diferente' }).fidelidade,
+    'divergente',
+  );
+});
+
+test('401 tenta a proxima conta no mesmo pedido e preserva o multipart', async () => {
+  const { executarCloudflare, proximaLiberacaoCota } = await import(
+    '../src/miniaturas/provedor.ts'
+  );
+  const chaves = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'MODEL_IMAGE_ACCOUNTS_JSON'];
+  const ambiente = Object.fromEntries(chaves.map((chave) => [chave, process.env[chave]]));
+  const anterior = globalThis.fetch;
+  const modelo = '@cf/black-forest-labs/flux-2-klein-9b';
+  const chamadas = [];
+  const form = new FormData();
+  form.set('prompt', 'moto de teste');
+  form.set('input_image_0', new Blob(['foto simulada']), 'foto.jpg');
+  process.env.CLOUDFLARE_ACCOUNT_ID = 'credenciais-a';
+  process.env.CLOUDFLARE_API_TOKEN = 'token-simulado-a';
+  process.env.MODEL_IMAGE_ACCOUNTS_JSON = JSON.stringify([
+    { name: 'segunda', accountId: 'credenciais-b', apiToken: 'token-simulado-b' },
+  ]);
+  let resposta = 'sucesso';
+  globalThis.fetch = async (url, opcoes) => {
+    const conta = new URL(url).pathname.split('/')[4];
+    chamadas.push(conta);
+    assert.equal(opcoes.body, form);
+    assert.equal(opcoes.body.get('prompt'), 'moto de teste');
+    assert.equal(await opcoes.body.get('input_image_0').text(), 'foto simulada');
+    if (conta === 'credenciais-a' || resposta === 'credenciais')
+      return Response.json(
+        { success: false, errors: [{ code: 10000, message: 'Authentication error' }] },
+        { status: 401 },
+      );
+    if (resposta === 'cota')
+      return Response.json(
+        { success: false, errors: [{ code: 3036, message: 'Daily free allocation exceeded' }] },
+        { status: 429 },
+      );
+    return Response.json({ success: true, result: { image: 'simulada' } });
+  };
+  try {
+    assert.deepEqual(await executarCloudflare(modelo, form), { image: 'simulada' });
+    assert.deepEqual(chamadas, ['credenciais-a', 'credenciais-b']);
+    resposta = 'cota';
+    await assert.rejects(executarCloudflare(modelo, form), { codigo: 'COTA' });
+    const liberacao = proximaLiberacaoCota();
+    assert.ok(liberacao > Date.now());
+    const quantidade = chamadas.length;
+    await assert.rejects(executarCloudflare(modelo, form), { codigo: 'COTA' });
+    assert.equal(chamadas.length, quantidade);
+    // Simula a renovacao da janela sem aguardar um dia real.
+    const agora = Date.now;
+    Date.now = () => liberacao + 1;
+    try {
+      resposta = 'sucesso';
+      assert.deepEqual(await executarCloudflare(modelo, form), { image: 'simulada' });
+      resposta = 'credenciais';
+      await assert.rejects(
+        executarCloudflare(modelo, form),
+        (erro) => erro.codigo === 'CREDENCIAIS' && /Erro de configuracao/.test(erro.message),
+      );
+      assert.equal(proximaLiberacaoCota(), 0);
+      // O token corrigido volta a ser avaliado.
+      process.env.CLOUDFLARE_API_TOKEN = 'token-corrigido-simulado';
+      process.env.CLOUDFLARE_ACCOUNT_ID = 'credenciais-b';
+      resposta = 'sucesso';
+      assert.deepEqual(await executarCloudflare(modelo, form), { image: 'simulada' });
+    } finally {
+      Date.now = agora;
+    }
+  } finally {
+    globalThis.fetch = anterior;
+    for (const [chave, valor] of Object.entries(ambiente)) {
+      if (valor === undefined) delete process.env[chave];
+      else process.env[chave] = valor;
+    }
+  }
+});
+
+for (const cenario of ['cota', 'credenciais', 'moderacao']) {
+  test(`fila apos 401 e ${cenario} preserva o estado correto do pedido`, async () => {
+    const { processarProximo } = await import('../src/miniaturas/fila.ts');
+    const { proximaLiberacaoCota } = await import('../src/miniaturas/provedor.ts');
+    const chaves = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'MODEL_IMAGE_ACCOUNTS_JSON'];
+    const ambiente = Object.fromEntries(chaves.map((chave) => [chave, process.env[chave]]));
+    const anterior = globalThis.fetch;
+    const prefixo = `fila-${cenario}`;
+    process.env.CLOUDFLARE_ACCOUNT_ID = `${prefixo}-a`;
+    process.env.CLOUDFLARE_API_TOKEN = 'simulado';
+    process.env.MODEL_IMAGE_ACCOUNTS_JSON = JSON.stringify([
+      { name: 'segunda', accountId: `${prefixo}-b`, apiToken: 'simulado' },
+      { name: 'terceira', accountId: `${prefixo}-c`, apiToken: 'simulado' },
+    ]);
+    const foto = await sharp({
+      create: { width: 800, height: 600, channels: 3, background: '#ddd' },
+    })
+      .jpeg()
+      .toBuffer();
+    const tarefa = {
+      id: prefixo,
+      catalogo: { modelo: 'Honda CG 150', ano: null, variante: '', moto_id: null },
+      modo: 'referencia',
+      observacoes: 'manter adesivo',
+      correcao: '',
+      tentativas: 1,
+      falhas: 0,
+      referencias: [{ caminho: 'foto.jpg' }],
+      pesquisa: {
+        consulta: 'Honda CG 150',
+        fontes: [],
+        avisos: [],
+        feita_em: new Date().toISOString(),
+      },
+    };
+    const alteracoes = [],
+      chamadas = [];
+    let reservas = 0;
+    const db = {
+      rpc: async () => {
+        reservas++;
+        return { data: [{ id: tarefa.id }], error: null };
+      },
+      from() {
+        const q = {
+          select: () => q,
+          eq: () => q,
+          update(valor) {
+            alteracoes.push(valor);
+            return q;
+          },
+          maybeSingle: async () => ({ data: tarefa, error: null }),
+          then(resolve, reject) {
+            return Promise.resolve({ data: [{ id: tarefa.id }], error: null }).then(
+              resolve,
+              reject,
+            );
+          },
+        };
+        return q;
+      },
+      storage: {
+        from: () => ({ download: async () => ({ data: new Blob([foto]), error: null }) }),
+      },
+    };
+    globalThis.fetch = async (url) => {
+      if (!String(url).startsWith('https://api.cloudflare.com')) return Response.json({});
+      const conta = new URL(url).pathname.split('/')[4];
+      chamadas.push(conta);
+      const tipo = conta.endsWith('-a') ? 'credenciais' : cenario;
+      const [status, code, message] =
+        tipo === 'credenciais'
+          ? [401, 10000, 'Authentication error']
+          : tipo === 'cota'
+            ? [429, 3036, 'Daily free allocation exceeded']
+            : [400, 3030, 'Your output has been flagged'];
+      return Response.json({ success: false, errors: [{ code, message }] }, { status });
+    };
+    try {
+      assert.equal(await processarProximo(db), true);
+      const ultima = alteracoes.at(-1);
+      assert.equal(ultima.executor, null);
+      if (cenario === 'cota') {
+        assert.equal(ultima.status, 'pendente');
+        assert.equal(ultima.tentativas, 0);
+        assert.equal(Date.parse(ultima.tentar_em), proximaLiberacaoCota());
+        assert.ok(Date.parse(ultima.tentar_em) > Date.now());
+        assert.equal(await processarProximo(db), false);
+        assert.equal(reservas, 1);
+      } else if (cenario === 'credenciais') {
+        assert.equal(ultima.status, 'falhou');
+        assert.match(ultima.erro, /Erro de configuracao/);
+      } else {
+        assert.equal(ultima.status, 'informacao');
+        assert.equal(ultima.tentativas, 0);
+        assert.match(ultima.erro, /pedido foi salvo.*Adicione uma foto/);
+      }
+      assert.deepEqual(
+        chamadas,
+        (cenario === 'moderacao' ? ['a', 'b'] : ['a', 'b', 'c']).map(
+          (sufixo) => `${prefixo}-${sufixo}`,
+        ),
+      );
+    } finally {
+      globalThis.fetch = anterior;
+      for (const [chave, valor] of Object.entries(ambiente)) {
+        if (valor === undefined) delete process.env[chave];
+        else process.env[chave] = valor;
+      }
+    }
+  });
+}

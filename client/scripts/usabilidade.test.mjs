@@ -139,8 +139,7 @@ globalThis.fetch = async (url, inicializacao = {}) => {
     return respostaJson({ dados: { categorias: [], servicos: [] }, versao: 1 });
   if (caminho === '/api/shared/agenda') return respostaJson({ dados: [], versao: 1 });
   if (caminho === '/api/agendamentos') return respostaJson({ itens: [] });
-  if (caminho === '/api/agendamentos/opcoes')
-    return respostaJson({ clientes: [], mecanicos: [] });
+  if (caminho === '/api/agendamentos/opcoes') return respostaJson({ clientes: [], mecanicos: [] });
   if (caminho === '/api/admin/settings/diagnostics')
     return respostaJson({ checkedAt: '2026-11-14', version: 'teste', checks: [] });
   if (caminho.startsWith('/api/motorcycle-brands')) return respostaJson({ brands: ['Honda'] });
@@ -845,7 +844,13 @@ test('publicacao no estudio exige confirmacao explicita e envia a revisao visual
       candidato: 'candidata/original.png',
       imagem: 'https://example.invalid/candidata.png',
       catalogo: { modelo: 'Honda CG 150', variante: 'Spyder', ano: null, revisao: 2 },
-      verificacao: { direcao: 'direita', inteira: true, automatica: true, problemas: [] },
+      verificacao: {
+        direcao: 'direita',
+        inteira: true,
+        automatica: true,
+        fundoTransparente: true,
+        problemas: [],
+      },
     });
   };
   try {
@@ -925,7 +930,8 @@ test('miniatura rapida pede somente o modelo e coloca a IA para trabalhar sem fo
   };
   try {
     await montarInterface(criarElemento(Rapida, { modeloInicial: 'Honda CG 160' }));
-    assert.equal(document.querySelectorAll('.mini-quick input').length, 1);
+    assert.equal(document.querySelectorAll('.mini-quick input:not(details input)').length, 1);
+    assert.equal(document.querySelector('.mini-quick-form details').open, false);
     assert.equal(document.querySelector('.mini-estudio'), null);
     const botao = [...document.querySelectorAll('button')].find((item) =>
       item.textContent.includes('Gerar miniatura'),
@@ -958,6 +964,13 @@ test('aprovacao rapida exige apenas um clique explicito, mantendo a confirmacao 
       status: payload ? 'aprovada' : 'revisao',
       imagem: 'https://example.invalid/moto.png',
       tentativas: 1,
+      verificacao: {
+        direcao: 'direita',
+        inteira: true,
+        automatica: true,
+        fundoTransparente: true,
+        problemas: [],
+      },
       catalogo: { modelo: 'Honda CG 160', revisao: 4 },
     });
   };
@@ -2343,5 +2356,1076 @@ test('funcionarios destaca somente ordens abertas em vermelho e total em azul', 
     );
   } finally {
     await desmontarInterface();
+  }
+});
+
+test('modal circula o foco com Tab e devolve o foco ao botao ao fechar', async () => {
+  const { useFocoModal } = await import('../src/hooks/useFocoModal.ts');
+  const disparador = document.createElement('button');
+  document.body.append(disparador);
+  disparador.focus();
+
+  function Dialogo() {
+    const ref = useFocoModal();
+    return criarElemento(
+      'section',
+      { ref, role: 'dialog', tabIndex: -1 },
+      ...['primeiro', 'ultimo'].map((id) =>
+        criarElemento(
+          'button',
+          {
+            key: id,
+            id,
+            ref: (elemento) => {
+              if (elemento) elemento.getClientRects = () => [{ width: 20, height: 20 }];
+            },
+          },
+          id,
+        ),
+      ),
+    );
+  }
+  try {
+    await montarInterface(criarElemento(Dialogo));
+    assert.equal(document.activeElement.id, 'primeiro');
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true }),
+    );
+    assert.equal(document.activeElement.id, 'ultimo');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+    assert.equal(document.activeElement.id, 'primeiro');
+  } finally {
+    await desmontarInterface();
+    assert.equal(document.activeElement, disparador);
+    disparador.remove();
+  }
+});
+
+test('detalhes do agendamento usam os dados da API e abrem a edicao do mesmo registro', async () => {
+  const original = globalThis.fetch;
+  const item = {
+    id: 81,
+    clienteId: 1,
+    cliente: 'Cliente da agenda',
+    telefone: '(15) 99999-0003',
+    motoId: 2,
+    moto: 'Honda CG 160',
+    placa: 'ABC1D23',
+    motoFoto: '/assets/models/urbana-160.webp',
+    mecanicoId: 3,
+    mecanico: 'Gabriel L.',
+    servico: 'Inspeção de luzes',
+    status: 'Confirmado',
+    data: '2026-11-24',
+    hora: '09:00',
+    duracao: '2 horas',
+    observacoes: 'Conferir sinalização',
+  };
+  globalThis.fetch = async (url, opcoes) =>
+    String(url) === '/api/agendamentos' ? respostaJson({ itens: [item] }) : original(url, opcoes);
+  try {
+    await montarInterface(
+      criarElemento(RoteadorMemoria, { initialEntries: ['/agendamentos'] }, criarElemento(App)),
+    );
+    const ver = document.querySelector('[aria-label="Ver Cliente da agenda"]');
+    assert.ok(ver);
+    await act(async () => ver.click());
+    const detalhes = document.querySelector('.appointment-details');
+    assert.ok(detalhes);
+    assert.match(detalhes.textContent, /Inspeção de luzes/);
+    assert.equal(detalhes.querySelector('img').getAttribute('src'), item.motoFoto);
+    assert.match(detalhes.textContent, /Conferir sinalização/);
+    await act(async () => detalhes.querySelector('footer .appointment-confirm').click());
+    assert.equal(document.querySelector('.appointment-details'), null);
+    assert.match(document.querySelector('.appointment-modal').textContent, /Editar agendamento/);
+  } finally {
+    await desmontarInterface();
+    globalThis.fetch = original;
+  }
+});
+
+test('confirmacao de cadastro abre WhatsApp so para acesso ativo e preserva o telefone informado', async () => {
+  const { default: ModalSucessoUsuario, compartilharAcesso } = await import(
+    '../src/components/ModalSucessoUsuario.tsx'
+  );
+  const pessoa = {
+    nome: 'Pessoa de Teste',
+    email: 'pessoa@example.invalid',
+    telefone: '+55 (15) 99999-0003',
+  };
+  const props = {
+    ...pessoa,
+    cargo: 'Mecânico',
+    erro: '',
+    aoFechar() {},
+    aoCompartilhar() {
+      assert.equal(compartilharAcesso(pessoa, 'AcessoSintetico123!'), '');
+    },
+  };
+  const abrirOriginal = window.open;
+  let abriu = 0;
+  window.open = (endereco, alvo, opcoes) => {
+    abriu++;
+    const url = new URL(endereco);
+    assert.equal(url.origin, 'https://wa.me');
+    assert.equal(url.pathname, '/5515999990003');
+    assert.match(url.searchParams.get('text'), /pessoa@example.invalid/);
+    assert.equal(alvo, '_blank');
+    assert.equal(opcoes, 'noopener,noreferrer');
+  };
+  try {
+    await montarInterface(
+      criarElemento(ModalSucessoUsuario, { ...props, aprovacaoPendente: true }),
+    );
+    assert.match(document.querySelector('.nam-user-created').textContent, /Aguardando aprovação/);
+    assert.equal(document.querySelector('.nam-success-whatsapp'), null);
+    await desmontarInterface();
+    await montarInterface(
+      criarElemento(ModalSucessoUsuario, { ...props, aprovacaoPendente: false }),
+    );
+    assert.match(document.querySelector('.nam-user-created').textContent, /Acesso ativo/);
+    await act(async () => document.querySelector('.nam-success-whatsapp').click());
+    assert.equal(abriu, 1);
+  } finally {
+    await desmontarInterface();
+    window.open = abrirOriginal;
+  }
+});
+
+for (const [modelo, ano, porTeclado] of [
+  ['CG', '2008', true],
+  ['Ténéré 700', '2026', false],
+]) {
+  test(`miniatura rapida aceita ${modelo} com ano e envia o pedido`, async () => {
+    const Rapida = (await import('../src/components/miniaturas/MiniaturaRapida.tsx')).default;
+    const anterior = globalThis.fetch;
+    const id = 'c541e3eb-c07c-49bd-a897-bbc05b871dd3';
+    let criacao,
+      gerou = 0;
+    await iniciarRascunhos(`teste-modelo-${modelo}`);
+    globalThis.fetch = async (url, opcoes = {}) => {
+      if (String(url).endsWith('/gerar')) {
+        gerou++;
+        return respostaJson({ ok: true });
+      }
+      if (opcoes.method === 'GET')
+        return respostaJson({
+          id,
+          status: 'pendente',
+          tentativas: 0,
+          referencias: [],
+          catalogo: { modelo, ano: Number(ano), revisao: 0 },
+        });
+      criacao = JSON.parse(opcoes.body);
+      return respostaJson({ id });
+    };
+    try {
+      await montarInterface(criarElemento(Rapida, { modeloInicial: modelo }));
+      const campoAno = document.querySelector('input[inputmode="numeric"]');
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
+          campoAno,
+          ano,
+        );
+        campoAno.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      const botao = [...document.querySelectorAll('button')].find((b) =>
+        b.textContent.includes('Gerar miniatura'),
+      );
+      assert.equal(botao.disabled, false);
+      await act(async () => {
+        if (porTeclado)
+          document
+            .querySelector('.mini-quick-form input')
+            .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        else botao.click();
+        await aguardar(40);
+      });
+      assert.equal(gerou, 1);
+      assert.equal(criacao.modelo, modelo);
+      assert.equal(criacao.ano, Number(ano));
+      assert.match(document.body.textContent, /Sua moto está na fila/);
+    } finally {
+      await desmontarInterface();
+      globalThis.fetch = anterior;
+    }
+  });
+}
+
+test('modal real de miniatura preserva QR, quatro fotos, fabricante, geracao e publicacao', async () => {
+  const Modal = (await import('../src/components/ModalPreviaModelo.tsx')).default;
+  const anteriorFetch = globalThis.fetch;
+  const anteriorBitmap = globalThis.createImageBitmap;
+  const canvas = documentoSimulado.window.HTMLCanvasElement.prototype;
+  const anteriorContexto = canvas.getContext,
+    anteriorBlob = canvas.toBlob;
+  globalThis.createImageBitmap = async () => ({ width: 800, height: 600, close() {} });
+  canvas.getContext = () => ({ fillRect() {}, drawImage() {} });
+  canvas.toBlob = (retorno) => retorno(new Blob(['jpeg de teste'], { type: 'image/jpeg' }));
+  const id = '9a984ac7-f78b-48da-ad3f-99e418501012';
+  const token = 'q'.repeat(43);
+  const requisicoes = [];
+  let cancelamentos = 0;
+  let conflitoAprovacao = true;
+  let falharAtualizacao = false;
+  let pedido,
+    publicou = 0,
+    fechou = 0;
+  await iniciarRascunhos('teste-modal-miniatura-completo');
+  const clique = async (texto) => {
+    const botao = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent.trim() === texto,
+    );
+    assert.ok(botao, texto);
+    assert.equal(botao.disabled, false, texto);
+    await act(async () => {
+      botao.click();
+      if (texto === 'Aprovar e publicar') botao.click();
+      await aguardar(50);
+      document.querySelector('.mini-studio-full-result img')?.dispatchEvent(new Event('load'));
+    });
+  };
+  const mudar = async (campo, valor) =>
+    act(async () => {
+      const prototipo =
+        campo.tagName === 'TEXTAREA'
+          ? documentoSimulado.window.HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototipo, 'value').set.call(campo, valor);
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  const selecionarFotos = async (quantidade) => {
+    const input = document.querySelector('.mini-studio input[type=file]');
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: Array.from(
+        { length: quantidade },
+        (_, n) => new File(['foto'], `foto-${n}.jpg`, { type: 'image/jpeg' }),
+      ),
+    });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await aguardar(60);
+    });
+  };
+  globalThis.fetch = async (url, opcoes = {}) => {
+    const caminho = String(url);
+    const corpo = typeof opcoes.body === 'string' ? JSON.parse(opcoes.body) : opcoes.body;
+    requisicoes.push({ caminho, metodo: opcoes.method, corpo });
+    if (caminho === '/api/admin/miniaturas' && opcoes.method === 'POST') {
+      pedido = {
+        id,
+        modo: corpo.modo,
+        observacoes: corpo.observacoes,
+        status: 'rascunho',
+        tentativas: 0,
+        referencias: [],
+        catalogo: { modelo: corpo.modelo, ano: corpo.ano, variante: corpo.variante, revisao: 3 },
+      };
+      return respostaJson({ id });
+    }
+    if (caminho.endsWith('/celular') && opcoes.method === 'DELETE') {
+      cancelamentos++;
+      assert.equal(caminho, `/api/admin/miniaturas/${id}/celular`);
+      if (cancelamentos === 1)
+        return new Response(JSON.stringify({ message: 'Falha simulada ao revogar link.' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      return respostaJson({ ok: true });
+    }
+    if (caminho.endsWith('/celular'))
+      return respostaJson({ token, expira: new Date(Date.now() + 1200000).toISOString() });
+    if (caminho.endsWith('/referencias') && opcoes.method === 'POST') {
+      assert.ok(corpo instanceof Blob);
+      pedido.referencias.push({
+        caminho: 'foto-' + pedido.referencias.length,
+        nome: 'Foto',
+        origem: 'admin',
+        imagem: 'data:image/png;base64,AA==',
+      });
+      return respostaJson({ ok: true });
+    }
+    if (caminho.includes('/referencias/') && opcoes.method === 'DELETE') {
+      pedido.referencias.splice(Number(caminho.split('/').pop()), 1);
+      return respostaJson({ ok: true });
+    }
+    if (caminho.endsWith('/fonte')) {
+      assert.equal(corpo.confirmouUso, true);
+      pedido.referencias.push({
+        caminho: 'fabricante',
+        nome: 'Foto oficial',
+        origem: 'web',
+        imagem: 'data:image/png;base64,AA==',
+      });
+      return respostaJson({ ok: true });
+    }
+    if (opcoes.method === 'PATCH') {
+      Object.assign(pedido, corpo);
+      return respostaJson({ ok: true });
+    }
+    if (caminho.endsWith('/gerar')) {
+      Object.assign(pedido, { observacoes: corpo.observacoes, modo: corpo.modo });
+      pedido.status = 'revisao';
+      pedido.tentativas++;
+      pedido.imagem = 'data:image/png;base64,AA==';
+      pedido.candidato = 'teste/original.png';
+      pedido.verificacao = {
+        automatica: pedido.tentativas === 1,
+        direcao: pedido.tentativas === 1 ? 'direita' : 'incerta',
+        inteira: pedido.tentativas === 1,
+        fundoTransparente: true,
+        problemas: [],
+      };
+      return respostaJson({ ok: true });
+    }
+    if (caminho.endsWith('/aprovar')) {
+      assert.equal(corpo.revisao, pedido.catalogo.revisao);
+      if (conflitoAprovacao) {
+        conflitoAprovacao = false;
+        pedido.catalogo.revisao++;
+        return Response.json(
+          { message: 'A imagem publicada mudou. Atualize a revisão.' },
+          { status: 409 },
+        );
+      }
+      falharAtualizacao = true;
+      pedido.status = 'aprovada';
+      return respostaJson({ ok: true });
+    }
+    if (caminho.endsWith('/descartar')) {
+      pedido.status = 'descartada';
+      return respostaJson({ ok: true });
+    }
+    if (falharAtualizacao) {
+      falharAtualizacao = false;
+      return Response.json({ message: 'Falha de rede ao atualizar' }, { status: 503 });
+    }
+    return respostaJson(pedido);
+  };
+  try {
+    await montarInterface(
+      criarElemento(Modal, {
+        currentModel: 'Honda XRE 300',
+        onClose() {
+          fechou++;
+        },
+        onChanged() {
+          publicou++;
+        },
+      }),
+    );
+    assert.ok(document.querySelector('dialog.mini-studio-dialog'));
+    assert.equal(document.querySelector('.mini-quick'), null);
+    assert.equal(document.querySelector('.mini-studio-advanced').open, false);
+    assert.equal(document.querySelector('.mini-studio-result'), null);
+    assert.match(
+      document.querySelector('.mini-studio-preview').textContent,
+      /A prévia aparece aqui/,
+    );
+    await mudar(document.querySelector('.mini-studio-years input'), '2023');
+    await mudar(document.querySelector('.mini-studio-years label:last-child input'), 'ABS');
+    await clique('Usar QR Code');
+    assert.match(document.querySelector('.mini-qr img').src, /^data:image\/png;base64,/);
+    assert.ok(!document.body.textContent.includes(token));
+    await clique('Cancelar link');
+    assert.ok(document.querySelector('.mini-qr img'), 'QR fica visivel se a revogacao falhar');
+    assert.match(document.querySelector('[role=alert]').textContent, /Falha simulada/);
+    await clique('Cancelar link');
+    assert.equal(document.querySelector('.mini-qr'), null);
+    assert.equal(cancelamentos, 2);
+    await clique('Usar QR Code');
+    await selecionarFotos(5);
+    assert.match(document.querySelector('[role=alert]').textContent, /quatro fotos/);
+    assert.equal(requisicoes.filter((r) => r.caminho.endsWith('/referencias')).length, 0);
+    await selecionarFotos(4);
+    assert.equal(pedido.referencias.length, 4);
+    assert.equal(document.querySelectorAll('.mini-references figure').length, 4);
+    await act(async () => {
+      document.querySelector('[aria-label="Remover foto 1"]').click();
+      await aguardar(40);
+    });
+    const detalhes = document.querySelector('.mini-source-import');
+    await act(async () => {
+      detalhes.open = true;
+    });
+    await mudar(detalhes.querySelector('input[type=url]'), 'https://www.honda.com.br/motos/modelo');
+    assert.equal(
+      [...detalhes.querySelectorAll('button')].find((b) =>
+        b.textContent.includes('Baixar e adicionar'),
+      ).disabled,
+      true,
+    );
+    await act(async () => detalhes.querySelector('input[type=checkbox]').click());
+    await clique('Baixar e adicionar referência');
+    assert.equal(pedido.referencias.length, 4);
+    await act(async () => document.querySelectorAll('.mini-studio-choice input')[1].click());
+    await mudar(
+      document.querySelector('.mini-studio-notes textarea'),
+      'Preservar adesivos e pintura.',
+    );
+    await clique('Gerar miniatura');
+    assert.equal(pedido.modo, 'preservar');
+    assert.equal(
+      requisicoes.filter((r) => r.metodo === 'PATCH').length,
+      0,
+      'dados e enfileiramento sao enviados juntos',
+    );
+    assert.equal(pedido.catalogo.ano, 2023);
+    assert.equal(pedido.catalogo.variante, 'ABS');
+    assert.equal(pedido.observacoes, 'Preservar adesivos e pintura.');
+    const resultado = document.querySelector('.mini-studio-result');
+    assert.ok(resultado);
+    assert.equal(document.querySelector('.mini-studio-grid').hidden, true);
+    await act(async () => document.querySelector('.mini-studio-steps button').click());
+    assert.equal(document.querySelector('.mini-studio-grid').hidden, false);
+    assert.equal(document.querySelector('.mini-studio-result'), null);
+    await act(async () => document.querySelectorAll('.mini-studio-steps button')[1].click());
+    assert.equal(document.querySelector('form').contains(resultado), false);
+    assert.match(document.querySelector('.mini-studio-attempts').textContent, /1 de 6/);
+    assert.equal(
+      [...resultado.querySelectorAll('button')].find((b) => b.textContent.includes('Aprovar'))
+        .disabled,
+      true,
+    );
+    await act(async () =>
+      resultado.querySelectorAll('.mini-confirm input').forEach((input) => input.click()),
+    );
+    await clique('Gerar novamente');
+    assert.equal(pedido.tentativas, 2);
+    assert.equal(document.querySelector('.mini-studio-result .mini-confirm input').checked, false);
+    await act(async () =>
+      document
+        .querySelectorAll('.mini-studio-result .mini-confirm input')
+        .forEach((input) => input.click()),
+    );
+    assert.equal(
+      document.querySelector('.mini-approve').disabled,
+      false,
+      'conferencia manual libera quando o verificador esta indisponivel',
+    );
+    await clique('Aprovar e publicar');
+    assert.equal(publicou, 0);
+    assert.match(document.querySelector('[role=alert]').textContent, /imagem publicada mudou/);
+    assert.equal(document.querySelector('.mini-approve').disabled, true);
+    await act(async () =>
+      document
+        .querySelectorAll('.mini-studio-result .mini-confirm input')
+        .forEach((input) => input.click()),
+    );
+    await clique('Aprovar e publicar');
+    assert.equal(publicou, 1);
+    assert.equal(
+      requisicoes.filter((r) => r.caminho.endsWith('/aprovar')).length,
+      2,
+      'dois cliques simultaneos nao duplicam a requisicao',
+    );
+    assert.equal(
+      document.querySelector('[role=alert]'),
+      null,
+      'falha de refresh nao desfaz publicacao concluida',
+    );
+    assert.match(document.body.textContent, /Miniatura publicada/);
+    await clique('Fechar');
+    assert.equal(fechou, 1);
+  } finally {
+    await desmontarInterface();
+    globalThis.fetch = anteriorFetch;
+    globalThis.createImageBitmap = anteriorBitmap;
+    canvas.getContext = anteriorContexto;
+    canvas.toBlob = anteriorBlob;
+  }
+});
+
+test('modal real de miniatura mostra erro da fila, permite descartar e conserva fechar', async () => {
+  const Modal = (await import('../src/components/ModalPreviaModelo.tsx')).default;
+  const anteriorFetch = globalThis.fetch;
+  const id = '0515268d-d8ef-4867-b9ad-9d990f2a76e1';
+  let descartou = false,
+    fechou = 0;
+  await iniciarRascunhos('teste-modal-miniatura-erro');
+  globalThis.fetch = async (url, opcoes = {}) => {
+    if (String(url).endsWith('/descartar')) {
+      descartou = true;
+      return respostaJson({ ok: true });
+    }
+    if (String(url).endsWith('/miniaturas') && opcoes.method === 'POST')
+      return respostaJson({ id });
+    if (String(url).endsWith('/celular'))
+      return respostaJson({
+        token: 't'.repeat(43),
+        expira: new Date(Date.now() + 1200000).toISOString(),
+      });
+    return respostaJson({
+      id,
+      status: descartou ? 'descartada' : 'falhou',
+      tentativas: 2,
+      erro: descartou ? null : 'Erro de configuracao: todas as contas recusaram as credenciais.',
+      modo: 'referencia',
+      observacoes: '',
+      referencias: [],
+      catalogo: { modelo: 'CG', ano: null, variante: '', revisao: 0 },
+    });
+  };
+  try {
+    await montarInterface(
+      criarElemento(Modal, {
+        currentModel: 'CG',
+        onClose() {
+          fechou++;
+        },
+        onChanged() {},
+      }),
+    );
+    await act(async () => {
+      [...document.querySelectorAll('button')]
+        .find((b) => b.textContent.includes('Usar QR Code'))
+        .click();
+      await aguardar(50);
+    });
+    assert.match(document.querySelector('[role=alert]').textContent, /Erro de configuracao/);
+    await act(async () => {
+      [...document.querySelectorAll('button')]
+        .find((b) => b.textContent.trim() === 'Cancelar solicitação e editar')
+        .click();
+      await aguardar(40);
+    });
+    assert.equal(descartou, true);
+    assert.match(document.body.textContent, /Solicitação cancelada/);
+    await act(async () => document.querySelector('[aria-label="Fechar estúdio"]').click());
+    assert.equal(fechou, 1);
+  } finally {
+    await desmontarInterface();
+    globalThis.fetch = anteriorFetch;
+  }
+});
+
+test('miniatura apresenta somente eventos do backend e comparador ajusta a imagem inteira', async () => {
+  const Progresso = (await import('../src/components/miniaturas/ProgressoMiniatura.tsx')).default;
+  const Comparador = (await import('../src/components/miniaturas/ComparadorMiniaturas.tsx'))
+    .default;
+  try {
+    await montarInterface(
+      criarElemento(Progresso, {
+        pedido: {
+          status: 'revisao',
+          tentativas: 2,
+          pesquisa: {
+            progresso: [
+              {
+                etapa: 'geracao',
+                descricao: 'Gerando e preparando a miniatura',
+                tentativa: 2,
+                iniciado_em: '2026-11-24T12:00:00Z',
+                concluido_em: '2026-11-24T12:00:05Z',
+                duracao_ms: 5000,
+                detalhes: 'Correção solicitada: preservar os adesivos.',
+              },
+            ],
+          },
+        },
+      }),
+    );
+    assert.match(document.body.textContent, /5.0 s/);
+    assert.match(document.body.textContent, /preservar os adesivos/);
+    await desmontarInterface();
+    await montarInterface(
+      criarElemento(Progresso, { pedido: { status: 'processando', tentativas: 1 } }),
+    );
+    assert.match(document.body.textContent, /Pedido em processamento/);
+    assert.equal(document.querySelectorAll('.mini-progress-log ol > li').length, 1);
+    await desmontarInterface();
+    await montarInterface(
+      criarElemento(Comparador, {
+        referencia: 'data:image/png;base64,AA==',
+        candidata: 'data:image/png;base64,AA==',
+      }),
+    );
+    const comparacao = document.querySelector('.mini-comparison');
+    assert.equal(comparacao.dataset.zoom, '100');
+    for (const img of comparacao.querySelectorAll('img')) {
+      assert.equal(img.style.objectFit, 'contain');
+      assert.equal(img.style.height, '100%');
+    }
+    const range = comparacao.querySelector('input');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(range, '200');
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    assert.equal(comparacao.dataset.zoom, '200');
+    assert.equal(comparacao.querySelector('img').style.width, '200%');
+  } finally {
+    await desmontarInterface();
+  }
+});
+
+test('miniatura cancela QR depois do HTTP 428 e da confirmacao administrativa real do transporte', async () => {
+  const { registrarConfirmacao } = await import('../src/services/confirmacaoAdministrativa.ts');
+  const { requisitarMiniaturas } = await import('../src/services/centralMiniaturas.ts');
+  const original = globalThis.fetch;
+  let confirmou = false,
+    chamadas = 0,
+    dialogos = 0;
+  const parar = registrarConfirmacao(async (contexto) => {
+    dialogos++;
+    assert.equal(contexto.titulo, 'Confirmar remoção');
+    confirmou = true;
+  });
+  globalThis.fetch = async (url, opcoes) => {
+    assert.ok(String(url).endsWith('/celular'));
+    assert.equal(opcoes.method, 'DELETE');
+    assert.equal(opcoes.credentials, 'include');
+    chamadas++;
+    return confirmou
+      ? respostaJson({ ok: true })
+      : new Response(
+          JSON.stringify({
+            code: 'REAUTH_REQUIRED',
+            operation: { titulo: 'Confirmar remoção', descricao: 'Confirme sua identidade.' },
+          }),
+          { status: 428, headers: { 'Content-Type': 'application/json' } },
+        );
+  };
+  try {
+    assert.deepEqual(
+      await requisitarMiniaturas(
+        '/api/admin/miniaturas/a491521e-04b6-490f-a8eb-70ebd39fb2fa/celular',
+        'DELETE',
+      ),
+      { ok: true },
+    );
+    assert.equal(chamadas, 2);
+    assert.equal(dialogos, 1);
+  } finally {
+    parar();
+    globalThis.fetch = original;
+  }
+});
+
+test('miniatura monta Log de um pedido antigo com fontes e horarios existentes', async () => {
+  const { montarLogMiniatura } = await import('../src/services/logMiniaturas.ts');
+  const itens = montarLogMiniatura({
+    id: 'antigo',
+    status: 'revisao',
+    tentativas: 2,
+    criado_em: '2026-11-24T12:00:00Z',
+    atualizado_em: '2026-11-24T12:02:00Z',
+    referencias: [{ origem: 'admin' }],
+    candidato: 'candidata.png',
+    pesquisa: {
+      feita_em: '2026-11-24T12:01:00Z',
+      fontes: [{ titulo: 'Honda XRE 300', url: 'https://www.honda.com.br/motos/xre-300' }],
+      avisos: [],
+    },
+  });
+  const fonte = itens.find((e) => e.etapa === 'fontes');
+  assert.equal(fonte.iniciado_em, '2026-11-24T12:01:00Z');
+  assert.equal(fonte.fontes[0].titulo, 'Honda XRE 300');
+  assert.ok(itens.some((e) => e.etapa === 'revisao'));
+  assert.ok(!JSON.stringify(itens).includes('próximas execuções'));
+});
+
+test('miniatura cancela QR pelo dialogo administrativo do painel apos HTTP 428', async () => {
+  const Modal = (await import('../src/components/ModalPreviaModelo.tsx')).default;
+  const Confirmacao = (await import('../src/components/ConfirmacaoAdministrativa.tsx')).default;
+  const anterior = globalThis.fetch;
+  const id = 'fc26cf58-050c-473b-81ae-8830ef4a080d';
+  let confirmou = false,
+    deletes = 0;
+  await iniciarRascunhos('miniatura-cancelar-qr-confirmacao');
+  globalThis.fetch = async (url, opcoes = {}) => {
+    const path = String(url);
+    if (path.endsWith('/api/admin/security/session'))
+      return respostaJson({
+        active: false,
+        mfaConfigured: false,
+        expiresAt: null,
+        maximumExpiresAt: null,
+        blockedUntil: null,
+      });
+    if (path.endsWith('/api/admin/security/confirm')) {
+      confirmou = true;
+      return respostaJson({ active: true, expiresAt: new Date(Date.now() + 900000).toISOString() });
+    }
+    if (path.endsWith('/celular') && opcoes.method === 'DELETE') {
+      deletes++;
+      return confirmou
+        ? respostaJson({ ok: true })
+        : new Response(
+            JSON.stringify({
+              code: 'REAUTH_REQUIRED',
+              operation: {
+                titulo: 'Confirmar remoção',
+                descricao: 'Confirme sua identidade para cancelar o link.',
+              },
+            }),
+            { status: 428, headers: { 'Content-Type': 'application/json' } },
+          );
+    }
+    if (path.endsWith('/celular'))
+      return respostaJson({
+        token: 'c'.repeat(43),
+        expira: new Date(Date.now() + 1200000).toISOString(),
+      });
+    if (path.endsWith('/miniaturas') && opcoes.method === 'POST') return respostaJson({ id });
+    return respostaJson({
+      id,
+      status: 'rascunho',
+      tentativas: 0,
+      referencias: [],
+      observacoes: '',
+      modo: 'referencia',
+      catalogo: { modelo: 'Honda XRE 300', ano: null, variante: '', revisao: 0 },
+    });
+  };
+  try {
+    await montarInterface(
+      criarElemento(
+        React.Fragment,
+        null,
+        criarElemento(Confirmacao, {
+          usuario: { nome: 'QA', email: 'qa@example.invalid', perfil: 'Administrador' },
+        }),
+        criarElemento(Modal, { currentModel: 'Honda XRE 300', onClose() {}, onChanged() {} }),
+      ),
+    );
+    const clicar = async (texto) =>
+      act(async () => {
+        [...document.querySelectorAll('button')]
+          .find((b) => b.textContent.trim() === texto)
+          .click();
+        await aguardar(70);
+      });
+    await clicar('Usar QR Code');
+    assert.ok(document.querySelector('.mini-qr'));
+    await clicar('Cancelar link');
+    assert.ok(document.querySelector('.mini-qr'), 'aguarda confirmacao sem fingir sucesso');
+    const dialogo = document.querySelector('dialog.admin-confirm-dialog');
+    assert.ok(dialogo.open);
+    const senha = dialogo.querySelector('input[type=password]');
+    assert.ok(senha);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
+        senha,
+        'SenhaSinteticaQA123!',
+      );
+      senha.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      dialogo
+        .querySelector('form')
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await aguardar(80);
+    });
+    assert.equal(confirmou, true);
+    assert.equal(deletes, 2);
+    assert.equal(document.querySelector('.mini-qr'), null);
+    assert.match(document.body.textContent, /Link cancelado/);
+  } finally {
+    await desmontarInterface();
+    globalThis.fetch = anterior;
+  }
+});
+
+for (const caso of ['direcao incorreta', 'em processamento', 'transparencia legada']) {
+  test(`revisao miniatura trata ${caso} sem bloquear por metadado antigo`, async () => {
+    const Revisao = (await import('../src/components/miniaturas/RevisaoMiniatura.tsx')).default;
+    const pedido = {
+      id: 'teste',
+      status: caso === 'em processamento' ? 'processando' : 'revisao',
+      catalogo: { modelo: 'Honda CG', revisao: 1 },
+      referencias: [],
+      imagem: 'data:image/png;base64,AA==',
+      verificacao: {
+        automatica: caso === 'direcao incorreta',
+        direcao: 'esquerda',
+        inteira: true,
+        fundoTransparente: false,
+        problemas: [],
+      },
+      tentativas: 1,
+    };
+    let aprovacoes = 0;
+    await montarInterface(
+      criarElemento(Revisao, {
+        pedido,
+        ocupado: false,
+        conferencias: { identidade: true, direcao: true, inteira: true, uso: true },
+        aoConferir() {},
+        indice: 0,
+        aoSelecionar() {},
+        correcao: '',
+        aoCorrigir() {},
+        aoEditar() {},
+        aoAprovar() {
+          aprovacoes++;
+        },
+        aoRestaurar() {},
+        imagemCarregada: true,
+        aoCarregarImagem() {},
+      }),
+    );
+    try {
+      const botao = document.querySelector('.mini-approve');
+      if (caso === 'em processamento') assert.equal(botao, null);
+      else if (caso === 'direcao incorreta') {
+        assert.equal(botao.disabled, true);
+        assert.match(document.querySelector('[role=status]').textContent, /nova geração/);
+      } else {
+        assert.equal(botao.disabled, false);
+        await act(async () => botao.click());
+        assert.equal(aprovacoes, 1);
+      }
+    } finally {
+      await desmontarInterface();
+    }
+  });
+}
+
+test('menu de miniaturas aparece somente com pendencias ou estudio aberto', async () => {
+  const Menu = (await import('../src/components/MenuAdmin.tsx')).default;
+  const { setAcessoConta } = await import('../src/services/acessoConta');
+  const { avisarAlteracaoDados } = await import('../src/services/atualizacaoDados');
+  const { registrarEdicaoMiniatura } = await import('../src/services/edicaoMiniatura');
+  const fetchAnterior = globalThis.fetch;
+  let quantidade = 0,
+    encerrar;
+  setAcessoConta({ administrador: true, cargo: 'Administrador', permissoes: {} });
+  globalThis.fetch = async () => respostaJson({ quantidade });
+  try {
+    await montarInterface(
+      criarElemento(RoteadorMemoria, null, criarElemento(Menu, { onLogout() {} })),
+    );
+    await act(async () => aguardar(50));
+    assert.equal(document.querySelector('a[href="/miniaturas"]'), null);
+    quantidade = 3;
+    await act(async () => {
+      avisarAlteracaoDados();
+      await aguardar(260);
+    });
+    assert.ok(document.querySelector('a[href="/miniaturas"]'));
+    assert.match(document.querySelector('a[href="/miniaturas"]').textContent, /3/);
+    quantidade = 0;
+    await act(async () => {
+      avisarAlteracaoDados();
+      await aguardar(260);
+    });
+    assert.equal(document.querySelector('a[href="/miniaturas"]'), null);
+    await act(async () => {
+      encerrar = registrarEdicaoMiniatura();
+      await aguardar(20);
+    });
+    assert.ok(document.querySelector('a[href="/miniaturas"]'));
+    await act(async () => {
+      encerrar();
+      await aguardar(20);
+    });
+    assert.equal(document.querySelector('a[href="/miniaturas"]'), null);
+  } finally {
+    encerrar?.();
+    await desmontarInterface();
+    globalThis.fetch = fetchAnterior;
+    setAcessoConta({ administrador: false, cargo: '', permissoes: {} });
+  }
+});
+test('menu de miniaturas respeita a permissao administrativa da API', async () => {
+  const Menu = (await import('../src/components/MenuAdmin.tsx')).default;
+  const { setAcessoConta } = await import('../src/services/acessoConta');
+  const anterior = globalThis.fetch;
+  let consultas = 0;
+  setAcessoConta({
+    administrador: false,
+    cargo: 'Mecanico',
+    permissoes: { motocicletas: { visualizar: true } },
+  });
+  globalThis.fetch = async () => {
+    consultas++;
+    return respostaJson({ quantidade: 2 });
+  };
+  try {
+    await montarInterface(
+      criarElemento(RoteadorMemoria, null, criarElemento(Menu, { onLogout() {} })),
+    );
+    await act(async () => aguardar(50));
+    assert.equal(document.querySelector('a[href="/miniaturas"]'), null);
+    assert.equal(consultas, 0);
+  } finally {
+    await desmontarInterface();
+    globalThis.fetch = anterior;
+    setAcessoConta({ administrador: false, cargo: '', permissoes: {} });
+  }
+});
+test('central de miniaturas usa lapis e estudio para abrir o modal oficial com o pedido correto', async () => {
+  const Pagina = (await import('../src/pages/Miniaturas.tsx')).default;
+  const anterior = globalThis.fetch;
+  await iniciarRascunhos('central-miniaturas-modal-oficial');
+  const pedido = {
+    id: '9a984ac7-f78b-48da-ad3f-99e418501012',
+    status: 'revisao',
+    modo: 'preservar',
+    observacoes: 'Manter adesivos originais',
+    tentativas: 2,
+    atualizado_em: new Date().toISOString(),
+    candidato: 'candidatas/teste/original.png',
+    imagem: 'data:image/png;base64,AA==',
+    referencias: [{ caminho: 'foto-1', imagem: 'data:image/png;base64,AA==', origem: 'admin' }],
+    catalogo: { modelo: 'Yamaha Fazer FZ25', ano: 2022, variante: 'ABS', moto_id: 42, revisao: 2 },
+    verificacao: { automatica: false, problemas: [] },
+  };
+  globalThis.fetch = async (url) =>
+    String(url) === '/api/admin/miniaturas'
+      ? respostaJson({
+          pedidos: [
+            pedido,
+            {
+              ...pedido,
+              id: 'concluido',
+              status: 'aprovada',
+              catalogo: { ...pedido.catalogo, modelo: 'Modelo ja publicado' },
+            },
+          ],
+          configuracao: { geracao: true, limite: 30, consumo: 2 },
+        })
+      : respostaJson(pedido);
+  try {
+    await montarInterface(criarElemento(Pagina));
+    await act(async () => aguardar(80));
+    assert.equal(document.querySelectorAll('.indicadores-grid .indicador-card').length, 4);
+    assert.equal(document.querySelector('.mini-quick'), null);
+    assert.ok(!document.querySelector('tbody').textContent.includes('Modelo ja publicado'));
+    await act(async () => {
+      document.querySelector('.mini-ready-edit').click();
+      await aguardar(60);
+    });
+    assert.ok(document.querySelector('.mini-studio-dialog'));
+    assert.equal(document.querySelector('.mini-studio-model input').value, 'Yamaha Fazer FZ25');
+    assert.equal(document.querySelector('.mini-studio-years input').value, '2022');
+    assert.equal(document.querySelector('.mini-studio-years label:last-child input').value, 'ABS');
+    assert.equal(
+      document.querySelector('.mini-studio-notes textarea').value,
+      'Manter adesivos originais',
+    );
+    assert.equal(document.querySelectorAll('.mini-references figure').length, 1);
+    await act(async () => document.querySelector('[aria-label="Fechar estúdio"]').click());
+    await act(async () => {
+      [...document.querySelectorAll('button')]
+        .find((b) => b.textContent.trim() === 'Estúdio de miniaturas')
+        .click();
+      await aguardar(30);
+    });
+    assert.ok(document.querySelector('.mini-studio-dialog'));
+    assert.equal(document.querySelector('.mini-studio-model input').value, '');
+    assert.equal(document.querySelector('.mini-quick'), null);
+  } finally {
+    await desmontarInterface();
+    globalThis.fetch = anterior;
+  }
+});
+
+test('personalizacao por mascara altera somente pintura e conserva fundo, motor e pneus', async () => {
+  const { aplicarMascaraPintura } = await import('../src/services/miniaturasMotocicletas');
+  const original = new Uint8ClampedArray([
+    190, 190, 190, 255, 150, 150, 150, 255, 20, 20, 20, 255, 0, 0, 0, 0,
+  ]);
+  const mascara = new Uint8ClampedArray([
+    255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255,
+  ]);
+  for (const cor of ['Vermelha', 'Rosa', 'Amarela', 'Azul', 'Verde', 'Branca', 'Preta', 'Prata']) {
+    const pixels = new Uint8ClampedArray(original);
+    aplicarMascaraPintura(pixels, mascara, cor);
+    assert.notDeepEqual(Array.from(pixels.slice(0, 3)), [190, 190, 190], cor);
+    assert.equal(pixels[3], 255, cor);
+    assert.deepEqual(Array.from(pixels.slice(4)), Array.from(original.slice(4)), cor);
+  }
+  const semMascara = new Uint8ClampedArray(original);
+  aplicarMascaraPintura(semMascara, new Uint8ClampedArray(original.length), 'Vermelha');
+  assert.deepEqual(semMascara, original);
+});
+
+test('mascara de luz pinta igual na base neutra completa e na base vazada antiga', async () => {
+  const { aplicarMascaraPintura } = await import('../src/services/miniaturasMotocicletas');
+  // Pixel 0: painel pintavel (mascara azul zero, luz 150). Pixel 1: peca fixa.
+  const mascara = new Uint8ClampedArray([150, 150, 0, 255, 0, 0, 0, 0]);
+  const completa = new Uint8ClampedArray([150, 150, 150, 255, 30, 30, 30, 255]);
+  const vazada = new Uint8ClampedArray([0, 0, 0, 0, 30, 30, 30, 255]);
+  aplicarMascaraPintura(completa, mascara, 'Vermelha');
+  aplicarMascaraPintura(vazada, mascara, 'Vermelha');
+  assert.deepEqual(Array.from(completa), Array.from(vazada));
+  assert.equal(completa[3], 255);
+  assert.ok(completa[0] > completa[1], 'tinta vermelha aplicada');
+  assert.deepEqual(Array.from(completa.slice(4)), [30, 30, 30, 255]);
+  const neutra = new Uint8ClampedArray([150, 150, 150, 255, 30, 30, 30, 255]);
+  aplicarMascaraPintura(neutra, mascara, null);
+  assert.deepEqual(Array.from(neutra), [150, 150, 150, 255, 30, 30, 30, 255]);
+});
+
+test('miniatura publicada usa a mascara assinada para aplicar a cor da moto', async () => {
+  const { useMiniaturaModeloMotocicleta } = await import('../src/services/miniaturasMotocicletas');
+  const anteriorFetch = globalThis.fetch,
+    anteriorBitmap = globalThis.createImageBitmap;
+  const canvas = documentoSimulado.window.HTMLCanvasElement.prototype;
+  const anteriorContexto = canvas.getContext,
+    anteriorBlob = canvas.toBlob;
+  const criarUrl = URL.createObjectURL,
+    revogarUrl = URL.revokeObjectURL;
+  let pixelsFinais,
+    baixouMascara = false;
+  canvas.getContext = function () {
+    let tipo;
+    return {
+      drawImage(bitmap) {
+        tipo = bitmap.tipo;
+      },
+      getImageData() {
+        return {
+          data: new Uint8ClampedArray(
+            tipo === 'mascara'
+              ? [255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0]
+              : [190, 190, 190, 255, 150, 150, 150, 255, 0, 0, 0, 0],
+          ),
+        };
+      },
+      putImageData(imagem) {
+        pixelsFinais = Array.from(imagem.data);
+      },
+    };
+  };
+  canvas.toBlob = (retorno) => retorno(new Blob(['pintada'], { type: 'image/webp' }));
+  globalThis.createImageBitmap = async (blob) => ({
+    width: 3,
+    height: 1,
+    tipo: await blob.text(),
+    close() {},
+  });
+  URL.createObjectURL = () => 'blob:miniatura-pintada';
+  URL.revokeObjectURL = () => {};
+  globalThis.fetch = async (url) => {
+    if (String(url).startsWith('/api/miniaturas/publicada'))
+      return respostaJson({ imagem: 'https://exemplo/base', mascara: 'https://exemplo/mascara' });
+    if (String(url).endsWith('/mascara')) {
+      baixouMascara = true;
+      return new Response('mascara');
+    }
+    return new Response('base');
+  };
+  function Previa() {
+    const url = useMiniaturaModeloMotocicleta('Honda CG 160', 'Vermelha');
+    return criarElemento('img', { src: url || undefined, alt: 'Miniatura colorida' });
+  }
+  try {
+    await montarInterface(criarElemento(Previa));
+    await act(async () => aguardar(50));
+    assert.equal(baixouMascara, true);
+    assert.match(document.querySelector('img').src, /miniatura-pintada/);
+    assert.ok(pixelsFinais[0] > pixelsFinais[1] * 3);
+    assert.deepEqual(pixelsFinais.slice(4), [150, 150, 150, 255, 0, 0, 0, 0]);
+  } finally {
+    await desmontarInterface();
+    globalThis.fetch = anteriorFetch;
+    globalThis.createImageBitmap = anteriorBitmap;
+    canvas.getContext = anteriorContexto;
+    canvas.toBlob = anteriorBlob;
+    URL.createObjectURL = criarUrl;
+    URL.revokeObjectURL = revogarUrl;
   }
 });

@@ -1,7 +1,7 @@
 import { createApp } from './app.js';
 import { createSupabaseAdmin, PORT, SUPABASE_SECRET_KEY } from './config/conexao.js';
 import { iniciarCentralMiniaturas } from './miniaturas/fila.js';
-import { imagemModeloConfigurada } from './previaModelo.js';
+import { geracaoConfigurada } from './miniaturas/provedor.js';
 import { iniciarEventosCatalogo } from './catalogoEventos.js';
 
 const app = createApp();
@@ -17,7 +17,7 @@ app.listen(PORT, () => {
     const banco = createSupabaseAdmin();
     if (banco) iniciarEventosCatalogo(banco);
   }
-  if (!imagemModeloConfigurada())
+  if (!geracaoConfigurada() && process.env.MINIATURAS_PAUSAR_GERACAO !== 'true')
     console.warn(
       '[motorcycle-image] Configure o provedor de IA em server/.env; a fila aguardará as credenciais.',
     );

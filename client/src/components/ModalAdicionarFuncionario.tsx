@@ -1,5 +1,9 @@
+import { useFocoModal } from '../hooks/useFocoModal';
+import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
+import { limparRascunho } from '../services/rascunhos';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import ModalSucessoUsuario, { compartilharAcesso } from './ModalSucessoUsuario';
 import CampoCep from './CampoCep';
 import SeletorFiltro, { type FiltroOpcao } from './SeletorFiltro';
 import { Icone } from './MenuAdmin';
@@ -171,24 +175,40 @@ export default function ModalAdicionarFuncionario({
   initialValues?: Partial<Formulario>;
 }) {
   const acesso = useAcessoConta();
-  const [aba, setAba] = useState<Aba>('pessoais');
-  const [formulario, setFormulario] = useState<Formulario>(() => ({
-    ...vazio(),
-    ...initialValues,
-    cargo: initialRole,
-  }));
-  const [dataNascimentoTexto, setDataNascimentoTexto] = useState(() =>
-    paraTextoBR(initialValues?.data_nascimento ?? ''),
+
+  const escopo = `funcionario-novo-detalhes-${initialRole}`;
+  const [aba, setAba] = useEstadoRascunho<Aba>(escopo, 'etapa', 'pessoais');
+  const [senha, setSenha] = useState(initialValues?.senha ?? '');
+  const [confirmarSenha, setConfirmarSenha] = useState(initialValues?.confirmarSenha ?? '');
+  const [dadosRascunho, setDadosRascunho] = useEstadoRascunho<
+    Omit<Formulario, 'senha' | 'confirmarSenha'>
+  >(escopo, 'dados', () => {
+    const {
+      senha: _senha,
+      confirmarSenha: _confirmacao,
+      ...dados
+    } = { ...vazio(), ...initialValues };
+    return { ...dados, cargo: initialRole };
+  });
+  const formulario = { ...dadosRascunho, senha, confirmarSenha };
+  const [dataNascimentoTexto, setDataNascimentoTexto] = useEstadoRascunho(
+    escopo,
+    'nascimento',
+    () => paraTextoBR(dadosRascunho.data_nascimento),
   );
-  const [dataAdmissaoTexto, setDataAdmissaoTexto] = useState(() =>
-    paraTextoBR(initialValues?.data_admissao ?? dataHoje()),
+  const [dataAdmissaoTexto, setDataAdmissaoTexto] = useEstadoRascunho(escopo, 'admissao', () =>
+    paraTextoBR(dadosRascunho.data_admissao),
   );
-  const [foto, setFoto] = useState<string | null>(null);
+  const [foto, setFoto] = useEstadoRascunho<string | null>(escopo, 'foto', null);
   const [senhaVisivel, setSenhaVisivel] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState('');
-  const [criado, setCriado] = useState(false);
-  const [imediato, setImediato] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<{
+    funcionario: NovoFuncionario;
+    senha: string;
+    pendente: boolean;
+  }>();
+  const referenciaFoco = useFocoModal<HTMLFormElement>(!confirmacao);
 
   useEffect(() => {
     const anterior = document.body.style.overflow;
@@ -202,8 +222,12 @@ export default function ModalAdicionarFuncionario({
       document.removeEventListener('keydown', escapar);
     };
   }, [ocupado, onClose]);
-  const definir = <K extends keyof Formulario>(chave: K, valor: Formulario[K]) =>
-    setFormulario((atual) => ({ ...atual, [chave]: valor }));
+  // Credenciais ficam apenas em memoria durante o cadastro.
+  const definir = <K extends keyof Formulario>(chave: K, valor: Formulario[K]) => {
+    if (chave === 'senha') setSenha(String(valor));
+    else if (chave === 'confirmarSenha') setConfirmarSenha(String(valor));
+    else setDadosRascunho((atual) => ({ ...atual, [chave]: valor }));
+  };
   const usuarioPrivilegiado = acesso.nivel === 'superadministrador' || acesso.nivel === 'dono';
 
   async function carregarFoto(arquivo?: File) {
@@ -329,8 +353,11 @@ export default function ModalAdicionarFuncionario({
         senha: formulario.senha,
         confirmarSenha: formulario.confirmarSenha,
       });
-      setImediato(resultado.approvalPending === false);
-      setCriado(true);
+      limparRascunho(escopo);
+      setSenha('');
+      setConfirmarSenha('');
+      const pendente = resultado.approvalPending === true;
+      setConfirmacao({ funcionario: dados, senha: pendente ? '' : senha, pendente });
       onSubmitted({
         id: resultado.id,
         approvalPending: resultado.approvalPending === true,
@@ -341,6 +368,21 @@ export default function ModalAdicionarFuncionario({
     } finally {
       setOcupado(false);
     }
+  }
+
+  if (confirmacao) {
+    const { funcionario, senha: senhaCriada, pendente } = confirmacao;
+    return (
+      <ModalSucessoUsuario
+        nome={funcionario.nome}
+        cargo={funcionario.cargo}
+        email={funcionario.email}
+        aprovacaoPendente={pendente}
+        erro={erro}
+        aoCompartilhar={() => setErro(compartilharAcesso(funcionario, senhaCriada))}
+        aoFechar={onClose}
+      />
+    );
   }
 
   const fotoInput = (
@@ -370,6 +412,8 @@ export default function ModalAdicionarFuncionario({
       <form
         className="af-dialog"
         role="dialog"
+        ref={referenciaFoco}
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="af-title"
         onSubmit={mudarAbaSeguinte}
@@ -377,9 +421,7 @@ export default function ModalAdicionarFuncionario({
         <header className="af-header">
           <div>
             <h2 id="af-title">Adicionar Funcionário</h2>
-            <p>
-              {criado ? 'Solicitação enviada' : abas.find((item) => item.id === aba)?.description}
-            </p>
+            <p>{abas.find((item) => item.id === aba)?.description}</p>
           </div>
           <button
             type="button"
@@ -391,402 +433,357 @@ export default function ModalAdicionarFuncionario({
             <Icone name="close" size={19} />
           </button>
         </header>
-        {!criado ? (
-          <>
-            <nav className="af-tabs" aria-label="Etapas do cadastro">
-              {abas.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  role="tab"
-                  aria-selected={aba === item.id}
-                  className={`af-tab${aba === item.id ? ' active' : ''}`}
-                  onClick={() => {
-                    setAba(item.id);
-                    setErro('');
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-            <div className="af-body">
-              {aba === 'pessoais' && (
-                <section className="af-section">
-                  <div className="af-personal-layout">
-                    {fotoInput}
-                    <div className="af-personal-data">
-                      <div className="af-fields af-personal-fields">
-                        <Campo label="Nome completo" required>
-                          <input
-                            autoFocus
-                            autoComplete="name"
-                            value={formulario.nome}
-                            maxLength={100}
-                            placeholder="Nome e sobrenome"
-                            onChange={(e) => definir('nome', e.target.value)}
-                          />
-                        </Campo>
-                        <Campo label="CPF" required>
-                          <input
-                            inputMode="numeric"
-                            value={formulario.cpf}
-                            placeholder="000.000.000-00"
-                            onChange={(e) => definir('cpf', mascaraCpf(e.target.value))}
-                          />
-                        </Campo>
-                        <Campo label="Data de nascimento" required icon="calendar">
-                          <input
-                            inputMode="numeric"
-                            value={dataNascimentoTexto}
-                            placeholder="dd/mm/aaaa"
-                            onChange={(e) => {
-                              const texto = mascaraDataBR(e.target.value);
-                              setDataNascimentoTexto(texto);
-                              definir('data_nascimento', paraDataBanco(texto));
-                            }}
-                          />
-                        </Campo>
-                        <Campo label="Telefone / WhatsApp" required icon="phone">
-                          <input
-                            inputMode="tel"
-                            autoComplete="tel"
-                            value={formulario.telefone}
-                            placeholder="(11) 99999-9999"
-                            onChange={(e) => definir('telefone', mascaraTelefone(e.target.value))}
-                          />
-                        </Campo>
-                      </div>
-                      <div className="af-fields af-personal-address">
-                        <Campo label="CEP" required>
-                          <CampoCep
-                            value={formulario.cep}
-                            onChange={(valor) => definir('cep', valor)}
-                            onEndereco={(dados) =>
-                              definir(
-                                'endereco',
-                                [
-                                  dados.rua,
-                                  dados.bairro,
-                                  dados.cidade && `${dados.cidade} - ${dados.estado}`,
-                                ]
-                                  .filter(Boolean)
-                                  .join(', '),
-                              )
-                            }
-                          />
-                        </Campo>
-                        <Campo label="Endereço" required>
-                          <span className="af-input-shell">
-                            <Icone name="pin" size={16} />
-                            <input
-                              maxLength={300}
-                              value={formulario.endereco}
-                              placeholder="Rua, bairro e cidade"
-                              onChange={(e) => definir('endereco', e.target.value)}
-                            />
-                          </span>
-                        </Campo>
-                        <Campo label="Número">
-                          <input
-                            maxLength={20}
-                            value={formulario.numero_endereco}
-                            placeholder="Ex.: 120 ou s/n"
-                            onChange={(e) => definir('numero_endereco', e.target.value)}
-                          />
-                        </Campo>
-                        <Campo label="Complemento">
-                          <input
-                            maxLength={100}
-                            value={formulario.complemento}
-                            placeholder="Apto, bloco, sala..."
-                            onChange={(e) => definir('complemento', e.target.value)}
-                          />
-                        </Campo>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-              {aba === 'profissionais' && (
-                <section className="af-section">
-                  <div className="af-fields af-professional-fields">
-                    <Campo label="Cargo" required>
-                      <SeletorFiltro
-                        label="Cargo"
-                        value={formulario.cargo}
-                        options={cargos}
-                        onChange={(valor) => definir('cargo', valor)}
-                        variant="staff"
-                      />
-                    </Campo>
-                    <Campo label="Tipo de contratação" required>
-                      <SeletorFiltro
-                        label="Tipo de contratação"
-                        value={formulario.tipo_contrato}
-                        options={contratos}
-                        onChange={(valor) => definir('tipo_contrato', valor)}
-                        variant="staff"
-                      />
-                    </Campo>
-                    {formulario.tipo_contrato === 'Temporário' && (
-                      <Campo label="Duração do contrato (meses)" required>
-                        <input
-                          type="number"
-                          min="1"
-                          max="120"
-                          value={formulario.duracao_contrato_meses ?? ''}
-                          placeholder="Ex.: 6"
-                          onChange={(e) =>
-                            definir(
-                              'duracao_contrato_meses',
-                              e.target.value ? Number(e.target.value) : null,
-                            )
-                          }
-                        />
-                      </Campo>
-                    )}
-                    <Campo label="Especialidade">
+        <nav className="af-tabs" aria-label="Etapas do cadastro">
+          {abas.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              aria-current={aba === item.id ? 'step' : undefined}
+              className={`af-tab${aba === item.id ? ' active' : ''}`}
+              onClick={() => {
+                setAba(item.id);
+                setErro('');
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="af-body">
+          {aba === 'pessoais' && (
+            <section className="af-section">
+              <div className="af-personal-layout">
+                {fotoInput}
+                <div className="af-personal-data">
+                  <div className="af-fields af-personal-fields">
+                    <Campo label="Nome completo" required>
                       <input
-                        maxLength={150}
-                        value={formulario.especialidade}
-                        placeholder="Escreva a especialidade"
-                        onChange={(e) => definir('especialidade', e.target.value)}
+                        autoFocus
+                        autoComplete="name"
+                        value={formulario.nome}
+                        maxLength={100}
+                        placeholder="Nome e sobrenome"
+                        onChange={(e) => definir('nome', e.target.value)}
                       />
                     </Campo>
-                    <Campo label="Observações profissionais">
-                      <textarea
-                        rows={2}
-                        maxLength={2000}
-                        value={formulario.observacoes_profissionais}
-                        placeholder="Experiência, certificações..."
-                        onChange={(e) => definir('observacoes_profissionais', e.target.value)}
-                      />
-                    </Campo>
-                    <Campo label="Setor" required>
-                      <SeletorFiltro
-                        label="Setor"
-                        value={formulario.departamento}
-                        options={setores}
-                        onChange={(valor) => definir('departamento', valor)}
-                        variant="staff"
-                      />
-                    </Campo>
-                    <Campo label="Data de admissão" required icon="calendar">
+                    <Campo label="CPF" required>
                       <input
                         inputMode="numeric"
-                        value={dataAdmissaoTexto}
+                        value={formulario.cpf}
+                        placeholder="000.000.000-00"
+                        onChange={(e) => definir('cpf', mascaraCpf(e.target.value))}
+                      />
+                    </Campo>
+                    <Campo label="Data de nascimento" required icon="calendar">
+                      <input
+                        inputMode="numeric"
+                        value={dataNascimentoTexto}
                         placeholder="dd/mm/aaaa"
                         onChange={(e) => {
                           const texto = mascaraDataBR(e.target.value);
-                          setDataAdmissaoTexto(texto);
-                          definir('data_admissao', paraDataBanco(texto));
+                          setDataNascimentoTexto(texto);
+                          definir('data_nascimento', paraDataBanco(texto));
                         }}
                       />
                     </Campo>
-                  </div>
-                </section>
-              )}
-              {aba === 'contato' && (
-                <section className="af-section">
-                  <div className="af-fields af-contact-fields">
-                    <Campo label="Telefone secundário" icon="phone">
+                    <Campo label="Telefone / WhatsApp" required icon="phone">
                       <input
                         inputMode="tel"
-                        value={formulario.telefone_secundario}
-                        placeholder="(19) 98888-8888"
-                        onChange={(e) =>
-                          definir('telefone_secundario', mascaraTelefone(e.target.value))
+                        autoComplete="tel"
+                        value={formulario.telefone}
+                        placeholder="(11) 99999-9999"
+                        onChange={(e) => definir('telefone', mascaraTelefone(e.target.value))}
+                      />
+                    </Campo>
+                  </div>
+                  <div className="af-fields af-personal-address">
+                    <Campo label="CEP" required>
+                      <CampoCep
+                        value={formulario.cep}
+                        onChange={(valor) => definir('cep', valor)}
+                        onEndereco={(dados) =>
+                          definir(
+                            'endereco',
+                            [
+                              dados.rua,
+                              dados.bairro,
+                              dados.cidade && `${dados.cidade} - ${dados.estado}`,
+                            ]
+                              .filter(Boolean)
+                              .join(', '),
+                          )
                         }
                       />
                     </Campo>
-                    <Campo label="Contato de emergência" required icon="user">
-                      <input
-                        maxLength={100}
-                        value={formulario.contato_emergencia}
-                        placeholder="Nome completo"
-                        onChange={(e) => definir('contato_emergencia', e.target.value)}
-                      />
-                    </Campo>
-                    <Campo label="Parentesco" required>
-                      <input
-                        maxLength={60}
-                        value={formulario.parentesco_emergencia}
-                        placeholder="Ex.: Cônjuge"
-                        onChange={(e) => definir('parentesco_emergencia', e.target.value)}
-                      />
-                    </Campo>
-                    <Campo label="Telefone de emergência" required icon="phone">
-                      <input
-                        inputMode="tel"
-                        value={formulario.telefone_emergencia}
-                        placeholder="(19) 97777-7777"
-                        onChange={(e) =>
-                          definir('telefone_emergencia', mascaraTelefone(e.target.value))
-                        }
-                      />
-                    </Campo>
-                  </div>
-                </section>
-              )}
-              {aba === 'acesso' && (
-                <section className="af-section af-access-section">
-                  <div className="af-section-heading">
-                    <div>
-                      <h3>Acesso ao sistema</h3>
-                      <p>Defina o e-mail e a senha que o funcionário usará para entrar.</p>
-                    </div>
-                  </div>
-                  <div className="af-fields af-access-fields">
-                    <Campo label="E-mail de acesso" required className="span-two" icon="mail">
-                      <input
-                        type="email"
-                        autoComplete="email"
-                        maxLength={150}
-                        value={formulario.email}
-                        placeholder="nome@exemplo.com"
-                        onChange={(e) => definir('email', e.target.value)}
-                      />
-                    </Campo>
-                    <Campo label="Senha" required>
-                      <input
-                        type={senhaVisivel ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        maxLength={128}
-                        value={formulario.senha}
-                        placeholder="Crie uma senha"
-                        onChange={(e) => definir('senha', e.target.value)}
-                      />
-                    </Campo>
-                    <Campo label="Confirmar senha" required>
-                      <span className="af-password-input">
+                    <Campo label="Endereço" required>
+                      <span className="af-input-shell">
+                        <Icone name="pin" size={16} />
                         <input
-                          type={senhaVisivel ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          maxLength={128}
-                          value={formulario.confirmarSenha}
-                          placeholder="Repita a senha"
-                          onChange={(e) => definir('confirmarSenha', e.target.value)}
+                          maxLength={300}
+                          value={formulario.endereco}
+                          placeholder="Rua, bairro e cidade"
+                          onChange={(e) => definir('endereco', e.target.value)}
                         />
-                        <button
-                          type="button"
-                          aria-label={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
-                          onClick={() => setSenhaVisivel((anterior) => !anterior)}
-                        >
-                          <Icone name="eye" size={16} />
-                        </button>
                       </span>
                     </Campo>
+                    <Campo label="Número">
+                      <input
+                        maxLength={20}
+                        value={formulario.numero_endereco}
+                        placeholder="Ex.: 120 ou s/n"
+                        onChange={(e) => definir('numero_endereco', e.target.value)}
+                      />
+                    </Campo>
+                    <Campo label="Complemento">
+                      <input
+                        maxLength={100}
+                        value={formulario.complemento}
+                        placeholder="Apto, bloco, sala..."
+                        onChange={(e) => definir('complemento', e.target.value)}
+                      />
+                    </Campo>
                   </div>
-                  <div className="af-checklist">
-                    {[
-                      '8 ou mais caracteres',
-                      'Maiúscula e minúscula',
-                      'Um número',
-                      'Um símbolo',
-                    ].map((texto, indice) => {
-                      const valido = [
-                        formulario.senha.length >= 8,
-                        /[A-Z]/.test(formulario.senha) && /[a-z]/.test(formulario.senha),
-                        /\d/.test(formulario.senha),
-                        /[^\w\s]/.test(formulario.senha),
-                      ][indice];
-                      return (
-                        <span className={valido ? 'valid' : ''} key={texto}>
-                          <Icone name="check" size={13} />
-                          {texto}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <div className="af-access-notice">
-                    <Icone name={usuarioPrivilegiado ? 'check' : 'shield'} size={16} />
-                    <span>
-                      {usuarioPrivilegiado
-                        ? 'Seu perfil permite cadastrar o funcionário imediatamente.'
-                        : 'A solicitação ficará pendente até a aprovação da dona.'}
-                    </span>
-                  </div>
-                </section>
-              )}
-            </div>
-            <footer className="af-footer">
-              <span className="af-required-note">* Campos obrigatórios</span>
-              {erro && (
-                <p className="af-error" role="alert">
-                  {erro}
-                </p>
-              )}
-              {aba === 'pessoais' ? (
-                <button type="button" className="af-secondary" disabled={ocupado} onClick={onClose}>
-                  Cancelar
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="af-secondary"
-                  disabled={ocupado}
-                  onClick={() => {
-                    const anterior = abas[abas.findIndex((item) => item.id === aba) - 1];
-                    if (anterior) {
-                      setAba(anterior.id);
-                      setErro('');
-                    }
-                  }}
-                >
-                  Voltar
-                </button>
-              )}
-              <button type="submit" className="af-primary" disabled={ocupado}>
-                {ocupado
-                  ? 'Enviando…'
-                  : aba === 'acesso'
-                    ? usuarioPrivilegiado
-                      ? 'Criar funcionário'
-                      : 'Enviar para aprovação'
-                    : 'Continuar'}
-                {!ocupado && <Icone name={aba === 'acesso' ? 'check' : 'right'} size={15} />}
-              </button>
-            </footer>
-          </>
-        ) : (
-          <div className="af-success">
-            <span className="af-success-icon">
-              <Icone name={imediato ? 'check' : 'clock'} size={25} />
-            </span>
-            <span className="af-kicker">
-              {imediato ? 'CADASTRO CONCLUÍDO' : 'AGUARDANDO APROVAÇÃO'}
-            </span>
-            <h3>
-              {imediato
-                ? `${formulario.nome.trim()} já está cadastrado.`
-                : `Solicitação de ${formulario.nome.trim()} enviada.`}
-            </h3>
-            <p>
-              {imediato
-                ? 'O acesso já pode ser usado com o e-mail e a senha definidos.'
-                : 'A dona da oficina precisa aprovar o cadastro. Depois da aprovação, o login será criado com a senha informada.'}
-            </p>
-            <div className="af-success-person">
-              {foto ? (
-                <img src={foto} alt="" />
-              ) : (
-                <span>{formulario.nome.trim().charAt(0).toUpperCase()}</span>
-              )}
-              <div>
-                <b>{formulario.nome.trim()}</b>
-                <small>
-                  {formulario.cargo} · {formulario.email}
-                </small>
+                </div>
               </div>
-            </div>
-            <footer className="af-footer af-success-footer">
-              <button type="button" className="af-primary" onClick={onClose}>
-                Concluir
-              </button>
-            </footer>
-          </div>
-        )}
+            </section>
+          )}
+          {aba === 'profissionais' && (
+            <section className="af-section">
+              <div className="af-fields af-professional-fields">
+                <Campo label="Cargo" required>
+                  <SeletorFiltro
+                    label="Cargo"
+                    value={formulario.cargo}
+                    options={cargos}
+                    onChange={(valor) => definir('cargo', valor)}
+                    variant="staff"
+                  />
+                </Campo>
+                <Campo label="Tipo de contratação" required>
+                  <SeletorFiltro
+                    label="Tipo de contratação"
+                    value={formulario.tipo_contrato}
+                    options={contratos}
+                    onChange={(valor) => definir('tipo_contrato', valor)}
+                    variant="staff"
+                  />
+                </Campo>
+                {formulario.tipo_contrato === 'Temporário' && (
+                  <Campo label="Duração do contrato (meses)" required>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={formulario.duracao_contrato_meses ?? ''}
+                      placeholder="Ex.: 6"
+                      onChange={(e) =>
+                        definir(
+                          'duracao_contrato_meses',
+                          e.target.value ? Number(e.target.value) : null,
+                        )
+                      }
+                    />
+                  </Campo>
+                )}
+                <Campo label="Especialidade">
+                  <input
+                    maxLength={150}
+                    value={formulario.especialidade}
+                    placeholder="Escreva a especialidade"
+                    onChange={(e) => definir('especialidade', e.target.value)}
+                  />
+                </Campo>
+                <Campo label="Observações profissionais">
+                  <textarea
+                    rows={2}
+                    maxLength={2000}
+                    value={formulario.observacoes_profissionais}
+                    placeholder="Experiência, certificações..."
+                    onChange={(e) => definir('observacoes_profissionais', e.target.value)}
+                  />
+                </Campo>
+                <Campo label="Setor" required>
+                  <SeletorFiltro
+                    label="Setor"
+                    value={formulario.departamento}
+                    options={setores}
+                    onChange={(valor) => definir('departamento', valor)}
+                    variant="staff"
+                  />
+                </Campo>
+                <Campo label="Data de admissão" required icon="calendar">
+                  <input
+                    inputMode="numeric"
+                    value={dataAdmissaoTexto}
+                    placeholder="dd/mm/aaaa"
+                    onChange={(e) => {
+                      const texto = mascaraDataBR(e.target.value);
+                      setDataAdmissaoTexto(texto);
+                      definir('data_admissao', paraDataBanco(texto));
+                    }}
+                  />
+                </Campo>
+              </div>
+            </section>
+          )}
+          {aba === 'contato' && (
+            <section className="af-section">
+              <div className="af-fields af-contact-fields">
+                <Campo label="Telefone secundário" icon="phone">
+                  <input
+                    inputMode="tel"
+                    value={formulario.telefone_secundario}
+                    placeholder="(19) 98888-8888"
+                    onChange={(e) =>
+                      definir('telefone_secundario', mascaraTelefone(e.target.value))
+                    }
+                  />
+                </Campo>
+                <Campo label="Contato de emergência" required icon="user">
+                  <input
+                    maxLength={100}
+                    value={formulario.contato_emergencia}
+                    placeholder="Nome completo"
+                    onChange={(e) => definir('contato_emergencia', e.target.value)}
+                  />
+                </Campo>
+                <Campo label="Parentesco" required>
+                  <input
+                    maxLength={60}
+                    value={formulario.parentesco_emergencia}
+                    placeholder="Ex.: Cônjuge"
+                    onChange={(e) => definir('parentesco_emergencia', e.target.value)}
+                  />
+                </Campo>
+                <Campo label="Telefone de emergência" required icon="phone">
+                  <input
+                    inputMode="tel"
+                    value={formulario.telefone_emergencia}
+                    placeholder="(19) 97777-7777"
+                    onChange={(e) =>
+                      definir('telefone_emergencia', mascaraTelefone(e.target.value))
+                    }
+                  />
+                </Campo>
+              </div>
+            </section>
+          )}
+          {aba === 'acesso' && (
+            <section className="af-section af-access-section">
+              <div className="af-section-heading">
+                <div>
+                  <h3>Acesso ao sistema</h3>
+                  <p>Defina o e-mail e a senha que o funcionário usará para entrar.</p>
+                </div>
+              </div>
+              <div className="af-fields af-access-fields">
+                <Campo label="E-mail de acesso" required className="span-two" icon="mail">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    maxLength={150}
+                    value={formulario.email}
+                    placeholder="nome@exemplo.com"
+                    onChange={(e) => definir('email', e.target.value)}
+                  />
+                </Campo>
+                <Campo label="Senha" required>
+                  <input
+                    type={senhaVisivel ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    maxLength={128}
+                    value={formulario.senha}
+                    placeholder="Crie uma senha"
+                    onChange={(e) => definir('senha', e.target.value)}
+                  />
+                </Campo>
+                <Campo label="Confirmar senha" required>
+                  <span className="af-password-input">
+                    <input
+                      type={senhaVisivel ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      maxLength={128}
+                      value={formulario.confirmarSenha}
+                      placeholder="Repita a senha"
+                      onChange={(e) => definir('confirmarSenha', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
+                      onClick={() => setSenhaVisivel((anterior) => !anterior)}
+                    >
+                      <Icone name="eye" size={16} />
+                    </button>
+                  </span>
+                </Campo>
+              </div>
+              <div className="af-checklist">
+                {['8 ou mais caracteres', 'Maiúscula e minúscula', 'Um número', 'Um símbolo'].map(
+                  (texto, indice) => {
+                    const valido = [
+                      formulario.senha.length >= 8,
+                      /[A-Z]/.test(formulario.senha) && /[a-z]/.test(formulario.senha),
+                      /\d/.test(formulario.senha),
+                      /[^\w\s]/.test(formulario.senha),
+                    ][indice];
+                    return (
+                      <span className={valido ? 'valid' : ''} key={texto}>
+                        <Icone name="check" size={13} />
+                        {texto}
+                      </span>
+                    );
+                  },
+                )}
+              </div>
+              <div className="af-access-notice">
+                <Icone name={usuarioPrivilegiado ? 'check' : 'shield'} size={16} />
+                <span>
+                  {usuarioPrivilegiado
+                    ? 'Seu perfil permite cadastrar o funcionário imediatamente.'
+                    : 'A solicitação ficará pendente até a aprovação da dona.'}
+                </span>
+              </div>
+            </section>
+          )}
+        </div>
+        <footer className="af-footer">
+          <span className="af-required-note">* Campos obrigatórios</span>
+          {erro && (
+            <p className="af-error" role="alert">
+              {erro}
+            </p>
+          )}
+          {aba === 'pessoais' ? (
+            <button type="button" className="af-secondary" disabled={ocupado} onClick={onClose}>
+              Cancelar
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="af-secondary"
+              disabled={ocupado}
+              onClick={() => {
+                const anterior = abas[abas.findIndex((item) => item.id === aba) - 1];
+                if (anterior) {
+                  setAba(anterior.id);
+                  setErro('');
+                }
+              }}
+            >
+              Voltar
+            </button>
+          )}
+          <button type="submit" className="af-primary" disabled={ocupado}>
+            {ocupado
+              ? 'Enviando…'
+              : aba === 'acesso'
+                ? usuarioPrivilegiado
+                  ? 'Criar funcionário'
+                  : 'Enviar para aprovação'
+                : 'Continuar'}
+            {!ocupado && <Icone name={aba === 'acesso' ? 'check' : 'right'} size={15} />}
+          </button>
+        </footer>
       </form>
     </div>,
     document.body,

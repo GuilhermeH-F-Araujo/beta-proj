@@ -3,7 +3,11 @@ export type MiniaturaPublicada = {
   status: 'publicada' | 'indisponivel';
   catalogoId: string | null;
   revisao: number;
+  // Moto completa com a pintura em cinza neutro; pode ser exibida diretamente.
   imagem: string | null;
+  // Opcional: camada dos paineis pintaveis (vermelho/verde = luz, azul zero) para
+  // aplicar a cor da moto do cliente sem nova geracao por IA.
+  mascara: string | null;
   atualizadoEm: string | null;
 };
 export type CreditoMiniatura = {

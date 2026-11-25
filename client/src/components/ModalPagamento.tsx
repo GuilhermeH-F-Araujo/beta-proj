@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import { useEffect, useState } from 'react';
 import { useDadosVivos } from '../hooks/useDadosVivos';
 import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
@@ -75,6 +76,8 @@ export default function ModalPagamento({
   );
   const [salvando, setSalvando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
+  const focoPagamento = useFocoModal<HTMLElement>(!sucesso);
+  const focoConfirmacao = useFocoModal<HTMLElement>(sucesso);
 
   useEffect(() => {
     let ativo = true;
@@ -152,6 +155,8 @@ export default function ModalPagamento({
       {sucesso ? (
         <section
           className="payment-success"
+          ref={focoConfirmacao}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-labelledby="payment-success-title"
@@ -169,6 +174,8 @@ export default function ModalPagamento({
       ) : (
         <section
           className="payment-dialog"
+          ref={focoPagamento}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-labelledby="payment-title"

@@ -1,31 +1,37 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ACERVO } from './identidade.js';
-import { conferirErro, obterCatalogo, publicacaoAtual } from './repositorio.js';
+import { conferirErro, obterCatalogo, publicacaoAtual, urlArquivo } from './repositorio.js';
+// Casos de uso: a ultima miniatura aprovada vale para todas as motos do mesmo modelo.
+// Entre a versao do ano exato, a generica do modelo e uma antiga "somente desta moto",
+// vence a publicacao mais recente; restaurar o historico tambem conta como recente.
 export async function consultarPublicada(
   db: SupabaseClient,
   modelo: string,
   ano: number | null = null,
   motoId: number | null = null,
 ) {
-  let catalogo = null;
-  if (motoId) {
-    const { data, error } = await db
-      .from('miniatura_catalogo')
-      .select('*')
-      .eq('moto_id', motoId)
-      .not('publicada', 'is', null)
-      .order('atualizado_em', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    conferirErro(error);
-    catalogo = data;
-  }
-  if (!catalogo && ano)
-    catalogo = await obterCatalogo(db, { modelo, ano, variante: '', motoId: null });
-  if (!catalogo?.publicada)
-    catalogo = await obterCatalogo(db, { modelo, ano: null, variante: '', motoId: null });
+  const [doAno, doModelo, daMoto] = await Promise.all([
+    ano ? obterCatalogo(db, { modelo, ano, variante: '', motoId: null }) : null,
+    obterCatalogo(db, { modelo, ano: null, variante: '', motoId: null }),
+    motoId ? catalogoDaMoto(db, motoId) : null,
+  ]);
+  const publicados = [doAno, doModelo, daMoto].filter((item) => item?.publicada);
+  publicados.sort((a, b) => Date.parse(b.atualizado_em || 0) - Date.parse(a.atualizado_em || 0));
+  const catalogo = publicados[0] || doAno || doModelo || null;
   const publicacao = catalogo && (await publicacaoAtual(db, catalogo));
   return { catalogo, publicacao };
+}
+async function catalogoDaMoto(db: SupabaseClient, motoId: number) {
+  const { data, error } = await db
+    .from('miniatura_catalogo')
+    .select('*')
+    .eq('moto_id', motoId)
+    .not('publicada', 'is', null)
+    .order('atualizado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  conferirErro(error);
+  return data;
 }
 export async function lerPublicada(
   db: SupabaseClient,
@@ -40,7 +46,15 @@ export async function lerPublicada(
     .download(publicacao.caminho.replace('original.png', 'card.webp'));
   conferirErro(error);
   return data
-    ? { bytes: Buffer.from(await data.arrayBuffer()), mime: 'image/webp', origin: 'published' }
+    ? {
+        bytes: Buffer.from(await data.arrayBuffer()),
+        mime: 'image/webp',
+        origin: 'published',
+        mascara: await urlArquivo(
+          db,
+          publicacao.caminho.replace('original.png', 'pintura.png'),
+        ).catch(() => null),
+      }
     : null;
 }
 

@@ -1,3 +1,4 @@
+import { useFocoModal } from '../hooks/useFocoModal';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useEstadoRascunho } from '../hooks/useEstadoRascunho';
 import {
@@ -291,6 +292,8 @@ export default function ModalEditarCliente({
     }
   }
   const fotoPrevia = foto || atualFoto;
+  const referenciaFoco = useFocoModal<HTMLFormElement>(!pendente && !sucesso);
+  const focoConfirmacao = useFocoModal<HTMLElement>(!!pendente || sucesso);
   return (
     <div
       className="ce-backdrop"
@@ -301,6 +304,8 @@ export default function ModalEditarCliente({
       <form
         className="ce-dialog"
         role="dialog"
+        ref={referenciaFoco}
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="ce-title"
         onSubmit={salvar}
@@ -560,6 +565,8 @@ export default function ModalEditarCliente({
         <div className="ce-confirm-backdrop">
           <section
             className="ce-confirm-dialog"
+            ref={focoConfirmacao}
+            tabIndex={-1}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="ce-confirm-title"

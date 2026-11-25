@@ -84,3 +84,18 @@
     sans-serif;
   color: var(--theme-text, #111827);
 }
+
+.admin-menu-count {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--theme-red-soft, #ffedf1);
+  color: var(--theme-red-text, #c90032);
+}
+.admin-menu.collapsed .admin-menu-count {
+  display: none;
+}

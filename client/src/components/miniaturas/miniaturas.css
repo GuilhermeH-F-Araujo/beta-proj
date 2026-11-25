@@ -133,7 +133,7 @@
   color: var(--mini-ink) !important;
   font-weight: 700;
 }
-.mini-page button,
+.mini-page button:not(.indicador-card),
 .mini-dialog button,
 .mini-mobile button {
   display: inline-flex;
@@ -153,13 +153,13 @@
   white-space: normal;
   text-align: center;
 }
-.mini-page button:hover,
+.mini-page button:not(.indicador-card):hover,
 .mini-dialog button:hover,
 .mini-mobile button:hover {
   background: var(--theme-surface, #f5f7fa);
   border-color: var(--theme-border, #acbacb);
 }
-.mini-page button:disabled,
+.mini-page button:not(.indicador-card):disabled,
 .mini-dialog button:disabled,
 .mini-mobile button:disabled {
   opacity: 0.5;
@@ -177,7 +177,7 @@
 .mini-mobile .mini-primary:hover {
   background: var(--theme-red, #ce1730);
 }
-.mini-page button:focus-visible,
+.mini-page button:not(.indicador-card):focus-visible,
 .mini-dialog button:focus-visible,
 .mini-mobile button:focus-visible,
 .mini-page input:focus-visible,
@@ -1034,3 +1034,45 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.mini-page .mini-ready {
+  cursor: default;
+  padding: 18px;
+  background: var(--theme-surface, #fff);
+}
+.mini-page .mini-ready .mini-ready-edit {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--theme-surface, #fff);
+}
+.mini-ready-check {
+  display: block;
+  cursor: pointer;
+}
+.mini-page .mini-ready-warning {
+  color: var(--theme-red-text, #c90032);
+}
+.mini-page .mini-ready img {
+  margin-top: 20px;
+}
+
+/* Pop-up de erro compartilhado pelo estudio, pela central e pelo lote. */
+.mini-error-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: #10182880; padding: 24px; }
+.mini-error-popup { background: white; color: #172033; border-radius: 14px; padding: 28px; width: min(480px, 100%); box-shadow: 0 16px 48px #0003; }
+.mini-error-popup p { line-height: 1.6; overflow-wrap: anywhere; }
+.mini-error-popup button { min-height: 48px; width: 100%; }
+.mini-error-popup { max-height: 85dvh; overflow: auto; }
+.mini-error-popup { text-align: center; padding: 32px 28px; }
+.mini-error-popup h2 { font-size: 23px; margin: 8px 0; }
+.mini-error-popup p { font-size: 18px; }
+.mini-error-icon { width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center;
+  background: #fde7e4; color: #b42318; font-size: 32px; font-weight: 800; }
+.mini-error-actions { display: grid; gap: 10px; margin-top: 18px; }
+.mini-error-actions button { min-height: 54px; font-size: 18px; border-radius: 10px; }
+.mini-error-secondary { background: #f1f4f9; color: #172033; border: 1px solid #c9d2e0; }

@@ -67,6 +67,123 @@
     }
   ],
   "paths": {
+    "/api/admin/settings/company": {
+      "get": {
+        "summary": "Consultar dados da oficina",
+        "responses": {
+          "200": {
+            "description": "Dados da oficina."
+          },
+          "401": {
+            "description": "Sessao necessaria."
+          },
+          "403": {
+            "description": "Acesso negado."
+          },
+          "503": {
+            "description": "Banco indisponivel."
+          }
+        }
+      },
+      "put": {
+        "summary": "Salvar dados da oficina",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "nome": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "cnpj": {
+                    "type": "string",
+                    "maxLength": 24
+                  },
+                  "telefone": {
+                    "type": "string",
+                    "maxLength": 30
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 180
+                  },
+                  "cep": {
+                    "type": "string",
+                    "maxLength": 12
+                  },
+                  "numero": {
+                    "type": "string",
+                    "maxLength": 30
+                  },
+                  "complemento": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "endereco": {
+                    "type": "string",
+                    "maxLength": 180
+                  },
+                  "bairro": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "cidade": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "estado": {
+                    "type": "string",
+                    "maxLength": 2
+                  },
+                  "semana": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "sabado": {
+                    "type": "string",
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "nome",
+                  "cnpj",
+                  "telefone",
+                  "email",
+                  "cep",
+                  "endereco",
+                  "bairro",
+                  "cidade",
+                  "estado",
+                  "semana",
+                  "sabado"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dados da oficina."
+          },
+          "401": {
+            "description": "Sessao necessaria."
+          },
+          "403": {
+            "description": "Acesso negado."
+          },
+          "503": {
+            "description": "Banco indisponivel."
+          },
+          "400": {
+            "description": "Dados invalidos."
+          }
+        }
+      }
+    },
     "/api/admin/settings/backup": {
       "get": {
         "tags": [
@@ -4534,6 +4651,15 @@
                   "format": "binary"
                 }
               }
+            },
+            "headers": {
+              "X-Preview-Paint-Mask": {
+                "description": "URL assinada opcional de uma mascara de pintura da base neutra. Aplicar cor somente nos pixels cobertos.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              }
             }
           },
           "400": {
@@ -4635,6 +4761,15 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": true
+                }
+              }
+            },
+            "headers": {
+              "X-Preview-Paint-Mask": {
+                "description": "URL assinada opcional de uma mascara de pintura da base neutra. Aplicar cor somente nos pixels cobertos.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
                 }
               }
             }
@@ -4753,6 +4888,15 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Preview-Paint-Mask": {
+                "description": "URL assinada opcional de uma mascara de pintura da base neutra. Aplicar cor somente nos pixels cobertos.",
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
                 }
               }
             }
@@ -6484,6 +6628,75 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/orders/services": {
+      "post": {
+        "tags": [
+          "Ordens de servico"
+        ],
+        "summary": "Cadastrar um servico do catalogo durante a criacao de OS",
+        "operationId": "criarServicoPrevistoDaOrdem",
+        "description": "Salva um servico reutilizavel no catalogo, acessivel a quem pode criar ordens.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 150
+                  },
+                  "categoryId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "duration": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "price": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                },
+                "required": [
+                  "name",
+                  "categoryId",
+                  "duration",
+                  "price"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Servico salvo e pronto para uso nas proximas ordens."
+          },
+          "400": {
+            "description": "Dados invalidos ou categoria indisponivel."
+          },
+          "401": {
+            "description": "Sessao ausente ou expirada."
+          },
+          "403": {
+            "description": "O cargo nao pode criar ordens."
+          },
+          "409": {
+            "description": "Servico repetido ou catalogo atualizado em outra sessao."
+          },
+          "503": {
+            "description": "Catalogo indisponivel."
           }
         }
       }
@@ -8982,7 +9195,31 @@
         ],
         "responses": {
           "200": {
-            "description": "Operacao concluida"
+            "description": "Operacao concluida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "pesquisa": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true,
+                      "properties": {
+                        "progresso": {
+                          "type": "array",
+                          "maxItems": 120,
+                          "items": {
+                            "$ref": "#/components/schemas/ProgressoMiniatura"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Entrada invalida"
@@ -9320,7 +9557,7 @@
           "Miniaturas"
         ],
         "summary": "Enfileirar geracao ou correcao, ate seis tentativas",
-        "description": "Geracao e publicacao sao exclusivas de administrador. Nenhuma candidata e publicada automaticamente.",
+        "description": "Salva observacoes e modo junto com o enfileiramento em uma unica atualizacao protegida contra concorrencia. Se o pedido ja estiver pendente ou processando, retorna 202 com jaNaFila=true sem sobrescrever dados nem duplicar o trabalho.",
         "security": [
           {
             "SessaoAdministrador": []
@@ -9331,7 +9568,7 @@
             "description": "Operacao concluida"
           },
           "202": {
-            "description": "Pedido aceito na fila"
+            "description": "Solicitacao enfileirada ou ja em andamento; a resposta pode incluir jaNaFila=true e aviso quando os tokens da Cloudflare estiverem esgotados (o pedido aguarda a renovacao)."
           },
           "400": {
             "description": "Entrada invalida"
@@ -9370,6 +9607,17 @@
                   "correcao": {
                     "type": "string",
                     "maxLength": 800
+                  },
+                  "observacoes": {
+                    "type": "string",
+                    "maxLength": 1500
+                  },
+                  "modo": {
+                    "type": "string",
+                    "enum": [
+                      "referencia",
+                      "preservar"
+                    ]
                   }
                 }
               }
@@ -9384,7 +9632,7 @@
           "Miniaturas"
         ],
         "summary": "Aprovar e publicar com controle de revisao",
-        "description": "Geracao e publicacao sao exclusivas de administrador. Nenhuma candidata e publicada automaticamente.",
+        "description": "Publica somente a candidata conferida. Valida o arquivo transparente no Storage, registra a conferencia compativel com a funcao SQL existente e protege revisao e concorrencia. Pedidos ja aprovados retornam sucesso sem duplicar a publicacao.",
         "security": [
           {
             "SessaoAdministrador": []
@@ -9404,10 +9652,13 @@
             "description": "Sem permissao"
           },
           "409": {
-            "description": "Estado ou revisao mudou"
+            "description": "Candidata, revisao ou status mudaram; atualize a solicitacao e confira novamente."
           },
           "429": {
             "description": "Limite de tentativas"
+          },
+          "422": {
+            "description": "Candidata ausente ou enquadramento rejeitado. Gere outra imagem."
           }
         },
         "parameters": [
@@ -9462,6 +9713,12 @@
                     "enum": [
                       true
                     ]
+                  },
+                  "candidato": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "description": "Caminho da candidata exibida na tela. Se informado, precisa corresponder ao pedido atual."
                   }
                 }
               }
@@ -9475,7 +9732,7 @@
         "tags": [
           "Miniaturas"
         ],
-        "summary": "Descartar um pedido fora de processamento",
+        "summary": "Cancelar pedido, inclusive na fila ou em processamento",
         "description": "Geracao e publicacao sao exclusivas de administrador. Nenhuma candidata e publicada automaticamente.",
         "security": [
           {
@@ -9673,7 +9930,7 @@
           "Miniaturas"
         ],
         "summary": "Consultar somente miniatura publicada; nao gera nem aprova",
-        "description": "Geracao e publicacao sao exclusivas de administrador. Nenhuma candidata e publicada automaticamente.",
+        "description": "Geracao e publicacao sao exclusivas de administrador. Nenhuma candidata e publicada automaticamente. Retorna tambem mascara: URL assinada opcional do mapa de pintura. A imagem e transparente e neutra apenas nas areas de pintura variavel; as cores dos acabamentos fixos sao preservadas. A cor cadastrada e aplicada somente onde a mascara permite. Imagens legadas sem mascara nao sao recoloridas automaticamente.",
         "security": [
           {
             "SessaoPercurso": []
@@ -9758,7 +10015,7 @@
         "tags": [
           "Miniaturas"
         ],
-        "summary": "Importar foto autorizada de uma pagina oficial de fabricante",
+        "summary": "Importar foto autorizada de um link HTTPS publico de imagem ou pagina",
         "security": [
           {
             "SessaoAdministrador": []
@@ -9872,7 +10129,7 @@
                     "maxItems": 100,
                     "items": {
                       "type": "string",
-                      "minLength": 3,
+                      "minLength": 2,
                       "maxLength": 100
                     }
                   }
@@ -10748,6 +11005,106 @@
           }
         }
       }
+    },
+    "/api/admin/miniaturas/pendencias": {
+      "get": {
+        "tags": [
+          "Miniaturas"
+        ],
+        "summary": "Contar solicitacoes em aberto para o menu contextual",
+        "security": [
+          {
+            "SessaoAdministrador": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contagem exata de rascunhos, fila, processamento, revisao e pedidos que precisam de atencao.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "quantidade"
+                  ],
+                  "properties": {
+                    "quantidade": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessao necessaria"
+          },
+          "403": {
+            "description": "Sem permissao"
+          }
+        }
+      }
+    },
+    "/api/admin/miniaturas/situacao": {
+      "get": {
+        "tags": [
+          "Miniaturas"
+        ],
+        "summary": "Informar se a geracao esta disponivel (tokens, credenciais ou pausa)",
+        "security": [
+          {
+            "SessaoAdministrador": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Situacao atual da geracao de miniaturas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "disponivel",
+                    "motivo",
+                    "mensagem",
+                    "retomaEm"
+                  ],
+                  "properties": {
+                    "disponivel": {
+                      "type": "boolean"
+                    },
+                    "motivo": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "pausada",
+                        "sem_credenciais",
+                        "credenciais_recusadas",
+                        "sem_tokens"
+                      ]
+                    },
+                    "mensagem": {
+                      "type": "string"
+                    },
+                    "retomaEm": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sessao necessaria"
+          },
+          "403": {
+            "description": "Sem permissao"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11283,12 +11640,62 @@
                 "name"
               ]
             }
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "categoryId": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "categoryId",
+                "duration",
+                "price"
+              ]
+            }
+          },
+          "serviceCategories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
           }
         },
         "required": [
           "clients",
           "motorcycles",
-          "mechanics"
+          "mechanics",
+          "services",
+          "serviceCategories"
         ]
       },
       "DetalhesOrdem": {
@@ -14192,6 +14599,16 @@
               }
             ]
           },
+          "photoCaptureVersion": {
+            "type": "integer",
+            "enum": [
+              2
+            ],
+            "description": "Ativa a validacao das quatro vistas obrigatorias, dos servicos e da previsao deste fluxo da tela administrativa. Omitido nos clientes legados."
+          },
+          "noForecastConfirmed": {
+            "type": "boolean"
+          },
           "problem": {
             "type": "string",
             "minLength": 3,
@@ -14202,11 +14619,21 @@
             "maxLength": 255
           },
           "photos": {
-            "maxItems": 4,
+            "maxItems": 8,
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
+                "position": {
+                  "type": "string",
+                  "enum": [
+                    "front",
+                    "left",
+                    "rear",
+                    "right",
+                    "extra"
+                  ]
+                },
                 "data": {
                   "type": "string",
                   "maxLength": 750000
@@ -14215,6 +14642,16 @@
               "required": [
                 "data"
               ]
+            }
+          },
+          "services": {
+            "type": "array",
+            "maxItems": 50,
+            "description": "Obrigatorio com ao menos um item quando photoCaptureVersion for 2; opcional nos clientes legados.",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
             }
           }
         },
@@ -14482,7 +14919,7 @@
         "properties": {
           "modelo": {
             "type": "string",
-            "minLength": 3,
+            "minLength": 2,
             "maxLength": 100
           },
           "ano": {
@@ -14664,6 +15101,13 @@
               "moto": {
                 "type": "string"
               },
+              "motoFoto": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Foto cadastrada da motocicleta."
+              },
               "placa": {
                 "type": "string"
               },
@@ -14673,6 +15117,43 @@
             }
           }
         ]
+      },
+      "ProgressoMiniatura": {
+        "type": "object",
+        "required": [
+          "etapa",
+          "descricao",
+          "tentativa",
+          "iniciado_em"
+        ],
+        "properties": {
+          "etapa": {
+            "type": "string"
+          },
+          "descricao": {
+            "type": "string"
+          },
+          "tentativa": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "iniciado_em": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "concluido_em": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "duracao_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "detalhes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
       }
     }
   }
