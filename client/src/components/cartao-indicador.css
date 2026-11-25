@@ -1,0 +1,171 @@
+.indicadores-grid[data-colunas='1'] {
+  --indicadores-colunas: 1;
+}
+.indicadores-grid[data-colunas='5'] {
+  --indicadores-colunas: 5;
+}
+.indicadores-grid[data-indicadores] {
+  display: grid;
+  grid-template-columns: repeat(var(--indicadores-colunas, 4), minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+  height: auto;
+  margin-block: 20px 24px;
+}
+.indicador-card {
+  --indicador-cor: var(--theme-blue-text, #2563b8);
+  --indicador-fundo: var(--theme-blue-soft, #eaf3ff);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 118px;
+  padding: 18px;
+  border: 1px solid var(--theme-border, #dfe6ef);
+  border-radius: 14px;
+  background: var(--theme-surface, #fff);
+  color: var(--theme-text, #17283d);
+  box-shadow: 0 2px 4px #142d4d03;
+  text-align: left;
+  font: inherit;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.indicador-card.red {
+  --indicador-cor: var(--theme-red-text, #ce2442);
+  --indicador-fundo: var(--theme-red-soft, #fff0f2);
+}
+.indicador-card.green {
+  --indicador-cor: var(--theme-green-text, #16835b);
+  --indicador-fundo: var(--theme-green-soft, #e6f8ef);
+}
+.indicador-card.amber {
+  --indicador-cor: var(--theme-amber-text, #ad7709);
+  --indicador-fundo: var(--theme-amber-soft, #fff5dd);
+}
+.indicador-card.violet {
+  --indicador-cor: var(--theme-purple-text, #7955b8);
+  --indicador-fundo: var(--theme-purple-soft, #f1ebfc);
+}
+.indicador-card.slate {
+  --indicador-cor: var(--theme-muted, #63758b);
+  --indicador-fundo: color-mix(
+    in srgb,
+    var(--theme-muted, #63758b) 16%,
+    var(--theme-surface, #fff)
+  );
+}
+button.indicador-card {
+  cursor: pointer;
+}
+button.indicador-card:hover {
+  border-color: color-mix(in srgb, var(--indicador-cor) 38%, var(--theme-border, #dfe6ef));
+  box-shadow: 0 4px 14px #142d4d08;
+}
+.indicador-card.indicador-selecionado {
+  border-color: color-mix(in srgb, var(--indicador-cor) 55%, var(--theme-border, #dfe6ef));
+  background: color-mix(in srgb, var(--indicador-fundo) 30%, var(--theme-surface, #fff));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--indicador-cor) 12%, transparent);
+}
+.indicador-card:focus-visible {
+  outline: 3px solid var(--theme-blue-text, #2563b8);
+  outline-offset: 3px;
+}
+.indicador-icone {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--indicador-cor);
+  background: var(--indicador-fundo);
+}
+.indicador-conteudo {
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+  align-self: stretch;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.indicador-titulo {
+  align-self: end;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--theme-muted, #63758b);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.indicador-valor {
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  font-weight: 650;
+  color: var(--theme-text, #17283d);
+  font-variant-numeric: tabular-nums;
+}
+.indicador-descricao {
+  align-self: start;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--theme-muted, #63758b);
+  overflow-wrap: anywhere;
+}
+.indicador-grafico {
+  flex: 0 0 58px;
+  width: 58px;
+  max-width: 22%;
+  height: 38px;
+  color: var(--indicador-cor);
+}
+.indicador-proporcao {
+  position: absolute;
+  bottom: 14px;
+  right: 16px;
+  width: 40px;
+  height: 3px;
+  overflow: hidden;
+  background: var(--indicador-fundo);
+  border-radius: 4px;
+}
+.indicador-proporcao > span {
+  display: block;
+  height: 100%;
+  background: var(--indicador-cor);
+  border-radius: inherit;
+}
+.indicador-acao {
+  position: absolute;
+  top: 13px;
+  right: 12px;
+  color: var(--indicador-cor);
+  opacity: 0;
+  transition: opacity 160ms;
+}
+.indicador-card:is(:hover, :focus-visible) .indicador-acao {
+  opacity: 1;
+}
+@media (max-width: 1200px) {
+  .indicadores-grid[data-indicadores][data-colunas='1'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .indicadores-grid[data-indicadores] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 580px) {
+  .indicadores-grid[data-indicadores] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .indicador-card,
+  .indicador-acao {
+    transition: none;
+  }
+}

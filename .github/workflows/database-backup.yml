@@ -1,0 +1,159 @@
+name: Backup do banco Supabase
+
+on:
+  schedule:
+    - cron: '37 5 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: Dias para manter este backup
+        type: choice
+        required: false
+        default: '30'
+        options:
+          - '15'
+          - '30'
+          - '90'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: backup-supabase-database
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Exportar, criptografar e guardar
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+      BACKUP_RETENTION_DAYS: ${{ inputs.retention_days || vars.BACKUP_RETENTION_DAYS || '30' }}
+      BACKUP_FREQUENCY: ${{ vars.BACKUP_FREQUENCY || 'diario' }}
+    steps:
+      - name: Conferir privacidade e segredos
+        id: schedule
+        shell: bash
+        run: |
+          set -euo pipefail
+          private="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.private')"
+          if [[ "$private" != "true" ]]; then
+            echo "O repositorio precisa ser privado; nenhum dado foi exportado."
+            exit 1
+          fi
+          if [[ -z "$SUPABASE_DB_URL" || -z "$BACKUP_AGE_RECIPIENT" ]]; then
+            echo "Configure os secrets SUPABASE_DB_URL e BACKUP_AGE_RECIPIENT."
+            exit 1
+          fi
+          if [[ ! "$BACKUP_RETENTION_DAYS" =~ ^(15|30|90)$ ]]; then
+            echo "A retencao precisa ser 15, 30 ou 90 dias."
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            weekday="$(date -u +%u)"
+            monthday="$(date -u +%-d)"
+            case "$BACKUP_FREQUENCY" in
+              diario) skip=false ;;
+              semanal) [[ "$weekday" == "1" ]] && skip=false || skip=true ;;
+              mensal) [[ "$monthday" == "1" ]] && skip=false || skip=true ;;
+              *) echo "Frequencia invalida no repositorio."; exit 1 ;;
+            esac
+          else
+            skip=false
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+          echo "Execucao agendada? Frequencia: $BACKUP_FREQUENCY. Retencao: $BACKUP_RETENTION_DAYS dias."
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Obter codigo do projeto
+        if: steps.schedule.outputs.skip == 'false'
+        uses: actions/checkout@v5
+
+      - name: Instalar Supabase CLI
+        if: steps.schedule.outputs.skip == 'false'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Instalar age para criptografar
+        if: steps.schedule.outputs.skip == 'false'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y age
+
+      - name: Exportar e criptografar banco
+        if: steps.schedule.outputs.skip == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/backup-supabase"
+          encrypted="$work/encrypted"
+          mkdir -p "$encrypted"
+          supabase db dump --remote="$SUPABASE_DB_URL" -f "$work/roles.sql" --role-only
+          supabase db dump --remote="$SUPABASE_DB_URL" -f "$work/schema.sql"
+          supabase db dump --remote="$SUPABASE_DB_URL" -f "$work/data.sql" --data-only --use-copy -x "storage.buckets_vectors" -x "storage.vector_indexes"
+          for file in roles schema data; do
+            test -s "$work/$file.sql"
+            age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$encrypted/$file.sql.age" "$work/$file.sql"
+          done
+          cd "$encrypted"
+          sha256sum roles.sql.age schema.sql.age data.sql.age > SHA256SUMS
+          cat > COMO-RESTAURAR.txt <<'TEXT'
+          Backup logico do Supabase. Os arquivos SQL estao criptografados com age.
+          Guarde a chave privada age fora do GitHub. Sem ela, os arquivos nao podem ser recuperados.
+          Baixe e confira os arquivos antes de restaurar. Restaure roles, schema e dados em um projeto Supabase de teste primeiro.
+          O Supabase CLI omite schemas gerenciados (como auth e storage); objetos do Storage nao fazem parte deste backup.
+          TEXT
+          rm -f "$work/roles.sql" "$work/schema.sql" "$work/data.sql"
+
+      - name: Liberar margem para o plano gratuito
+        if: steps.schedule.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # O GitHub Free inclui 500 MB para artifacts; reservar margem para outros usos.
+          limite=$((400 * 1024 * 1024))
+          novo=$(du -sb "$RUNNER_TEMP/backup-supabase/encrypted" | cut -f1)
+          if (( novo > limite )); then
+            echo "Este backup excede o limite seguro de 400 MiB para o GitHub Free."
+            exit 1
+          fi
+          total=0
+          artifacts="$RUNNER_TEMP/backup-artifacts.tsv"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | startswith("supabase-backup-")) | [.id, .size_in_bytes, .created_at] | @tsv' \
+            | sort -k3,3 > "$artifacts"
+          while IFS=$'\t' read -r id tamanho criado; do
+            [[ -n "$id" ]] || continue
+            total=$((total + tamanho))
+          done < "$artifacts"
+          while IFS=$'\t' read -r id tamanho criado; do
+            [[ -n "$id" ]] || continue
+            if (( total + novo <= limite )); then break; fi
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+            total=$((total - tamanho))
+            echo "Artifact de backup antigo removido para manter a margem gratuita."
+          done < "$artifacts"
+          if (( total + novo > limite )); then
+            echo "Nao foi possivel reservar espaco sem ultrapassar o limite de seguranca."
+            exit 1
+          fi
+
+      - name: Guardar backup criptografado
+        if: steps.schedule.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backup-supabase/encrypted/
+          if-no-files-found: error
+          retention-days: ${{ env.BACKUP_RETENTION_DAYS }}
+
+      - name: Apagar arquivos temporarios
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/backup-supabase"

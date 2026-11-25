@@ -1,0 +1,351 @@
+/* Regioes independentes: conteudo nao amplia a navegacao fixa. */
+/* A escala acompanha tambem botoes criados depois, inclusive em portais. */
+html:where(:not(:has(.viewport)))[data-app-reading]
+  :is(
+    button,
+    input[type='button'],
+    input[type='submit'],
+    input[type='reset'],
+    [role='button'],
+    a.staff-square,
+    a.cp-outline,
+    a.cp-whatsapp-preference,
+    label.my-profile-photo-button,
+    label.mnf-photo-change
+  ) {
+  zoom: var(--app-button-scale, 1);
+}
+
+html:where(:not(:has(.viewport)))[data-app-reading] :is(.orders-viewport, .appointments-viewport) {
+  zoom: 1 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] :is(.orders-main, .appointments-main) > main {
+  zoom: var(--app-content-scale, 1) !important;
+  width: auto !important;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .admin-menu {
+  zoom: var(--app-menu-scale, 1) !important;
+  height: calc(100dvh / var(--app-menu-scale, 1));
+  overflow-y: auto;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .orders-header {
+  zoom: var(--app-header-scale, 1) !important;
+  width: auto !important;
+  align-self: stretch;
+  flex: none;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] [data-app-portal-root],
+html:where(:not(:has(.viewport)))[data-app-reading] [data-app-modal-root] {
+  zoom: var(--app-modal-scale, 1) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] [data-app-modal-inline='content'] {
+  zoom: calc(var(--app-modal-scale, 1) / var(--app-content-scale, 1)) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] [data-app-modal-inline='header'] {
+  zoom: calc(var(--app-modal-scale, 1) / var(--app-header-scale, 1)) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] [data-app-modal-inline='menu'] {
+  zoom: calc(var(--app-modal-scale, 1) / var(--app-menu-scale, 1)) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  [data-app-modal-root]:is([class*='backdrop'], [class*='overlay']) {
+  width: calc(100vw / var(--app-modal-scale, 1));
+  height: calc(100dvh / var(--app-modal-scale, 1));
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  [data-app-modal-root]
+  :is(.nam-dialog, [role='dialog']),
+html:where(:not(:has(.viewport)))[data-app-reading] dialog[data-app-modal-root] {
+  max-height: calc(94dvh / var(--app-modal-scale, 1));
+  max-width: calc(96vw / var(--app-modal-scale, 1));
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  [data-app-portal-root]:is([role='menu'], [role='listbox'], [role='status'], [role='alert']) {
+  zoom: var(--app-floating-scale, var(--app-content-scale, 1)) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .nam-dialog {
+  zoom: 1 !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  body
+  :is(#root, [data-app-portal-root])
+  :where(
+    p,
+    span,
+    div,
+    label,
+    input,
+    select,
+    textarea,
+    td,
+    th,
+    dt,
+    dd,
+    small,
+    button,
+    li,
+    a,
+    summary
+  ) {
+  font-weight: var(--app-font-weight, 500) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  body
+  :is(#root, [data-app-portal-root])
+  :where(b, strong, h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--app-heading-weight, 700) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  body
+  :is(#root, [data-app-portal-root])
+  :where(
+    p,
+    span,
+    div,
+    b,
+    strong,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    small,
+    td,
+    th,
+    dd,
+    dt,
+    li,
+    label,
+    input,
+    select,
+    textarea,
+    button,
+    summary
+  ) {
+  line-height: var(--app-line-height, 1.4) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-contrast='true']
+  :is(.orders-viewport, .appointments-viewport, [data-app-portal-root]) {
+  filter: contrast(1.08);
+}
+html:where(:not(:has(.viewport)))[data-app-density='confortavel']
+  :is(.appointments-viewport, [data-app-portal-root])
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select) {
+  min-height: 44px;
+}
+html:where(:not(:has(.viewport)))[data-app-density='confortavel']
+  :is(.appointments-viewport, [data-app-portal-root])
+  button {
+  min-height: 40px;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .orders-main,
+html:where(:not(:has(.viewport)))[data-app-reading] .appointments-main {
+  min-width: 0;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] :is(.orders-viewport, .appointments-viewport) {
+  min-width: 0 !important;
+}
+html:where(:not(:has(.viewport)))[data-app-contrast='true'] dialog[data-app-portal-root] {
+  filter: none;
+}
+html:where(:not(:has(.viewport)))[data-app-contrast='true']
+  dialog[data-app-portal-root]
+  > :is(header, .cfg-dialog-body, footer) {
+  filter: contrast(1.08);
+}
+
+html:where(:not(:has(.viewport)))[data-app-reading]
+  :is(.orders-viewport, .appointments-viewport, [data-app-portal-root])
+  button[role='switch'] {
+  min-height: 27px;
+}
+
+/* Durante a captura, nenhuma transicao pode devolver fontes intermediarias. */
+html:where(:not(:has(.viewport)))[data-app-reading][data-app-measuring] *,
+html:where(:not(:has(.viewport)))[data-app-reading][data-app-measuring] *::before,
+html:where(:not(:has(.viewport)))[data-app-reading][data-app-measuring] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+/* As bases sao originais e ficam estaveis entre alteracoes das preferencias. */
+html:where(:not(:has(.viewport)))[data-app-reading]:not([data-app-measuring]) [data-app-font] {
+  font-size: var(--app-local-font) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] [data-app-font-managed] {
+  transition-property: background-color, color, border-color, box-shadow, opacity, transform !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] [data-app-custom] {
+  zoom: var(--app-local-scale) !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea):not(
+    [data-app-custom]
+  ) {
+  min-height: max(calc(1lh + 12px), calc(40px * var(--app-field-scale, 1)));
+  padding-block: calc(6px * var(--app-field-scale, 1));
+  box-sizing: border-box;
+  max-width: 100%;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  :is(p, label, button, input, textarea, select, td, th, h1, h2, h3, h4, h5, h6) {
+  letter-spacing: var(--app-letter-spacing, normal);
+}
+html:where(:not(:has(.viewport)))[data-app-focus='true'] :focus-visible {
+  outline: 3px solid var(--theme-blue-border, #1766b0) !important;
+  outline-offset: 4px !important;
+}
+html body
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea):is(
+    :hover,
+    :focus-visible
+  ) {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+html[data-app-focus='true'] body
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea):focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+html[data-app-reading] body
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea):is(
+    :hover,
+    :focus-visible
+  ) {
+  border-color: var(--theme-border, #aebdce) !important;
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+html body
+  :is(div, span):has(
+    > input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):is(
+      :hover,
+      :focus,
+      :focus-visible
+    )
+  ) {
+  border-color: var(--theme-border, #aebdce) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+html:where(:not(:has(.viewport)))[data-app-links='true'] a {
+  text-decoration: underline !important;
+  text-underline-offset: 0.2em;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  :is(button, a, label)
+  > svg[aria-hidden='true'] {
+  zoom: var(--app-icon-scale, 1);
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  button:not([role='switch']):not([data-app-custom]):not([aria-label*='Diminuir']):not(
+    [aria-label*='Aumentar']
+  ) {
+  min-height: var(--app-touch-size, 40px);
+}
+html:where(:not(:has(.viewport)))[data-app-font-family]:not([data-app-font-family='sistema'])
+  body
+  :is(
+    p,
+    span,
+    div,
+    button,
+    a,
+    input,
+    textarea,
+    select,
+    label,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    small,
+    strong,
+    b,
+    td,
+    th
+  ) {
+  font-family: var(--app-selected-font-family) !important;
+}
+/* O editor permanece acessivel mesmo com as regioes ampliadas. */
+html:where(:not(:has(.viewport)))[data-app-reading] body [data-personalizador] {
+  zoom: 1 !important;
+  filter: none !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] body [data-personalizador] * {
+  font-family: system-ui, sans-serif !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .admin-shell-main > .orders-header {
+  height: auto;
+  min-height: 64px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .orders-header .header-actions {
+  flex-wrap: wrap;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .admin-shell > .admin-menu .admin-menu-link {
+  height: auto;
+  min-height: 40px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .orders-header h1 {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
+  min-height: calc(1lh + 12px);
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .admin-menu-link svg {
+  zoom: var(--app-icon-scale, 1);
+}
+html:where(:not(:has(.viewport)))[data-app-reading] body [data-personalizador] button {
+  min-height: 44px !important;
+}
+/* A barra e seus comandos nao se deslocam por causa do proprio ajuste. */
+html:where(:not(:has(.viewport)))[data-app-reading]
+  body
+  [data-app-preference-control]
+  :is(button, input, output) {
+  zoom: 1 !important;
+  font-size: 16px !important;
+  letter-spacing: normal !important;
+  transition: none !important;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] body [data-app-preference-control] button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+}
+html:where(:not(:has(.viewport)))[data-app-reading] .admin-shell > .admin-menu:not(.collapsed) {
+  width: calc(216px * clamp(1, var(--app-reading-font-scale, 1), 1.5));
+}
+html:where(:not(:has(.viewport)))[data-app-reading]
+  .admin-shell-main
+  > .orders-header
+  .header-search {
+  height: auto;
+  min-height: 44px;
+  padding-block: 4px;
+}

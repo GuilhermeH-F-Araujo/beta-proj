@@ -1,0 +1,212 @@
+/*
+ * Formas circulares (gerado a partir da varredura de todos os CSS do cliente).
+ * Elementos desenhados como circulo (border-radius 50% e largura = altura) nunca
+ * podem virar ovais: nao encolhem dentro de flex e mantem proporcao 1:1.
+ * Contadores (ex.: notificacoes "50") crescem por igual nos dois eixos.
+ */
+:where(
+  .acessos-status > span,
+  .admin-confirm-aprovado .admin-confirm-account > span,
+  .admin-confirm-progress i,
+  .admin-shell-main > .orders-header .profile-avatar,
+  .af-photo-preview,
+  .appointment-client-avatar,
+  .appointment-clock-center,
+  .appointment-clock-number,
+  .appointment-filter-dot,
+  .appointment-service-chip-icon,
+  .appointment-service-chips button,
+  .appointment-status i,
+  .appointment-summary-dot,
+  .appointments-viewport .profile-avatar,
+  .auth-notice-icon,
+  .bike-edit-owner-avatar,
+  .bike-edit-save-confirm .bike-edit-confirm-icon,
+  .bikes-delete-icon,
+  .bikes-notice-mark,
+  .calendar-grid button > i,
+  .calendar-legend i,
+  .canvas-editor-guide i,
+  .canvas-resize-handle,
+  .ce-photo,
+  .cfg-avatar,
+  .cfg-backup-state i,
+  .cfg-hero-tags i,
+  .cfg-log-icon,
+  .cfg-log-user > span,
+  .cfg-logs-dialog > header > .cfg-icon,
+  .cfg-preview-activity > span,
+  .cfg-switch span,
+  .cfg-totp-status i,
+  .clear-check,
+  .color-current > i,
+  .color-plane > i,
+  .color-recent button,
+  .color-swatches button,
+  .dashboard-footer i,
+  .dashboard-main .profile-avatar,
+  .details-activity i,
+  .details-client-avatar,
+  .filter-select-dot,
+  .forgot-admin-mark-icon,
+  .indicador-icone,
+  .installment-check,
+  .legend-row i,
+  .maintenance-icon,
+  .mini-error-icon,
+  .mini-log-mark,
+  .mini-studio .mini-references button,
+  .mini-studio-choice input,
+  .mini-studio-steps button > span,
+  .mini-working,
+  .moto-view-avatar,
+  .moto-view-color,
+  .moto-view-status > span,
+  .nam-remove-photo,
+  .nam-role i,
+  .nam-success-avatar,
+  .nam-success-result-icon,
+  .notice-content i,
+  .oa-arrow,
+  .oa-cancel-icon,
+  .oa-choice i,
+  .oa-confirm-icon,
+  .oa-radio,
+  .oa-state i,
+  .oa-success > span,
+  .os-create-option-avatar,
+  .os-create-photo > button,
+  .os-create-selection > span,
+  .os-create-status-dot,
+  .progress-circle,
+  .range-days button,
+  .senha-criterio-marca,
+  .services-app .color-recent button,
+  .services-app .color-swatches button,
+  .services-color-popover .color-recent button,
+  .services-color-popover .color-swatches button,
+  .services-color-trigger > i,
+  .settings-about-badges i,
+  .settings-live-dot,
+  .settings-modal-overline i,
+  .settings-period-radio,
+  .settings-period-radio i,
+  .settings-sound-radio,
+  .settings-spinner,
+  .settings-status i,
+  .settings-status-pill i,
+  .settings-switch i,
+  .staff-avatar,
+  .staff-detail .staff-tab-dados .staff-field-status-dot,
+  .staff-donut,
+  .staff-donut > div,
+  .staff-donut-layout li > i,
+  .staff-effect-icon,
+  .staff-filter-count,
+  .staff-loading > span,
+  .staff-password-rules i,
+  .staff-security-avatar,
+  .staff-security-current i,
+  .staff-security-effects .access-dot,
+  .staff-security-effects .data-dot,
+  .staff-security-eyebrow i,
+  .status-donut,
+  .success-check,
+  .summary-dot,
+  .team-avatar,
+  .terminal-radio,
+  .timeline-icon
+) {
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+}
+
+/* Os modos de leitura e densidade confortavel impoem altura minima a todo botao.
+   Em botoes redondos isso so aumentava a altura e gerava ovais. */
+html[data-app-reading]
+  :is(
+    .appointment-clock-number,
+    .appointment-service-chips button,
+    .calendar-grid button > i,
+    .canvas-resize-handle,
+    .clear-check,
+    .color-recent button,
+    .color-swatches button,
+    .mini-studio .mini-references button,
+    .mini-studio-steps button > span,
+    .nam-remove-photo,
+    .oa-arrow,
+    .os-create-photo > button,
+    .range-days button,
+    .services-app .color-recent button,
+    .services-app .color-swatches button,
+    .services-color-popover .color-recent button,
+    .services-color-popover .color-swatches button,
+    .notice-badge
+  ),
+html[data-app-density='confortavel']
+  :is(
+    .appointment-clock-number,
+    .appointment-service-chips button,
+    .calendar-grid button > i,
+    .canvas-resize-handle,
+    .clear-check,
+    .color-recent button,
+    .color-swatches button,
+    .mini-studio .mini-references button,
+    .mini-studio-steps button > span,
+    .nam-remove-photo,
+    .oa-arrow,
+    .os-create-photo > button,
+    .range-days button,
+    .services-app .color-recent button,
+    .services-app .color-swatches button,
+    .services-color-popover .color-recent button,
+    .services-color-popover .color-swatches button,
+    .notice-badge
+  ) {
+  min-height: 0 !important;
+}
+/* No relogio, os numeros crescem por igual (alvo maior sem deformar). */
+html[data-app-reading] .appointment-clock-number,
+html[data-app-density='confortavel'] .appointment-clock-number {
+  width: 36px;
+  height: 36px;
+}
+
+/* Contadores numericos: circulo que cresce com os digitos, nunca pilula. */
+.notice-badge,
+.appointments-viewport .notice-badge {
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+  padding: 0 3px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+.notice-badge {
+  min-width: 22px;
+  font-size: 10px;
+}
+
+/* Miniatura do modelo em espacos pequenos (resumo da OS, lista de clientes). */
+.miniatura-modelo {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.miniatura-modelo.com-imagem {
+  background: var(--theme-canvas, #f3f6f9);
+}
+.miniatura-modelo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.client-bike-thumb {
+  width: 34px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--theme-muted, #6d829b);
+}

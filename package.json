@@ -1,0 +1,41 @@
+{
+  "name": "perc3-auth",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "check:env": "npm --prefix server run check:env",
+    "doctor": "npm --prefix server run doctor",
+    "publish:recovery-logo": "npm --prefix server run publish:recovery-logo",
+    "publish:auth-emails": "npm --prefix server run publish:auth-emails",
+    "smoke": "node scripts/teste-inicial.mjs",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "install:all": "npm ci && npm --prefix server ci && npm --prefix client ci",
+    "build:render": "node scripts/build-render.mjs",
+    "start": "npm --prefix server start",
+    "test:ui": "node --import ./client/scripts/test-loader.mjs --import ./server/node_modules/tsx/dist/loader.mjs --test ./client/scripts/usabilidade.test.mjs",
+    "desenvolver": "node scripts/dev.mjs",
+    "compilar": "npm --prefix server run build && npm --prefix client run build",
+    "iniciar": "npm --prefix server start",
+    "instalar": "npm ci && npm --prefix server ci && npm --prefix client ci",
+    "compilar:render": "node scripts/build-render.mjs",
+    "verificar:ambiente": "npm --prefix server run check:env",
+    "diagnosticar": "npm --prefix server run doctor",
+    "testar:interface": "node --import ./client/scripts/test-loader.mjs --import ./server/node_modules/tsx/dist/loader.mjs --test ./client/scripts/usabilidade.test.mjs",
+    "testar:servidor": "npm --prefix server run testar",
+    "testar:ia-real": "npm --prefix server run testar:ia-real --",
+    "testar": "npm run compilar && npm run testar:servidor && npm run testar:interface",
+    "formatar": "prettier --write \"client/src/**/*.{ts,tsx,css}\" \"server/src/**/*.ts\" \"{scripts,client/scripts,server/scripts}/**/*.{mjs,mts}\" \"*.{json,md,yaml}\"",
+    "verificar:formato": "prettier --check \"client/src/**/*.{ts,tsx,css}\" \"server/src/**/*.ts\" \"{scripts,client/scripts,server/scripts}/**/*.{mjs,mts}\" \"*.{json,md,yaml}\"",
+    "documentar": "npm --prefix server run compilar && node server/scripts/atualizar-documentacao.mjs",
+    "verificar:codigo": "npm --prefix server run verificar:codigo && npm --prefix client run verificar:codigo",
+    "typecheck": "npm --prefix server run verificar:codigo && npm --prefix client run verificar:codigo",
+    "test:server": "npm --prefix server test",
+    "test": "npm run build && npm run test:server && npm run test:ui",
+    "format": "prettier --write \"client/src/**/*.{ts,tsx,css}\" \"server/src/**/*.ts\" \"{scripts,client/scripts,server/scripts}/**/*.{mjs,mts}\" \"*.{json,md,yaml}\"",
+    "format:check": "prettier --check \"client/src/**/*.{ts,tsx,css}\" \"server/src/**/*.ts\" \"{scripts,client/scripts,server/scripts}/**/*.{mjs,mts}\" \"*.{json,md,yaml}\"",
+    "docs:api": "npm --prefix server run compilar && node server/scripts/atualizar-documentacao.mjs"
+  },
+  "devDependencies": {
+    "prettier": "3.4.2"
+  }
+}
