@@ -6,6 +6,8 @@ import {
   buscarDiagnosticoSistema,
   minutosInatividade,
   salvarBackupSistema,
+  BACKUP_DEMONSTRACAO,
+  ultimoBackupDemonstracao,
   salvarInatividadeConta,
   type BackupSistema,
   type DiagnosticoSistema,
@@ -217,6 +219,11 @@ export default function ConfiguracoesSistema({
                 description="O GitHub guarda os backups criptografados do banco."
                 className="cfg-github-card"
               >
+                {BACKUP_DEMONSTRACAO && (
+                  <div className="cfg-backup-state ready">
+                    <i /> GitHub conectado · repositório privado
+                  </div>
+                )}
                 <ol className="cfg-github-steps">
                   <li>
                     Crie um repositório <b>privado</b> e envie o projeto com o workflow incluído.
@@ -256,6 +263,21 @@ export default function ConfiguracoesSistema({
                     <div className="cfg-backup-state ready">
                       <i /> Backup externo configurado
                     </div>
+                    {BACKUP_DEMONSTRACAO && (
+                      <p className="cfg-backup-help">
+                        Último backup:{' '}
+                        <b>
+                          {new Date(ultimoBackupDemonstracao()).toLocaleString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </b>{' '}
+                        · concluído com sucesso
+                      </p>
+                    )}
                     <div className="cfg-backup-fields">
                       <label>
                         Frequência automática

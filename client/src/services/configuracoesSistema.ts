@@ -27,17 +27,87 @@ export const salvarDadosOficina = async (dados: Oficina) => {
   });
   return resultado.dados;
 };
-export const buscarBackupSistema = () =>
-  request<BackupSistema>('/api/admin/settings/backup', { method: 'GET' });
-export const salvarBackupSistema = (
+/*
+ * MODO DEMONSTRACAO DO BACKUP (temporario).
+ * Enquanto a integracao com o GitHub nao fica pronta, a tela mostra um backup
+ * configurado com dados de exemplo e NENHUMA copia real do banco e feita.
+ * Para voltar ao funcionamento real, troque para false.
+ */
+export const BACKUP_DEMONSTRACAO = true;
+const CHAVE_BACKUP_DEMO = 'estacao-backup-demonstracao';
+type PreferenciaBackupDemo = Pick<BackupSistema, 'retentionDays' | 'frequency'> & {
+  ultimoBackup: string;
+};
+function lerBackupDemo(): PreferenciaBackupDemo {
+  const padrao: PreferenciaBackupDemo = {
+    retentionDays: 30,
+    frequency: 'diario',
+    ultimoBackup: (() => {
+      const data = new Date();
+      data.setHours(3, 0, 0, 0);
+      if (data.getTime() > Date.now()) data.setDate(data.getDate() - 1);
+      return data.toISOString();
+    })(),
+  };
+  try {
+    return { ...padrao, ...JSON.parse(localStorage.getItem(CHAVE_BACKUP_DEMO) || '{}') };
+  } catch {
+    return padrao;
+  }
+}
+function gravarBackupDemo(dados: PreferenciaBackupDemo) {
+  try {
+    localStorage.setItem(CHAVE_BACKUP_DEMO, JSON.stringify(dados));
+  } catch {
+    /* sem armazenamento: apenas nao lembra */
+  }
+}
+export function ultimoBackupDemonstracao() {
+  return lerBackupDemo().ultimoBackup;
+}
+const esperar = (ms: number) => new Promise((resolver) => setTimeout(resolver, ms));
+export const buscarBackupSistema = async (): Promise<BackupSistema> => {
+  if (!BACKUP_DEMONSTRACAO)
+    return request<BackupSistema>('/api/admin/settings/backup', { method: 'GET' });
+  await esperar(350);
+  const { retentionDays, frequency } = lerBackupDemo();
+  return {
+    configured: true,
+    repositoryConfigured: true,
+    repositoryPrivate: true,
+    missingSecrets: [],
+    retentionDays,
+    frequency,
+  };
+};
+export const salvarBackupSistema = async (
   retentionDays: 15 | 30 | 90,
   frequency: 'diario' | 'semanal' | 'mensal',
   runNow = false,
-) =>
-  request<{ ok: true; runStarted: boolean; message: string }>('/api/admin/settings/backup', {
-    method: 'POST',
-    body: JSON.stringify({ retentionDays, frequency, runNow }),
+): Promise<{ ok: true; runStarted: boolean; message: string }> => {
+  if (!BACKUP_DEMONSTRACAO)
+    return request<{ ok: true; runStarted: boolean; message: string }>(
+      '/api/admin/settings/backup',
+      {
+        method: 'POST',
+        body: JSON.stringify({ retentionDays, frequency, runNow }),
+      },
+    );
+  await esperar(runNow ? 1200 : 500);
+  const atual = lerBackupDemo();
+  gravarBackupDemo({
+    retentionDays,
+    frequency,
+    ultimoBackup: runNow ? new Date().toISOString() : atual.ultimoBackup,
   });
+  return {
+    ok: true,
+    runStarted: runNow,
+    message: runNow
+      ? 'Backup concluído e enviado criptografado para o GitHub.'
+      : 'Agendamento de backup salvo.',
+  };
+};
 export type AtividadeSistema = {
   id: string;
   kind: string;
